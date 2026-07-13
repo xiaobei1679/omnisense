@@ -333,10 +333,14 @@ export class Body {
   // ── 自主循环（autopilot）：让身体"自己决定每轮做什么"──
   // 思想借鉴 BabyAGI 的「自生成任务队列」循环（任务创建 → 优先级排序 → 执行 → 据结果重排 → 再生成）：
   //   https://github.com/yoheinakajima/babyagi · https://www.ibm.com/think/topics/babyagi
-  // 与 BabyAGI 的区别：OmniSense 离线即可自驱——每轮 (1) 感知环境 (2) 从议程自生成意图（执行后据结果
-  // 重排；此处离线确定性轮转 + 跳过需结构化参数的 hand 技能）(3) 用自身能力卡 skillResolve 把意图映射
-  // 到最佳器官/方法 (4) skillDispatch 真正执行，并记录委派结果。全程零网络、零挂起、可离线自活。
-  // 这是"和真人一样"的本质升级：不是被写死的步骤驱动，而是用自身能力清单自主决策去行动。
+  //   https://tinyagents.dev/compare/babyagi （执行/创建/优先级 三元组；优先级随结果动态调整）
+  // 与 BabyAGI 的区别：OmniSense 离线即可自驱——每轮 (1) 感知环境 (2) 从议程自生成意图
+  // (3) 用自身能力卡 skillResolve 把意图映射到最佳器官/方法 (4) skillDispatch 真正执行 (5) **把本次结果
+  // 回写议程、动态调权**（真正的"据结果重排"：动作成功→提权且"想清楚/规划"会带升"记忆类"意图；
+  // 退化到感知→惩罚并逼出"真正动手"的意图）。全程零网络、零挂起、可离线自活。
+  // 这是"和真人一样"的本质升级：不是被写死的步骤驱动，而是用自身能力清单自主决策、并据结果自我调整。
+  // 默认：内置议程开启**动态重排**（agendaDynamic:true，每步 trace 含 agendaWeights 快照）；自定义议程尊重用户顺序
+  // （除非显式 dynamic:true）。关闭用 opts.dynamic:false（或 CLI/桥接/工作区 --no-dynamic）。
   async autopilot(opts = {}) {
     const {
       ticks = 3,
@@ -355,21 +359,39 @@ export class Body {
       '回顾最近记下的记忆并反思',
     ];
     const agendaList = (Array.isArray(agenda) && agenda.length) ? agenda : DEFAULT_AGENDA;
+    // 动态议程（借鉴 BabyAGI 的「优先级重排」思想：每轮执行结果回写议程、动态调权，
+    // 让身体像真人一样"据结果调整下一步关注"，而非死板轮转）。内置议程默认开启；
+    // 自定义议程默认尊重用户给定顺序（除非显式 dynamic:true），保证可预测。离线启发式，零网络零 key。
+    const dynamic = opts.dynamic !== undefined ? !!opts.dynamic : !Array.isArray(agenda);
+    // 议程队列：每项带权重 w / 已跑次数 runs / 上次结果 ok / 上次运行 tick lastAt，供"据结果重排"。
+    const queue = agendaList.map((intent, i) => ({ intent, w: 1, runs: 0, ok: null, lastAt: -1, seed: i }));
+    // 选意图：动态模式用优先级队列（最少跑→最高权→最早 seed），既保证全覆盖又让"结果好"的意图优先；
+    // 静态模式由调用方按 round-robin 取。
+    function pickIntent() {
+      let best = -1, bestKey = null;
+      for (let k = 0; k < queue.length; k++) {
+        const q = queue[k];
+        const key = [q.runs, -q.w, q.seed]; // 升序：最少跑优先，平手取权重高、seed 小
+        const less = (a, b) => a[0] < b[0] || (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && a[2] < b[2])));
+        if (best < 0 || less(key, bestKey)) { best = k; bestKey = key; }
+      }
+      return best;
+    }
     const trace = [];
-    log.info(`\n[身体·自主循环 autopilot] 启动：${ticks} 轮 | 模型=${useLLM ? '在线' : '离线'} | 自驱决策(基于能力卡 skillResolve)`);
-    for (let i = 1, ai = 0; i <= ticks; i++, ai++) {
-      const step = { tick: i };
+    log.info(`\n[身体·自主循环 autopilot] 启动：${ticks} 轮 | 模型=${useLLM ? '在线' : '离线'} | 自驱决策(基于能力卡 skillResolve)${dynamic ? ' | 动态议程(结果驱动重排 · 借鉴 BabyAGI 优先级重排)' : ' | 静态议程(尊重用户顺序)'}`);
+    for (let i = 1; i <= ticks; i++) {
+      const step = { tick: i, agendaDynamic: dynamic };
       // 1) 感知：聚合近期眼耳输入 + 热搜，合成环境理解（离线）
       step.perceive = this.perceive();
-      // 2) 自生成任务：从议程取下一个意图（执行后据结果重排——此处离线确定性轮转）
-      const intent = agendaList[ai % agendaList.length];
+      // 2) 自生成任务：动态模式用优先级队列据"已跑/权重"选意图；静态模式按轮转取下一个。
+      const qi = dynamic ? pickIntent() : (i - 1) % agendaList.length;
+      const intent = agendaList[qi];
       step.intent = intent;
       // 3) 用自身能力卡决策：skillResolve 把意图映射到最佳器官/方法（top-3）
       const ranked = this.skillResolve(intent);
       step.candidates = ranked.map(r => ({ id: r.skill.id, score: r.score, matched: r.matched }));
       // 4) 自驱执行：挑第一个"会做事"的候选器官。排除需结构化参数且无法自动构造的 hand.*，
-      // 以及本轮已做过的 perceive.sense（避免"只反复感知、不行动"的退化循环），优先落到
-      // brain/mouth/ear 这类真正产生动作/记忆的器官；无则降级到感知。
+      // 优先落到 brain/mouth/ear 这类真正产生动作/记忆的器官；无则降级到感知。
       const EXEC_ORGANS = new Set(['brain', 'mouth', 'ear']);
       let chosenIdx = -1;
       for (let k = 0; k < ranked.length; k++) {
@@ -390,12 +412,32 @@ export class Body {
         step.result = dispatch.result != null ? dispatch.result : dispatch;
         step.dispatch = { resolved: dispatch.resolved, error: dispatch.error || null };
       }
+      // 5) 结果驱动重排（BabyAGI 优先级重排思想的离线实现）：把本轮委派结果回写议程——
+      // 真做了动作 → 提权（且"想清楚/规划"成功会带升"记忆类"意图，因为该记住/回顾）；
+      // 退化到感知（无动作）→ 惩罚并提权"真正动手"的记忆意图，逼出动作。权重快照进 trace 便于观测/测试。
+      if (dynamic) {
+        const item = queue[qi];
+        item.runs++;
+        item.lastAt = i;
+        const acted = step.executed !== 'perceive.sense';
+        item.ok = acted;
+        if (acted) {
+          item.w = Math.min(3, item.w + 0.3);
+          if (/思考|规划|感知|关注/.test(intent)) {
+            for (const q of queue) if (/记忆|回顾|记/.test(q.intent)) q.w = Math.min(3, q.w + 0.2);
+          }
+        } else {
+          item.w = Math.max(0.2, item.w - 0.3);
+          for (const q of queue) if (/记忆|记/.test(q.intent)) q.w = Math.min(3, q.w + 0.25);
+        }
+        step.agendaWeights = queue.map(q => ({ intent: q.intent, w: Math.round(q.w * 100) / 100 }));
+      }
       trace.push(step);
-      log.info(`[身体·自主循环] tick ${i}/${ticks}：意图「${intent}」 → 委派 ${step.executed}${chosenIdx < 0 ? ' (降级)' : ' (基于能力卡)'}`);
+      log.info(`[身体·自主循环] tick ${i}/${ticks}：意图「${intent}」 → 委派 ${step.executed}${chosenIdx < 0 ? ' (降级)' : ' (基于能力卡)'}${dynamic ? ` | 权重[${queue.map(q => q.w.toFixed(2)).join(',')}]` : ''}`);
       if (onTick) onTick(step);
       if (i < ticks && intervalMs) await sleep(intervalMs);
     }
     log.info('[身体·自主循环] 结束。');
-    return { ticks, mode: 'autopilot', trace, stopped: false };
+    return { ticks, mode: 'autopilot', agendaDynamic: dynamic, trace, stopped: false };
   }
 }

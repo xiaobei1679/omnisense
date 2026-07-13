@@ -75,17 +75,21 @@ node "{SKILL_DIR}/src/cli.mjs" trace --export=spans.otlp.json --export-format=ot
 ## 🤖 自主循环（autopilot · 身体自己决定做什么，借鉴 BabyAGI）
 
 `live()` 让身体自驱活着，但每轮动作写死。`autopilot()` 更进一步：**身体用自身能力卡 `skillResolve`
-自己决定每轮做什么**，再 `skillDispatch` 离线执行——感知→自生成意图→选最佳器官→执行→记录委派结果。
+自己决定每轮做什么**，再 `skillDispatch` 离线执行——感知→自生成意图→选最佳器官→执行→**把结果回写议程、动态调权**。
 思想借鉴 BabyAGI 的「自生成任务队列」循环（任务创建→优先级排序→执行→据结果重排→再生成）：
-`https://github.com/yoheinakajima/babyagi` · `https://www.ibm.com/think/topics/babyagi`。区别：OmniSense
-**离线即可自驱**——默认议程只映射到离线器官（脑/嘴/耳），`hand.*` 需结构化参数的技能自动跳过降级，
-全程零网络、零挂起。
+`https://github.com/yoheinakajima/babyagi` · `https://www.ibm.com/think/topics/babyagi` · `https://tinyagents.dev/compare/babyagi`（优先级随结果动态调整）。
+区别：OmniSense **离线即可自驱**——默认议程只映射到离线器官（脑/嘴/耳），`hand.*` 需结构化参数的技能自动跳过降级；
+**默认开启动态议程**：内置 4 项议程用优先级队列（最少跑→最高权→最早 seed）选意图，既保证全覆盖又让"结果好"的意图优先，
+每步 trace 带 `agendaWeights` 快照可观测"权重如何随结果变化"；自定义议程默认尊重用户顺序（除非显式 `dynamic:true`），
+`--no-dynamic` 可关闭重排。全程零网络、零挂起。
 
 ```bash
-node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=3          # 身体自驱决策（基于能力卡 skillResolve）
+node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=3                # 身体自驱决策（默认动态议程：结果驱动重排）
+node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=3 --no-dynamic   # 关闭动态重排、尊重默认顺序
 node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=2 --llm   # 有模型网关时在线思考
 # 工作区侧驱动身体自主循环（合并后的新项目：工作区能真正让身体"自驱"）
 node openclaw-workspace/scripts/omnisense-link.mjs autopilot 2 --json
+node openclaw-workspace/scripts/omnisense-link.mjs autopilot 2 --no-dynamic --json
 ```
 
 ## 快速使用

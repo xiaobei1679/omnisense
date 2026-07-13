@@ -180,6 +180,39 @@ it('runLink trace 无参数默认给 summary（不报错）', async () => {
   const r = await runLink(['trace']);
   assert.ok('total' in r, '无参数应回退到 summary');
 });
+
+it('runLink autopilot 默认动态议程：trace 含 agendaDynamic 与每轮权重快照，且跨轮权重因结果重排而变化', async () => {
+  // 默认议程 4 项 → 动态模式：每轮结果回写议程、据结果调权（借鉴 BabyAGI 优先级重排）。
+  const r = await runLink(['autopilot', '6']);
+  assert.equal(r.mode, 'autopilot', '应标记 autopilot 模式');
+  assert.equal(r.agendaDynamic, true, '默认应开启动态议程');
+  assert.equal(r.trace.length, 6);
+  // 每轮都应有感知/意图/候选/委派，且带 agendaWeights 快照（4 项议程）
+  const seenIntents = new Set();
+  for (const t of r.trace) {
+    assert.ok(t.perceive && t.intent && Array.isArray(t.candidates), '每轮应有感知/意图/候选');
+    assert.ok(t.executed, '应委派到某器官');
+    assert.ok(Array.isArray(t.agendaWeights) && t.agendaWeights.length === 4, '动态模式每步应带 4 项议程权重快照');
+    seenIntents.add(t.intent);
+  }
+  // 覆盖性：6 轮应让默认议程 4 项意图都至少出现一次（优先级队列保证公平轮转）
+  assert.equal(seenIntents.size, 4, '动态模式 6 轮应覆盖全部 4 项默认意图');
+  // 结果驱动重排：首轮与末轮权重快照应不同（证明权重随结果变化）
+  assert.notDeepEqual(r.trace[0].agendaWeights, r.trace[r.trace.length - 1].agendaWeights, '权重应随每轮结果重排而变化');
+});
+
+it('runLink autopilot --no-dynamic 关闭动态重排：尊重顺序、无权重快照', async () => {
+  const r = await runLink(['autopilot', '2', '--no-dynamic']);
+  assert.equal(r.mode, 'autopilot');
+  assert.equal(r.agendaDynamic, false, '应关闭动态议程');
+  assert.equal(r.trace.length, 2);
+  for (const t of r.trace) {
+    assert.ok(t.intent, '每轮应有意图');
+    assert.equal(t.agendaWeights, undefined, '--no-dynamic 不应产出权重快照');
+  }
+  // 静态模式按 round-robin 取默认议程：第一轮应为默认议程第 0 项（思考类）
+  assert.match(r.trace[0].intent, /思考|关注/, '--no-dynamic 应尊重默认议程顺序(首轮=思考意图)');
+});
 // 不依赖 node:test 的 after 兜底（route brain.think 等离线器官调用 await 外部资源，会让 node:test 提前
 // finalize 文件并截断后续用例）；改为模块顶层独立定时器：留足 20s 让全部用例跑完后强制退出，
 // 既跑完所有断言（成败真实）又避免 undici keep-alive socket 导致套件无限挂起。

@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -112,9 +112,14 @@ export async function runLink(args) {
   if (cmd === 'autopilot') {
     // 自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行。
     // 工作区侧驱动证据：合并后的新项目里，工作区能真正让身体"自驱"而非只被动委派。
+    // 默认开启动态议程重排（每轮结果回写议程、据结果调权，借鉴 BabyAGI 优先级重排）；
+    // --no-dynamic 关闭重排、尊重用户顺序；--dynamic 显式开启（含自定义议程时）。
     const ticks = Number(rest[0]) || 2;
+    const opts = { ticks };
+    if (rest.includes('--no-dynamic')) opts.dynamic = false;
+    if (rest.includes('--dynamic')) opts.dynamic = true;
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
-    const r = await withTimeout(omni.autopilot({ ticks }), TIMEOUT_MS);
+    const r = await withTimeout(omni.autopilot(opts), TIMEOUT_MS);
     return r;
   }
   if (cmd === 'trace') {

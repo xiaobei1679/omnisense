@@ -40,7 +40,9 @@ node integrations/openclaw/omni-body.mjs card --json
 node integrations/openclaw/omni-body.mjs live '{"ticks":2}' --json
 
 # 启动自主循环：身体用自身能力卡自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列）
+# 默认开启动态议程（结果驱动重排）；传 {"dynamic":false} 或加 --no-dynamic 关闭重排、尊重顺序
 node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2}' --json
+node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2,"dynamic":false}' --json  # 关闭动态重排
 
 # 把一句话目标交给身体去执行
 node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --json

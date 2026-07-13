@@ -97,11 +97,12 @@
 ## 数据流（autopilot 自主循环：身体自己决定做什么）
 
 1. 每轮 `autopilot` 先 `perceive()` 聚合近期眼耳输入 + 热搜，合成环境理解（离线）。
-2. 从议程自生成意图（默认议程离线安全：思考/记忆/规划/回顾；执行后据结果重排，此处离线确定性轮转）。
+2. 从议程选意图：**默认开启动态议程**——用优先级队列 `（最少跑 → 最高权 → 最早 seed）` 选意图，既保证全部意图轮到、又让"结果好"的意图优先；自定义议程默认尊重用户顺序（除非显式 `dynamic:true`）。
 3. `skillResolve(intent)` 把意图映射到能力卡 `skills[]` 中最佳器官/方法（top-3 排名，纯关键词匹配）。
 4. 在排名里挑第一个"会做事"的器官（脑/嘴/耳；跳过需结构化参数的 `hand.*` 与本轮已做过的 `perceive.sense`），`skillDispatch(intent)` 真正执行，结果记入该轮 `trace.executed/result`。
-5. 全部候选都不可执行 → 诚实降级到 `perceive.sense` 并标注 `fallback` 原因（如 `matched-hand-needs-args` / `no-exec-organ`），绝不因缺参数报错或联网。
-6. 借鉴 BabyAGI「任务创建→排序→执行→重排→再生成」自生成任务队列思想（https://github.com/yoheinakajima/babyagi），但离线即可自驱，无需 LLM 即可让身体在世界里自主行动。
+5. **结果驱动重排（BabyAGI「优先级随结果重排」思想的离线实现）**：本轮委派结果回写议程——动作成功 → 提权（且"想清楚/规划"成功会带升"记忆类"意图，因为该记住/回顾）；退化到感知（无动作）→ 惩罚并逼出"真正动手"的意图。每步 `trace.agendaWeights` 快照当前权重，可观测"权重如何随结果变化"。
+6. 全部候选都不可执行 → 诚实降级到 `perceive.sense` 并标注 `fallback` 原因（如 `matched-hand-needs-args` / `no-exec-organ`），绝不因缺参数报错或联网。
+7. 借鉴 BabyAGI「任务创建→排序→执行→重排→再生成」自生成任务队列思想（https://github.com/yoheinakajima/babyagi · https://www.ibm.com/think/topics/babyagi · https://tinyagents.dev/compare/babyagi），但离线即可自驱，无需 LLM 即可让身体在世界里自主行动、并据结果自我调整下一步关注。
 
 ## 目录结构
 

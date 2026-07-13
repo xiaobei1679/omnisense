@@ -119,12 +119,14 @@ async function main() {
       const interval = Number((rest.find(a => /^--interval=(\d+)$/.test(a)) || '').split('=')[1]) || 0;
       const useLLM = flag('--llm');
       const allowShell = flag('--allow-shell');
-      log.info(`[autopilot] 启动自主循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, shell=${allowShell}`);
-      result = await omni.autopilot({ ticks, intervalMs: interval * 1000, useLLM, allowShell });
+      const dynamic = !flag('--no-dynamic'); // 默认开启动态议程重排（据结果调权）；--no-dynamic 尊重用户顺序
+      log.info(`[autopilot] 启动自主循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, shell=${allowShell}, 动态议程=${dynamic ? '开' : '关'}`);
+      result = await omni.autopilot({ ticks, intervalMs: interval * 1000, useLLM, allowShell, dynamic });
       if (!jsonMode) {
-        console.log('\n═══ 自主循环结果（身体自驱决策 · 借鉴 BabyAGI 自生成任务队列）═══');
+        console.log('\n═══ 自主循环结果（身体自驱决策 · 借鉴 BabyAGI 自生成任务队列 · 结果驱动重排）═══');
         for (const t of (result.trace || [])) {
-          console.log(`· tick ${t.tick}: 意图「${t.intent}」 → 委派 ${t.executed}${t.fallback ? ` (降级:${t.fallback})` : ' (基于能力卡)'}`);
+          const w = t.agendaWeights ? ` | 权重[${t.agendaWeights.map(q => q.w.toFixed(2)).join(',')}]` : '';
+          console.log(`· tick ${t.tick}: 意图「${t.intent}」 → 委派 ${t.executed}${t.fallback ? ` (降级:${t.fallback})` : ' (基于能力卡)'}${w}`);
         }
       }
       break;
@@ -298,7 +300,7 @@ const USAGE = `OmniSense 命令行
   body                自检身体：打印七种器官（眼/耳/嘴/脑/手/感知/脚）及各自能力
   card                打印 A2A 风格 Agent Card（七器官能力扁平化为 skills[]，供多智能体工作区发现与委派）
   live [--ticks=3] [--interval=0] [--llm] [--speak] [--allow-shell]   生命循环：自驱地「感知→思考→动手→说话→移动」，像真人一样活着（默认离线、有限轮次）
-  autopilot [--ticks=3] [--interval=0] [--llm] [--allow-shell]   自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列，离线自驱决策）
+  autopilot [--ticks=3] [--interval=0] [--llm] [--allow-shell] [--no-dynamic]   自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列；默认动态议程——每轮结果回写议程、据结果重排下一步；--no-dynamic 关闭重排、尊重用户顺序）
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)

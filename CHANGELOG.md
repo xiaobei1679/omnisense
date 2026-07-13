@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v3.1.0 — 2026-07-13 (minor)
+
+- autopilot 升级为结果驱动的动态议程重排（借鉴 BabyAGI 优先级随结果重排：每轮委派结果回写议程、动态调权，默认开启、--no-dynamic 可关；内核 body.mjs + 工作区 omnisense-link.mjs 双触达，离线自驱、全程零网络）
+
 ## v3.0.0 — 2026-07-13 (major)
 
 - OTLP/GenAI 可观测性导出：身体轨迹一键导出 OTLP/JSON（OTel-native，run→trace，root invoke_agent + 每步 execute_tool，gen_ai.*/error.type/status.code），可直投 Grafana Tempo/Phoenix/Jaeger/OTel Collector；CLI trace --export-format=otlp、serve GET /trace-export?format=otlp、工作区 omnisense-link trace --export-format=otlp 跨层复用同一份 tracer

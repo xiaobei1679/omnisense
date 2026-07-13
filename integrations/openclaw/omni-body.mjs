@@ -50,7 +50,12 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'describe': return body.describe();
     case 'card': return body.agentCard();
     case 'live': return await body.live(parseJsonArg(args[0]) || {});
-    case 'autopilot': return await body.autopilot(parseJsonArg(args[0]) || {});
+    case 'autopilot': {
+      const opts = parseJsonArg(args[0]) || {};
+      if (args.includes('--no-dynamic')) opts.dynamic = false;
+      if (args.includes('--dynamic')) opts.dynamic = true;
+      return await body.autopilot(opts);
+    }
     case 'dispatch': return await body.skillDispatch(args.join(' ') || '');
     case 'foot': return await body.foot(args[0], parseJsonArg(args[1]));
     case 'eye':
