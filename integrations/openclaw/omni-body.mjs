@@ -15,6 +15,7 @@
 //   node integrations/openclaw/omni-body.mjs mouth giveOpinion "AI 感知" [--json]
 //   node integrations/openclaw/omni-body.mjs brain think "我该关注什么" [--json]
 //   node integrations/openclaw/omni-body.mjs foot watch '{"max":3}' [--json]
+//   node integrations/openclaw/omni-body.mjs dispatch "计算 2+2" [--json]  # 技能匹配与自动委派
 //
 // 器官→方法映射（详见 src/body.mjs）：
 //   eye/ear/mouth/brain/foot → body[organ](method, ...args)
@@ -48,6 +49,7 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'describe': return body.describe();
     case 'card': return body.agentCard();
     case 'live': return await body.live(parseJsonArg(args[0]) || {});
+    case 'dispatch': return await body.skillDispatch(args.join(' ') || '');
     case 'foot': return await body.foot(args[0], parseJsonArg(args[1]));
     case 'eye':
     case 'ear':

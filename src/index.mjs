@@ -92,6 +92,12 @@ export class OmniSense {
   // 生命循环：感知→思考→动手→说话→移动，自驱地在世界里活着（默认离线、有限轮次）
   live(opts) { return this.body.live(opts); }
 
+  // 技能匹配与委派（基于能力卡的能力发现闭环）
+  // skillResolve(goal) 纯关键词匹配 → 返回排名 top-3
+  // skillDispatch(goal, opts) 找最佳技能并自动调用
+  skillResolve(goal) { return this.body.skillResolve(goal); }
+  skillDispatch(goal, opts) { return this.body.skillDispatch(goal, opts); }
+
   async status() { return this.models.status(); }
 
   // 真实联网演示（无需 key 即可证明眼睛真能看网站/热搜）

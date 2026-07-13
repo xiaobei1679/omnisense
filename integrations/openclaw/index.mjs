@@ -16,3 +16,10 @@ export function listOrgans() {
 export async function agentCard() {
   return runOrgan('card', []);
 }
+
+// 技能匹配与委派：基于 Agent Card 能力卡找到最佳器官/方法并自动调用
+// 纯关键词匹配，零外部依赖
+export async function dispatchSkill(goal) {
+  const omni = (await import('../../src/index.mjs')).OmniSense.create();
+  return omni.skillDispatch(goal);
+}

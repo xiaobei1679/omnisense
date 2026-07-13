@@ -41,6 +41,12 @@ node integrations/openclaw/omni-body.mjs live '{"ticks":2}' --json
 
 # 把一句话目标交给身体去执行
 node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --json
+
+# 技能匹配与自动委派：基于 Agent Card 能力卡找到最佳技能并执行
+# （借鉴 IETF AgentCard 能力发现 + ARD intent→tool 匹配思想）
+node integrations/openclaw/omni-body.mjs dispatch "计算 2+2" --json
+node integrations/openclaw/omni-body.mjs dispatch "思考当前热点" --json
+node integrations/openclaw/omni-body.mjs dispatch "看今日热搜" --json
 ```
 
 ## 在工作区里注册 OmniSense 为引擎
@@ -89,12 +95,15 @@ console.log(JSON.parse(out));
 | `runOrgan(organ, rawArgs)` | `omni-body.mjs` | 执行单个器官动作，返回结果对象（供测试与脚本复用）；`organ='describe'` 返回七器官树、`'card'` 返回 A2A 技能卡、`'live'` 启动生命循环 |
 | `runGoal(goal, opts)` | `omnisense-bridge.mjs` | 一句话目标 → 感知→思考→动手，返回 `{ goal, usedLLM, trace }` |
 | `agentCard()` | `body.mjs` | A2A 风格能力卡：`{ schema, name, description, version, skills[] }`，skills 含 `id/name/description/tags/examples/net` |
+| `dispatchSkill(goal)` | `index.mjs` | 技能匹配与委派：基于 Agent Card 自动找到最佳技能并执行（纯关键词匹配，零外部依赖） |
 | `ORGANS` | `index.mjs` | 七器官常量数组 `['eye','ear','mouth','brain','hand','perceive','foot']` |
 | `listOrgans()` | `index.mjs` | 返回器官副本，避免调用方误改常量 |
 
 > 工作区侧消费入口见 `openclaw-workspace/scripts/omnisense-link.mjs`：`describe`（七器官树）、
 > `card`（A2A 技能卡）、`route <organ.method> [args...]`（按技能 id 委派到对应器官/方法）、
+> `dispatch <目标>`（**能力发现闭环**：自动匹配最合适的技能并委派），
 > 以及 `list` / `hand` / `goal`。`route` 复用本层 `runOrgan`，对七器官通用。
+> `dispatch` 复用 `body.skillDispatch`，基于关键词匹配自动选择最佳技能。
 
 ## 设计要点（诚实说明）
 

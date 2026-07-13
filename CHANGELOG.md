@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v2.0.0 — 2026-07-13 (major)
+
+- 能力发现闭环：新增 skillResolve/skillDispatch 基于 Agent Card 关键词匹配自动委派到最佳器官/方法（CLI dispatch / 桥接 dispatchSkill / 工作区 omnisense-link dispatch）。借鉴 IETF AgentCard + ARD intent→tool 匹配 + AutoGen MCP Skill Registry + CrewAI 能力路由思想。两套测试全绿：核心 195/195、工作区 254/254。
+
 ## v1.6.0 — 2026-07-13 (minor)
 
 - 能力自描述与跨层委派迭代：1) OmniSense 内核 body.describe() 升级为 A2A Agent Card 风格结构化能力卡(METHOD_META/NET_HAND 模块化，新增 agentCard() 扁平技能卡，含 net 联网诚实标注);2) 工作区侧 omnisense-link.mjs 新增 describe(七器官树)/card(A2A 技能卡)/route<organ.method>(按技能 id 委派到任意器官);3) 跨层测试补 describe/route 用例(11 断言全绿，解决 undici keep-alive 致 node --test 挂起与 node:test 提前 finalize 的取舍);4) 修复工作区子包 8 个预存测试路径问题(基于 import.meta.url 子包根，不再依赖 cwd)，整套件 252/252 通过;5) 两套测试全绿(核心 185 + 工作区 252)。借鉴 Google A2A Protocol 的 AgentCard 思想(仅结构与字段语义，未引入传输/协议依赖)。

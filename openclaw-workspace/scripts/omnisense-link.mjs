@@ -43,7 +43,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>"',
       organs: listOrgans(),
     };
   }
@@ -70,6 +70,13 @@ export async function runLink(args) {
     const text = rest.join(' ').trim();
     if (!text) return { ok: false, error: 'goal 需要文本参数' };
     return await withTimeout(runGoal(text, { useLLM: false }), TIMEOUT_MS);
+  }
+  if (cmd === 'dispatch') {
+    const text = rest.join(' ').trim();
+    if (!text) return { ok: false, error: 'dispatch 需要文本目标' };
+    const omni = (await import('../../src/index.mjs')).OmniSense.create();
+    const r = await withTimeout(omni.skillDispatch(text), TIMEOUT_MS);
+    return r;
   }
   // 其余默认当作器官调用：omnisense-link hand calc '{"expression":"2+2"}'
   const organ = cmd;

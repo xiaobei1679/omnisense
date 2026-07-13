@@ -115,6 +115,46 @@ async function main() {
       break;
     }
     case 'sense': result = omni.sense(); break;
+    case 'dispatch': {
+      // 技能匹配与委派：基于 Agent Card 的能力发现闭环
+      const goal = rest.filter(a => !a.startsWith('--')).join(' ').trim();
+      const detail = flag('--detail');
+      if (!goal) { console.log('用法: node src/cli.mjs dispatch "<目标>" [--detail] [--json]'); process.exitCode = 1; break; }
+      // 先展示匹配到的候选技能
+      const resolved = omni.skillResolve(goal);
+      if (resolved.length === 0) {
+        result = { ok: false, error: '未匹配到任何可用技能。试试更具体的目标：计算/搜索/思考/看热搜/写文件/读文件/…' };
+        if (!jsonMode) console.log(`[dispatch] ${result.error}`);
+        break;
+      }
+      if (!jsonMode) {
+        console.log(`\n[dispatch] 目标: "${goal}"`);
+        console.log(`[dispatch] 技能匹配 (top-${resolved.length}):`);
+        for (const s of resolved) console.log(`  · ${s.skill.id}  (评分 ${s.score})  → 匹配词: ${s.matched.join(', ')}`);
+      }
+      if (detail) { result = { ok: true, goal, candidates: resolved }; break; }
+      // 自动委派到最佳技能
+      const dispatchResult = await omni.skillDispatch(goal);
+      if (!dispatchResult.resolved) {
+        result = { ok: false, goal, error: dispatchResult.error };
+        if (!jsonMode) console.log(`[dispatch] × ${dispatchResult.error}`);
+        break;
+      }
+      if (dispatchResult.needsJsonArgs) {
+        const skill = dispatchResult.resolvedSkill;
+        result = { ok: false, goal, resolved: true, skill, prompt: dispatchResult.prompt, candidates: dispatchResult.candidates };
+        if (!jsonMode) {
+          console.log(`[dispatch] 最佳匹配: ${skill.id} (评分 ${skill.score})`);
+          console.log(`[dispatch] ${dispatchResult.prompt}`);
+          console.log(`[dispatch] 候选技能:`);
+          for (const c of dispatchResult.candidates) console.log(`  · ${c.skill.id} (评分 ${c.score})`);
+        }
+        break;
+      }
+      result = { ok: true, goal, skill: dispatchResult.resolvedSkill, result: dispatchResult.result };
+      if (!jsonMode) console.log(`[dispatch] ✓ 已委派至 ${dispatchResult.resolvedSkill.id} (评分 ${dispatchResult.resolvedSkill.score})`);
+      break;
+    }
     case 'search': {
       const diversity = Number((rest.find(a => /^--diversity=/.test(a)) || '').split('=')[1]) || 0;
       const topK = Number((rest.find(a => /^--topK=/.test(a)) || '').split('=')[1]) || 20;
@@ -193,6 +233,7 @@ const USAGE = `OmniSense 命令行
   card                打印 A2A 风格 Agent Card（七器官能力扁平化为 skills[]，供多智能体工作区发现与委派）
   live [--ticks=3] [--interval=0] [--llm] [--speak] [--allow-shell]   生命循环：自驱地「感知→思考→动手→说话→移动」，像真人一样活着（默认离线、有限轮次）
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
+  dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)
   trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)

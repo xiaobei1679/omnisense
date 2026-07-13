@@ -54,9 +54,13 @@ node scripts/omnisense-link.mjs describe --json
 node scripts/omnisense-link.mjs route --list
 node scripts/omnisense-link.mjs route hand.calc '{"expression":"2+2"}'
 node scripts/omnisense-link.mjs route brain.think "我该关注什么"
+# 技能匹配与自动委派（能力发现闭环）
+node scripts/omnisense-link.mjs dispatch "计算 2+2"
+node scripts/omnisense-link.mjs dispatch "思考当前热点"
+node scripts/omnisense-link.mjs dispatch "看今日热搜"
 ```
 
-> 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。
+> 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` / `dispatch` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。`dispatch` 再借鉴 IETF AgentCard（能力发现）与 ARD（intent→tool 匹配）思想。
 
 `config/openclaw.json.example` 中的 `omnisense-engine` 角色即基于此入口，把"做事"统一收口到身体。
 跨层测试见 `tests/omnisense-link.test.mjs`（离线断言，不触发联网挂起）。
