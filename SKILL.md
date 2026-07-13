@@ -65,6 +65,12 @@ node "{SKILL_DIR}/src/cli.mjs" trace --clear            # 清空本地轨迹
 
 作为库：`omni.traceSummary()` · `omni.traces({limit,engine})` · `omni.getTrace(id)` · `omni.clearTraces()`。serve 暴露 `GET /trace-summary`、`GET /traces?engine=&limit=`。详见 README「🔭 Agent 执行轨迹追踪」。
 
+## A2A 风格能力卡（Agent Card · 能力发现与委派，借鉴 Google A2A Protocol）
+
+合并后的「新项目」让多智能体工作区能机器可读地「发现」并委派身体能力。`body.agentCard()`（库）/ CLI `node "{SKILL_DIR}/src/cli.mjs" card` / 桥接 `node integrations/openclaw/omni-body.mjs card` 把七器官能力扁平化为 `skills[]`（id/name/description/tags/examples/net，`net` 诚实标注联网依赖）。工作区侧 `openclaw-workspace/scripts/omnisense-link.mjs` 再提供 `describe`（七器官树）/ `card`（扁平卡）/ `route <organ.method>`（按技能 id 委派），全部离线可跑、可单测。
+
+设计借鉴（思想/模式，非代码）：Google A2A Protocol · AgentCard `https://github.com/google/A2A` · 仅取「skill 自描述」结构用于能力发现，未引入其传输/协议依赖。
+
 ## 快速使用
 
 ### A. 作为库（在另一段脚本中 import）

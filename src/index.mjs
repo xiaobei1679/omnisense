@@ -87,6 +87,8 @@ export class OmniSense {
   // 七器官：眼 eye / 耳 ear / 嘴 mouth / 脑 brain / 手 hand / 感知 perceive / 脚 foot
   // 直接以真人隐喻驱动既有能力：omni.body.eye('seeWebsite', url) / omni.body.hand('web_fetch', {...}) …
   get organs() { return this.body.describe(); }
+  // A2A 风格能力卡：把七器官能力扁平化为 skills[]，供多智能体工作区做能力发现与委派
+  agentCard() { return this.body.agentCard(); }
   // 生命循环：感知→思考→动手→说话→移动，自驱地在世界里活着（默认离线、有限轮次）
   live(opts) { return this.body.live(opts); }
 

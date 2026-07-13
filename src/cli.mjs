@@ -85,10 +85,22 @@ async function main() {
       for (const o of organs) {
         console.log(`  ${o.name} (${o.key})  ${o.module}.mjs`);
         console.log(`      ${o.desc}`);
-        console.log(`      能力: ${o.methods.join(', ')}`);
+        console.log(`      能力: ${o.methods.map(m => m.name).join(', ')}`);
       }
       console.log('\n驱动: omni.body.eye/ear/mouth/brain/hand/perceive/foot(...)');
       console.log('生命循环: omni.live({ ticks, useLLM, speak }) 或 `omni live`\n');
+      break;
+    }
+    case 'card': {
+      // A2A 风格 Agent Card：把身体全部能力扁平化为 skills[]，供多智能体工作区做能力发现与委派
+      const card = omni.agentCard();
+      if (jsonMode) { result = card; break; }
+      console.log('\n🪪 OmniSense Agent Card（A2A 风格能力自描述）');
+      console.log(`  名称: ${card.name} | 版本: ${card.version} | 技能数: ${card.skills.length}`);
+      console.log(`  描述: ${card.description}`);
+      console.log('  技能:');
+      for (const s of card.skills) console.log(`   · ${s.id}  ${s.net ? '(联网)' : '(离线)'}  ${s.description}`);
+      console.log('\n能力发现: 多智能体工作区可依据 skills[].id / tags / net 委派任务（omni.agentCard()）。\n');
       break;
     }
     case 'live': {
@@ -178,6 +190,7 @@ const USAGE = `OmniSense 命令行
   plan "<目标>"        基于当前感知给出下一步行动建议（离线）
   sense                聚合近期感知为环境模型
   body                自检身体：打印七种器官（眼/耳/嘴/脑/手/感知/脚）及各自能力
+  card                打印 A2A 风格 Agent Card（七器官能力扁平化为 skills[]，供多智能体工作区发现与委派）
   live [--ticks=3] [--interval=0] [--llm] [--speak] [--allow-shell]   生命循环：自驱地「感知→思考→动手→说话→移动」，像真人一样活着（默认离线、有限轮次）
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)

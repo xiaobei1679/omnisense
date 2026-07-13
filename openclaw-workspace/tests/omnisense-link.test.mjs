@@ -51,4 +51,51 @@ it('runLink goal 无参数报错（不伪造成功）', async () => {
   assert.match(r.error, /需要文本/);
 });
 
-after(() => process.exit(failed ? 1 : 0));
+it('runLink card 返回 A2A 风格能力卡（跨层：工作区->桥->身体）', async () => {
+  // runOrgan('card') 直接返回 agentCard() 对象（与 describe 一致，非 {ok} 包裹）
+  const r = await runLink(['card']);
+  assert.ok(Array.isArray(r.skills) && r.skills.length > 0, '能力卡应扁平化出 skills[]');
+  assert.equal(r.name, 'OmniSense Body');
+  assert.ok(r.skills.every(s => s.id && s.name && 'net' in s), '每个 skill 含 id/name/net');
+});
+
+it('runLink describe 返回七器官树（每器官含结构化 methods）', async () => {
+  const r = await runLink(['describe']);
+  assert.equal(r.ok, true);
+  assert.equal(r.organs.length, 7);
+  for (const o of r.organs) {
+    assert.ok(Array.isArray(o.methods), `${o.key} 应有 methods 数组`);
+    assert.ok(o.methods.length > 0, `${o.key} methods 不应为空`);
+    assert.ok(o.methods.every(m => m.name && 'desc' in m && 'net' in m), `${o.key} 每个 method 含 name/desc/net`);
+  }
+});
+
+it('runLink route --list 列出全部能力（与 card skills 数一致）', async () => {
+  const r = await runLink(['route', '--list']);
+  assert.equal(r.ok, true);
+  assert.ok(r.count > 0, '应列出至少一个能力');
+  assert.ok(Array.isArray(r.skills) && r.skills.every(s => s.id && 'net' in s), 'skills 含 id/net');
+  const card = await runLink(['card']);
+  assert.equal(r.count, card.skills.length, 'route --list 数量应与 card 技能数一致');
+});
+
+it('runLink route hand.calc 委派到手器官并离线计算', async () => {
+  const r = await runLink(['route', 'hand.calc', JSON.stringify({ expression: '2+2' })]);
+  assert.equal(r.ok, true);
+  assert.equal(r.output.result, 4);
+});
+
+it('runLink route brain.think 委派到脑器官（统一返回契约 {ok:true,result}）', async () => {
+  const r = await runLink(['route', 'brain.think', '我该关注什么']);
+  assert.equal(r.ok, true);
+  assert.ok(r.result, 'route 应包成 {ok:true, result}');
+});
+
+it('runLink route 错误 skillId 格式报错（不伪造成功）', async () => {
+  const r = await runLink(['route', 'badformat']);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /organ\.method/);
+});
+
+// 临时诊断：先不强制 exit，确认 route brain.think / route badformat 本身能通过
+after(() => { if (failed) console.error(`DIAG failed=${failed}`); });

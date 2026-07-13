@@ -32,6 +32,10 @@ node integrations/openclaw/omni-body.mjs perceive --json
 # 列出七器官及其方法
 node integrations/openclaw/omni-body.mjs describe --json
 
+# A2A 风格能力卡：七器官能力扁平化为 skills[]（id/name/description/tags/examples/net）
+# 借鉴 Google A2A Protocol 的 AgentCard 思想（https://github.com/google/A2A），仅借鉴结构语义
+node integrations/openclaw/omni-body.mjs card --json
+
 # 启动生命循环（像真人一样 感知→思考→动手→说话→移动）
 node integrations/openclaw/omni-body.mjs live '{"ticks":2}' --json
 
@@ -53,7 +57,7 @@ node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --jso
 
 ```js
 // ESM（推荐）
-import { runOrgan, runGoal, ORGANS, listOrgans } from '../integrations/openclaw/index.mjs';
+import { runOrgan, runGoal, agentCard, ORGANS, listOrgans } from '../integrations/openclaw/index.mjs';
 
 // 驱动单个器官
 const r = await runOrgan('hand', ['calc', '{"expression":"2+2"}']);

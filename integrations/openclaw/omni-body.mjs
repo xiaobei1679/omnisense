@@ -8,6 +8,7 @@
 //   node integrations/openclaw/omni-body.mjs hand calc '{"expression":"2+2"}' [--json]
 //   node integrations/openclaw/omni-body.mjs perceive [--json]
 //   node integrations/openclaw/omni-body.mjs describe [--json]
+//   node integrations/openclaw/omni-body.mjs card [--json]
 //   node integrations/openclaw/omni-body.mjs live '{"ticks":2}' [--json]
 //   node integrations/openclaw/omni-body.mjs eye seeHotTopics bilibili [--json]   # 联网（离线降级）
 //   node integrations/openclaw/omni-body.mjs ear listenFeedback "用户说…" [--json]
@@ -45,6 +46,7 @@ export async function runOrgan(organ, rawArgs = []) {
     }
     case 'perceive': return body.perceive();
     case 'describe': return body.describe();
+    case 'card': return body.agentCard();
     case 'live': return await body.live(parseJsonArg(args[0]) || {});
     case 'foot': return await body.foot(args[0], parseJsonArg(args[1]));
     case 'eye':
@@ -53,7 +55,7 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'brain':
       return await body[organ](args[0], ...args.slice(1));
     default:
-      throw new Error(`未知器官: ${organ}（可选 eye/ear/mouth/brain/hand/perceive/foot/describe/live）`);
+      throw new Error(`未知器官: ${organ}（可选 eye/ear/mouth/brain/hand/perceive/foot/describe/card/live）`);
   }
 }
 

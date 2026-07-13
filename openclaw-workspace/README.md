@@ -46,7 +46,16 @@ node scripts/omnisense-link.mjs list
 node scripts/omnisense-link.mjs hand calc '{"expression":"3*14"}'
 # 用一句话目标驱动身体（感知->思考->记忆；联网路径由 CLI 的 process.exit 兜底退出）
 node scripts/omnisense-link.mjs goal "记录一次跨层迭代验证" --json
+# A2A 风格能力卡：身体全部能力扁平化为 skills[]（供工作区智能体发现与委派）
+node scripts/omnisense-link.mjs card --json
+# 七器官树（含每能力 desc/net/examples）
+node scripts/omnisense-link.mjs describe --json
+# 按技能 id 直接委派到器官/方法（route <organ.method> [args...]）
+node scripts/omnisense-link.mjs route --list
+node scripts/omnisense-link.mjs route hand.calc '{"expression":"2+2"}'
 ```
+
+> 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。
 
 `config/openclaw.json.example` 中的 `omnisense-engine` 角色即基于此入口，把"做事"统一收口到身体。
 跨层测试见 `tests/omnisense-link.test.mjs`（离线断言，不触发联网挂起）。

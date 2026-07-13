@@ -11,3 +11,8 @@ export const ORGANS = ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot
 export function listOrgans() {
   return [...ORGANS];
 }
+
+// A2A 风格 Agent Card：把身体全部能力扁平化为 skills[]，供多智能体工作区做能力发现与委派
+export async function agentCard() {
+  return runOrgan('card', []);
+}

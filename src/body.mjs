@@ -14,9 +14,17 @@
 //   2) 手（hand）是一等公民：直接 hand('web_fetch', {...}) 调用真实能力。
 //   3) live() 是「和真人一样」的核心：不是被动等命令，而是自驱地
 //      感知→思考→动手→说话→移动，在世界里活着。默认离线、有限轮次，绝不挂起。
+//   4) 自描述（describe / agentCard）：借鉴 Google A2A Protocol 的 Agent Card 思想——
+//      每个能力带 description / tags / examples，供上层 client（多智能体工作区）发现与调用；
+//      OmniSense 额外加 net 字段诚实标注「是否需要联网」（离线环境会降级）。
 import { runWatch, runWatchTick } from './core/watch.mjs';
 import { buildDefaultTools, executeTool, toolSpecs } from './core/tools.mjs';
 import { log } from './core/logger.mjs';
+import { readFileSync } from 'node:fs';
+
+// 读取仓库版本（与根目录 VERSION 保持同步），用于 Agent Card 的 version 字段
+let CARD_VERSION = '0.0.0';
+try { CARD_VERSION = readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim(); } catch {}
 
 // 七器官清单（供文档 / demo / 自检）。顺序即"真人身体"自上而下。
 export const ORGANS = [
@@ -28,6 +36,51 @@ export const ORGANS = [
   { key: 'perceive', name: '感知', module: 'perception', desc: '感：把眼耳输入汇成环境理解' },
   { key: 'foot',     name: '脚',   module: 'watch',     desc: '行：常驻感知、在世界里移动与监视' },
 ];
+
+// ── 能力自描述元数据（借鉴 A2A Protocol 的 Agent Card：每个技能带 desc / tags / examples）──
+// 额外 net 字段：该能力是否需要联网（诚实标注，离线环境会降级）。
+// 手（hand）工具的元数据来自运行时 toolSpecs，故此处不列；联网子集见 NET_HAND。
+const METHOD_META = {
+  eye: {
+    seeWebsite:      { desc: '抓取并摘要网页正文', net: true,  examples: ['看 https://example.com'] },
+    seeHotTopics:    { desc: '抓取单平台实时热搜', net: true,  examples: ['看 B站热搜'] },
+    seeHotAll:       { desc: '多平台热搜并行聚合并去重', net: true },
+    summarizeWebsite:{ desc: '网页正文提取 + 摘要', net: true },
+    seeImage:        { desc: '识图 / 描述图像', net: false },
+    watchVideo:      { desc: '看视频 / 抽帧信息', net: true },
+    clearHotCache:   { desc: '清空热搜缓存', net: false },
+    hotStats:        { desc: '热搜抓取统计', net: false },
+  },
+  ear: {
+    hearAudio:       { desc: '音频转写', net: false },
+    hearNovel:       { desc: '小说朗读 / 听书', net: false },
+    listenFeedback:  { desc: '聆听用户反馈', net: false },
+  },
+  mouth: {
+    speak:           { desc: '说话 / 朗读', net: false },
+    giveOpinion:     { desc: '表达观点', net: false },
+    reply:           { desc: '回复', net: false },
+  },
+  brain: {
+    think:           { desc: '思考 / 推理', net: false },
+    decide:          { desc: '决策', net: false },
+    plan:            { desc: '规划', net: false },
+    act:             { desc: '行动', net: false },
+    agent:           { desc: '运行体驱动(agent 模式)', net: false },
+    multiAgent:      { desc: '多智能体协调', net: false },
+    command:         { desc: '命令调度', net: false },
+    remember:        { desc: '记忆', net: false },
+    recall:          { desc: '回忆', net: false },
+    search:          { desc: '记忆 / 知识检索', net: false },
+  },
+  perceive: { sense: { desc: '把眼耳输入汇成整体环境理解', net: false } },
+  foot: {
+    watch:           { desc: '常驻感知巡逻', net: false },
+    watchTick:       { desc: '单次移动快照', net: false },
+  },
+};
+// 手（hand）工具中需要联网的子集（其余离线）
+const NET_HAND = new Set(['web_fetch', 'summarize_url', 'hot_topics']);
 
 export class Body {
   constructor(omni) {
@@ -53,22 +106,53 @@ export class Body {
   }
   handList() { return toolSpecs(this.tools); }
 
-  // 身体自检：列出七器官及其各自能力（demo / 文档 / CLI `body` 用）
+  // 身体自检：以 A2A Agent Card 风格返回七器官及其各自能力的结构化清单
+  // （含每个能力的描述 / 是否联网 / 示例），供上层 client 发现与调用。
   describe() {
     return ORGANS.map(o => ({ ...o, methods: this._methodsOf(o.key) }));
   }
 
   _methodsOf(key) {
-    switch (key) {
-      case 'eye':      return ['seeWebsite', 'seeHotTopics', 'seeHotAll', 'summarizeWebsite', 'seeImage', 'watchVideo', 'clearHotCache', 'hotStats'];
-      case 'ear':      return ['hearAudio', 'hearNovel', 'listenFeedback'];
-      case 'mouth':    return ['speak', 'giveOpinion', 'reply'];
-      case 'brain':    return ['think', 'decide', 'plan', 'act', 'agent', 'multiAgent', 'command', 'remember', 'recall', 'search'];
-      case 'hand':     return this.handList().map(t => t.name);
-      case 'perceive': return ['sense'];
-      case 'foot':     return ['watch', 'watchTick'];
-      default:         return [];
+    if (key === 'hand') {
+      return this.handList().map(t => ({
+        name: t.name,
+        desc: t.description || '',
+        net: NET_HAND.has(t.name),
+        examples: [],
+      }));
     }
+    const meta = METHOD_META[key];
+    if (!meta) return [];
+    return Object.entries(meta).map(([name, m]) => ({ name, desc: m.desc, net: m.net, examples: m.examples || [] }));
+  }
+
+  // A2A 风格 Agent Card：把身体全部能力扁平化为 skills[]（id/name/description/tags/examples/net），
+  // 供多智能体工作区做「能力发现 + 委派」（灵感来自 Google A2A Protocol 的 AgentCard.skills：
+  // https://github.com/google/A2A —— 仅借鉴结构与字段语义，未引入其传输/协议依赖）。
+  // net=true 表示该能力需要联网，离线环境会诚实降级（OmniSense 的诚实扩展字段）。
+  agentCard() {
+    const skills = [];
+    for (const o of ORGANS) {
+      const organKey = o.key;
+      const organName = o.name;
+      for (const m of this._methodsOf(organKey)) {
+        skills.push({
+          id: `${organKey}.${m.name}`,
+          name: m.name,
+          description: m.desc || `${organName} 的 ${m.name} 能力`,
+          tags: [organKey, organName],
+          examples: m.examples || [],
+          net: m.net,
+        });
+      }
+    }
+    return {
+      schema: 'omnisense-agent-card/1.0',
+      name: 'OmniSense Body',
+      description: '通用 AI 身体：眼/耳/嘴/脑/手/感知/脚 七器官，像真人一样感知、思考、行动',
+      version: CARD_VERSION,
+      skills,
+    };
   }
 
   // ── 生命循环：像真人一样持续「感知→思考→动手→说话→移动」──

@@ -33,6 +33,37 @@ test('describe 返回 7 器官且各自带能力列表', () => {
   }
 });
 
+test('describe 每个能力是 {name,desc,net} 对象（A2A Agent Card 风格）', () => {
+  const body = new Body(fakeOmni());
+  const d = body.describe();
+  const eye = d.find(o => o.key === 'eye');
+  assert.ok(Array.isArray(eye.methods) && eye.methods.length > 0);
+  for (const m of eye.methods) {
+    assert.ok(typeof m.name === 'string' && m.name.length > 0, '能力需有 name');
+    assert.ok('net' in m, '能力需含 net 字段（诚实标注联网）');
+  }
+});
+
+test('agentCard 扁平化全部能力为 skills[]（id/name/description/tags/net，唯一 id）', () => {
+  const body = new Body(fakeOmni());
+  const card = body.agentCard();
+  assert.equal(card.schema, 'omnisense-agent-card/1.0');
+  assert.equal(card.name, 'OmniSense Body');
+  assert.ok(card.version && /^\d+\.\d+\.\d+$/.test(card.version), 'version 应为 semver');
+  assert.ok(Array.isArray(card.skills) && card.skills.length > 0);
+  const ids = new Set(card.skills.map(s => s.id));
+  assert.equal(ids.size, card.skills.length, 'skill id 应唯一');
+  for (const s of card.skills) {
+    assert.ok(s.id && s.name && s.description, 'skill 需含 id/name/description');
+    assert.ok(Array.isArray(s.tags) && s.tags.length > 0, 'skill 需含 tags');
+    assert.ok('net' in s, 'skill 需含 net 字段（诚实标注联网）');
+  }
+  // 至少含一个联网能力（眼）与一个离线能力（脑.think）
+  assert.ok(card.skills.some(s => s.net), '应含联网能力');
+  assert.ok(card.skills.some(s => !s.net), '应含离线能力');
+  assert.ok(ids.has('eye.seeWebsite') && ids.has('brain.think'));
+});
+
 test('器官委托：eye/ear/mouth/brain/perceive 转发到对应模块', async () => {
   const body = new Body(fakeOmni());
   const e = await body.eye('seeWebsite', 'http://x');

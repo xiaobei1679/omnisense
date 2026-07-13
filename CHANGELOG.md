@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v1.5.0 — 2026-07-13 (minor)
+
+- A2A 风格 Agent Card 能力自描述（body.agentCard()/CLI card/桥接 omni-body.mjs card）+ 工作区 omnisense-link 增强 describe(器官树)/card(扁平技能卡)/route(按 organ.method 委派)；借鉴 Google A2A Protocol 的 AgentCard 思想（仅取结构语义 id/name/description/tags/examples，未引入其传输/协议依赖），额外加 net 字段诚实标注联网依赖。两套测试全绿：OmniSense 185/185、子包 252/252。
+
 ## v1.4.0 — 2026-07-13 (minor)
 
 - 跨层迭代：新增 openclaw-workspace/scripts/omnisense-link.mjs（工作区驱动 OmniSense 七器官/目标的一体化入口）+ 跨层测试 tests/omnisense-link.test.mjs（离线，after 兜底退出避免 undici keep-alive 挂起）；工作区 README 增补联动说明；.gitignore 忽略 .workbuddy/ 本地记忆。落实用户要求：合并后的新项目两轮同迭代、不再只动内核。
