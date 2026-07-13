@@ -18,6 +18,6 @@
     "type": "minor",
     "date": "2026-07-13T03:58:23.340Z",
     "tag": "v1.2.0",
-    "notes": "版本心跳机制收口：package.json 增加 release 脚本 + files 纳入 VERSION/CHANGELOG/versions.json/scripts；README/SKILL 增补『版本与回退』章节；版本逻辑单测已落地(test/version.test.mjs)。距基线>3h，按规则升 major。"
+    "notes": "版本心跳机制收口：package.json 增加 release 脚本 + files 纳入 VERSION/CHANGELOG/versions.json/scripts；README/SKILL 增补『版本与回退』章节；版本逻辑单测已落地(test/version.test.mjs)。注：本次 auto 判定为 minor——按本机时钟距基线 v1.0.0 仅约 6 分钟，未满 3h，故不升 major（major 将在距基线满 3h 后的首次心跳触发）。"
   }
 ]
