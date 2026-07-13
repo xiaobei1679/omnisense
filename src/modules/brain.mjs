@@ -41,11 +41,47 @@ export class Brain {
     this.bus.register('brain', 'decide', p => this.decide(p.goal));
     this.bus.register('brain', 'command', p => this.command(p.target, p.action, p.payload));
     this.bus.register('brain', 'plan', p => this.plan(p.goal));
+
+    // 四层记忆总线注册
+    this.bus.register('brain', 'remember', p => this.remember(p.key, p.value));
+    this.bus.register('brain', 'recall', p => this.recall(p.key));
+    this.bus.register('brain', 'note', p => this.note(p.text, p.tag));
+    // Layer 2: Rule
+    this.bus.register('brain', 'addRule', p => this.memory.addRule(p.rule));
+    this.bus.register('brain', 'removeRule', p => this.memory.removeRule(p.id));
+    this.bus.register('brain', 'getRules', p => this.memory.getRules(p.enabledOnly));
+    this.bus.register('brain', 'checkRules', p => this.memory.checkRules(p.input));
+    // Layer 3: Skill
+    this.bus.register('brain', 'addSkill', p => this.memory.addSkill(p.skill));
+    this.bus.register('brain', 'findSkills', p => this.memory.findSkills(p.query));
+    this.bus.register('brain', 'hitSkill', p => this.memory.hitSkill(p.id));
+    // Layer 4: Knowledge
+    this.bus.register('brain', 'addKnowledge', p => this.memory.addKnowledge(p.knowledge));
+    this.bus.register('brain', 'searchKnowledge', p => this.memory.searchKnowledge(p.query, p.topK));
+    this.bus.register('brain', 'learnFromCorrection', p => this.memory.learnFromCorrection(p));
+    // 跨层
+    this.bus.register('brain', 'searchAll', p => this.memory.searchAll(p.query, p.opts));
+    this.bus.register('brain', 'layerSnapshot', () => this.memory.layerSnapshot());
   }
 
+  // Layer 1: Memory（向后兼容）
   remember(key, value) { return this.memory.remember(key, value); }
   recall(key) { return this.memory.recall(key); }
   note(text, tag) { return this.memory.note(text, tag); }
+
+  // Layer 2-4 快捷方法
+  addRule(rule) { return this.memory.addRule(rule); }
+  removeRule(id) { return this.memory.removeRule(id); }
+  getRules(enabledOnly = true) { return this.memory.getRules(enabledOnly); }
+  checkRules(input) { return this.memory.checkRules(input); }
+  addSkill(skill) { return this.memory.addSkill(skill); }
+  findSkills(query) { return this.memory.findSkills(query); }
+  hitSkill(id) { return this.memory.hitSkill(id); }
+  addKnowledge(knowledge) { return this.memory.addKnowledge(knowledge); }
+  searchKnowledge(query, topK) { return this.memory.searchKnowledge(query, topK); }
+  learnFromCorrection(info) { return this.memory.learnFromCorrection(info); }
+  searchAll(query, opts) { return this.memory.searchAll(query, opts); }
+  layerSnapshot() { return this.memory.layerSnapshot(); }
 
   // 大脑向任意感官/表达下发命令（眼/耳/嘴的行动都来自这里）
   async command(target, action, payload = {}) {

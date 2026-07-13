@@ -61,5 +61,12 @@
     "date": "2026-07-13T13:31:00.085Z",
     "tag": "v2.1.0",
     "notes": "CodeGraph MCP + Caveman 输出压缩集成：1) 安装 CodeGraph 知识图谱(colbymchenry/codegraph, MIT, 47K★)，索引 145 文件/1701 节点/5230 边，新建 src/tools/codegraph.mjs 注册为 hand 器官工具(支持 explore/query/node/callers/callees 五种模式);2) mouth 器官注入 Caveman 输出压缩(借鉴 88K★ 开源项目)，新增 setStyle/getStyle 方法，支持 normal/lite/full/ultra 四级风格，通过 omnisense-link route mouth.setStyle 调用;3) 创建两个实用 WorkBuddy Skills(codegraph-mcp-setup + agi-memory-architecture)供后续直接加载;4) 更新 .gitignore 排除 .codegraph/ 索引目录;5) 修复 skillResolve 测试因 getStyle 新增使匹配偏移;6) 两套测试全绿(核心 195 + 工作区 254)。"
+  },
+  {
+    "version": "2.2.0",
+    "type": "minor",
+    "date": "2026-07-13T13:40:02.714Z",
+    "tag": "v2.2.0",
+    "notes": "四层记忆架构改造(AGI-Memory 借鉴)：1) Memory 类从单文件键值存储升级为四层派生架构——Layer1 Memory(原store/notes，向后兼容)+Layer2 Rule(IF-ELSE 门控规则，带 matchRule 引擎)+Layer3 Skill(技能定义/trigger搜索/hitCount追踪)+Layer4 Knowledge(结构化知识+derived_from+confidence+avoid_pitfall);2) 各层独立 json 文件持久化(原子 rename 写)，独立的 CRUD 与 BM25 搜索方法;3) Brain 新增 12 个总线方法(addRule/removeRule/getRules/checkRules/addSkill/findSkills/hitSkill/addKnowledge/searchKnowledge/learnFromCorrection/searchAll/layerSnapshot);4) 跨层 searchAll 支持 from 参数筛选各层;5) learnFromCorrection 自动从纠错中生成 Knowledge 条目;6) 所有原有 API 完全不变，195+254 测试全绿。"
   }
 ]
