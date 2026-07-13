@@ -3,7 +3,7 @@ name: omnisense
 description: |
   通用 AI 感知系统，赋予宿主多模态真实感知能力：眼睛(真实看网站/视频/漫画动漫/抖音/红果/B站/微博/头条/百度/热点)、
   耳朵(真实听用户意见/小说/文案/歌曲)、嘴巴(真实交流·给意见/对话)、大脑(思考/记忆/向眼耳嘴下发命令)、
-  感知(环境聚合)。
+  感知(环境聚合)、手(真正动手·联网抓/读写文件/计算/记忆/总结)、脚(常驻感知·在世界里移动与监视)。
   文本推理默认走本机模型网关（OpenAI 兼容端点，127.0.0.1:<gateway.port>/v1，免 API KEY）真思考真说；
   联网抓取/下载本机真实执行。
   适用：需要让 AI 像真人一样去"看/听/说/想"的任何场景。
@@ -15,7 +15,7 @@ license: MIT
 
 # OmniSense · 通用 AI 感知系统（技能/插件）
 
-赋予宿主 眼·耳·嘴·脑·感知 五类真实能力，像真人一样感知世界。
+赋予宿主 眼·耳·嘴·脑·手·感知·脚 七类真实能力，像真人一样的身体一样感知、思考并行动。
 **一次编写、到处使用**：可丢进任意 Agent 框架的 `skills/omnisense/` 目录，也可作为独立 CLI / npm 包 / 库使用。
 
 > 本仓库同时是通用开源项目（见 `README.md`）。作为技能使用时，把整个目录放进框架的 `skills/omnisense/` 即可。
@@ -28,14 +28,16 @@ license: MIT
   - 模式自动探测：环境变量 `OMNI_RUNTIME=gateway|driver` 可强制；否则按网关可达性自动判断。
 - **诚实降级**：视觉「看图」(VLM)、语音「听」(ASR)与「出声」(TTS) 网关当前不支持，需外部 key 或本地引擎，未配置时如实说明，绝不假装已看懂/听懂/说出。
 
-## 五模块与真实能力对照
-| 模块 | 真实能做的 | 模型依赖 |
+## 七器官与真实能力对照
+| 器官 | 真实能做的 | 模型依赖 |
 |------|-----------|---------|
 | 眼 Eyes | 抓网站HTML、拉B站/头条/微博/百度/抖音热搜、红果短剧热榜(聚合)、知乎热搜词、微信热文、B站番剧榜(WBI签名)、yt-dlp下视频抽帧 | 网站/热搜抓取本机真实执行(免key)；看图视觉：driver模式由宿主直接读图(免key)，网关模式需VLM key |
 | 耳 Ears | 下载并读取音频、听用户意见/小说文本/文案(文本理解) | 语音转写ASR需外部；文本理解走网关或 driver |
 | 嘴 Mouth | 就话题给意见、真实对话回复、可TTS出声 | 说话/给意见免key(网关 或 driver 驱动)；出声需TTS |
 | 脑 Brain | 记忆、聚合感知、思考决策、**行动(act: Agent 推理闭环执行目标)**、向眼耳嘴下发命令 | 思考/行动免key(网关 或 driver 驱动) |
+| 手 Hand | 联网抓取(web_fetch)/读写文件/列表/计算(安全算术)/时间/热搜/网页摘要/记忆读写 | 全部本机真实执行(免key)；shell 需显式开启 |
 | 感知 Perception | 聚合近期感知为情境模型、给出注意力建议 | 无 |
+| 脚 Foot | 常驻感知循环(差异检测+多模式自主编排+新增热点联网摘要)、在世界里移动与监视 | 离线确定性与在线思考两路，互不阻塞 |
 
 ## 快速使用
 
@@ -49,6 +51,10 @@ await omni.seeHotTopics('bilibili');   // 眼：真抓热搜
 await omni.seeWebsite('https://...');  // 眼：真抓网站
 await omni.think('用户关心什么');        // 脑：网关代理免key思考
 await omni.giveOpinion('AI感知的价值');  // 嘴：免key给意见
+// 或直接用「身体」隐喻驱动七器官：
+await omni.body.eye('seeWebsite', 'https://example.com'); // 眼
+await omni.body.hand('web_fetch', { url: 'https://example.com' }); // 手：动手抓取
+await omni.live({ ticks: 3, speak: true }); // 生命循环：自驱地感知→思考→动手→说话→移动
 ```
 
 ### B. 命令行（SKILL_DIR 指向本技能目录）
@@ -74,6 +80,8 @@ node "{SKILL_DIR}/src/cli.mjs" watch --interval=60      # 常驻感知循环(写
 node "{SKILL_DIR}/src/cli.mjs" watch --agent --interval=120   # 开启"变化即行动"(remember)
 node "{SKILL_DIR}/src/cli.mjs" watch --agent --agent-mode=alert --interval=120   # 仅"突变"时写告警记忆
 node "{SKILL_DIR}/src/cli.mjs" watch --agent --agent-mode=digest --interval=120  # 变化即把热点+差异写成 markdown 摘要落盘
+node "{SKILL_DIR}/src/cli.mjs" body                   # 身体自检：打印七器官(眼/耳/嘴/脑/手/感知/脚)及能力
+node "{SKILL_DIR}/src/cli.mjs" live --ticks=3 --speak   # 生命循环：自驱地感知→思考→动手→说话→移动(像真人一样活着)
 node "{SKILL_DIR}/src/cli.mjs" serve 8787              # 启动本地驱动服务(127.0.0.1；OMNI_TOKEN 启用 Bearer 鉴权)
 # 🤖 Agent 行动闭环：真把目标做完（有模型走 ReAct，无模型走本地规划器离线完成）
 node "{SKILL_DIR}/src/cli.mjs" agent "计算 2+2" --no-llm

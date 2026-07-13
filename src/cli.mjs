@@ -77,6 +77,31 @@ async function main() {
       }
       break;
     }
+    case 'body': {
+      // 打印七器官（像真人一样的身体自检）
+      const organs = omni.organs;
+      if (jsonMode) { result = organs; break; }
+      console.log('\n🧍 OmniSense 身体：七种器官（像真人一样）');
+      for (const o of organs) {
+        console.log(`  ${o.name} (${o.key})  ${o.module}.mjs`);
+        console.log(`      ${o.desc}`);
+        console.log(`      能力: ${o.methods.join(', ')}`);
+      }
+      console.log('\n驱动: omni.body.eye/ear/mouth/brain/hand/perceive/foot(...)');
+      console.log('生命循环: omni.live({ ticks, useLLM, speak }) 或 `omni live`\n');
+      break;
+    }
+    case 'live': {
+      const ticks = Number((rest.find(a => /^--ticks=(\d+)$/.test(a)) || '').split('=')[1]) || 3;
+      const interval = Number((rest.find(a => /^--interval=(\d+)$/.test(a)) || '').split('=')[1]) || 0;
+      const useLLM = flag('--llm');
+      const speak = flag('--speak');
+      const allowShell = flag('--allow-shell');
+      log.info(`[live] 启动生命循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, 说话=${speak}, shell=${allowShell}`);
+      result = await omni.live({ ticks, intervalMs: interval * 1000, useLLM, speak, allowShell });
+      if (!jsonMode) console.log('\n═══ 生命循环结果 ═══\n' + (result.trace || []).map(t => `· tick ${t.tick}: 感知 ${t.perceive?.topicCount ?? 0} 话题 | 行动 ${t.act?.completed ? '✓' : '✗'}`).join('\n'));
+      break;
+    }
     case 'sense': result = omni.sense(); break;
     case 'search': {
       const diversity = Number((rest.find(a => /^--diversity=/.test(a)) || '').split('=')[1]) || 0;
@@ -140,6 +165,8 @@ const USAGE = `OmniSense 命令行
   multiagent "<目标>"  多 Agent 协作：协调器把目标拆成角色子任务(researcher/analyst/writer/critic)，独立子任务并行执行、共享黑板、协调器综合产出；有在线模型时走 LLM 智能拆解子任务，否则离线拆解 [--roles=researcher,analyst,writer] [--no-llm] [--no-parallel] [--coordinator] [--allow-shell]
   plan "<目标>"        基于当前感知给出下一步行动建议（离线）
   sense                聚合近期感知为环境模型
+  body                自检身体：打印七种器官（眼/耳/嘴/脑/手/感知/脚）及各自能力
+  live [--ticks=3] [--interval=0] [--llm] [--speak] [--allow-shell]   生命循环：自驱地「感知→思考→动手→说话→移动」，像真人一样活着（默认离线、有限轮次）
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)

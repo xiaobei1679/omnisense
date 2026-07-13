@@ -11,6 +11,7 @@ import { Perception } from './modules/perception.mjs';
 import { runWatch, runWatchTick } from './core/watch.mjs';
 import { runAgent } from './core/agent.mjs';
 import { runMultiAgent } from './core/agents.mjs';
+import { Body } from './body.mjs';
 import { log } from './core/logger.mjs';
 import { env } from 'node:process';
 
@@ -24,6 +25,8 @@ export class OmniSense {
     this.mouth = new Mouth(this.bus, this.models);
     this.brain = new Brain(this.bus, this.models, this.memory);
     this.perception = new Perception(this.bus);
+    // 身体：把七种器官整合成一个像真人一样的智能体
+    this.body = new Body(this);
   }
 
   static create() { loadEnv(); return new OmniSense(); }
@@ -69,6 +72,13 @@ export class OmniSense {
   watchTick(opts) { return runWatchTick(this, opts); }
   watch(opts) { return runWatch(this, opts); }
 
+  // —— 身体：像真人一样的七器官 ——
+  // 七器官：眼 eye / 耳 ear / 嘴 mouth / 脑 brain / 手 hand / 感知 perceive / 脚 foot
+  // 直接以真人隐喻驱动既有能力：omni.body.eye('seeWebsite', url) / omni.body.hand('web_fetch', {...}) …
+  get organs() { return this.body.describe(); }
+  // 生命循环：感知→思考→动手→说话→移动，自驱地在世界里活着（默认离线、有限轮次）
+  live(opts) { return this.body.live(opts); }
+
   async status() { return this.models.status(); }
 
   // 真实联网演示（无需 key 即可证明眼睛真能看网站/热搜）
@@ -80,6 +90,9 @@ export class OmniSense {
     log.info('运行模式(后端):', st.backend);
     log.info('能力:', JSON.stringify({ think: st.think, seeVision: st.seeVision, webFetch: st.webFetch, hear: st.hear, speak: st.speak }));
     log.info('说明:', st.note);
+    // 身体自检：像真人一样的七器官
+    const organs = this.organs;
+    log.info(`身体自检: ${organs.length} 种器官 → ` + organs.map(o => `${o.name}(${o.key})`).join(' '));
     log.info('（眼/耳联网抓取本机真实执行，全程免 key；脑/嘴在网关模式走本地模型网关、在驱动模式由调用方自身驱动）\n');
 
     // 真实看热点（联网，无需 key）—— 多平台并行聚合演示
