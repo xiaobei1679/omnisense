@@ -1,0 +1,50 @@
+{
+  "name": "omni-sense",
+  "version": "1.0.0",
+  "description": "通用 AI 感知系统：赋予 AI 眼睛/耳朵/嘴巴/大脑/感知五类真实能力（联网真抓取，模型免 key 双模式自适应）。一次编写，到处运行——可作为 OpenClaw/QClaw 技能，也可作为独立 npm 包 / CLI 使用。",
+  "type": "module",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "bin": {
+    "omni-sense": "./src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node src/cli.mjs demo",
+    "demo": "node src/cli.mjs demo",
+    "status": "node src/cli.mjs status",
+    "hot": "node src/cli.mjs hot",
+    "see": "node src/cli.mjs see",
+    "serve": "node src/cli.mjs serve",
+    "test": "node --test",
+    "lint": "node -e \"const cp=require('child_process');const fs=require('fs');const {execFileSync}=cp;const g=(d)=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?g(d+'/'+e.name):(e.name.endsWith('.mjs')?[d+'/'+e.name]:[]));const files=[...g('src'),...g('test')];for(const f of files){execFileSync(process.execPath,['--check',f],{stdio:'inherit'});}console.log('lint OK: '+files.length+' files');\""
+  },
+  "keywords": [
+    "ai",
+    "perception",
+    "multimodal",
+    "agent",
+    "eyes",
+    "ears",
+    "llm",
+    "openclaw",
+    "qclaw",
+    "sense",
+    "vision",
+    "tool",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "optionalDependencies": {}
+}

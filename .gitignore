@@ -1,0 +1,32 @@
+# ── 运行时态（个人/本地状态，不进仓库）──
+/.omni-memory.json
+*.omni-memory.json
+/.omni-watch.json
+*.omni-watch.json
+
+# ── 密钥 / 本地配置 ──
+.env
+.env.local
+*.local
+
+# ── 依赖与锁文件 ──
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ── 日志与临时产物 ──
+*.log
+npm-debug.log*
+/tmp/
+omni-img-*
+# 测试临时产物（agent 写文件验证遗留）
+_v.txt
+*.tmp
+.DS_Store
+
+# ── 系统文件 ──
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
