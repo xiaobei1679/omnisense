@@ -118,8 +118,8 @@ for (let i = 1; i < rawArgs.length; i++) {
 }
 
 switch (cmd) {
-  case 'build': return cmdBuild(args);
-  case 'list-tasks': return cmdListTasks();
+  case 'build': cmdBuild(args); break;
+  case 'list-tasks': cmdListTasks(); break;
   default:
     console.log('spawn-template.js v1.0 — 子Agent spawn任务模板组装器');
     console.log('  build --task-id <id> [--task-text "<原文>"] [--profile] [--policies] [--lessons]');

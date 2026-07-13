@@ -522,16 +522,16 @@ for (let i = 1; i < rawArgs.length; i++) {
 }
 
 switch (cmd) {
-  case 'add': return cmdAdd(args);
-  case 'list': return cmdList(args);
-  case 'push': return cmdPush(args);
-  case 'push-all': return cmdPushAll(args);
-  case 'query': return cmdQuery(args);
-  case 'stats': return cmdStats();
-  case 'cleanup': return cmdCleanup(args);
-  case 'forget': return cmdForget(args);
-  case 'expire': return cmdExpire();
-  case 'touch': return cmdTouch(args);
+  case 'add': cmdAdd(args); break;
+  case 'list': cmdList(args); break;
+  case 'push': cmdPush(args); break;
+  case 'push-all': cmdPushAll(args); break;
+  case 'query': cmdQuery(args); break;
+  case 'stats': cmdStats(); break;
+  case 'cleanup': cmdCleanup(args); break;
+  case 'forget': cmdForget(args); break;
+  case 'expire': cmdExpire(); break;
+  case 'touch': cmdTouch(args); break;
   default:
     console.log('experience-pool.js v2.0 — 子Agent共享经验池（含置信度/来源追溯/过期/遗忘）');
     console.log('  add      — 添加新经验 [--confidence 0.7] [--source "<ref>"] [--ttl-days 90]');

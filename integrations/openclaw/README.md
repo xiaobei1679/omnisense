@@ -46,7 +46,27 @@ node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --jso
 `config/openclaw.json` 后，`omnisense-engine` 即可作为工作区的一员，通过本目录的桥接脚本
 把 OmniSense 的七器官当作"身体"来使用。
 
-工作区里调用示例（CommonJS 工具脚本中）：
+### 调用方式（推荐：直接 import，无 shell 中转）
+
+桥接层导出统一入口 `integrations/openclaw/index.mjs`，上层直接复用 `src/` 真实实现，
+不 spawn 子进程、可单测：
+
+```js
+// ESM（推荐）
+import { runOrgan, runGoal, ORGANS, listOrgans } from '../integrations/openclaw/index.mjs';
+
+// 驱动单个器官
+const r = await runOrgan('hand', ['calc', '{"expression":"2+2"}']);
+console.log(r.output.result); // 4
+
+// 把一句话目标交给身体（感知→思考→动手）
+const g = await runGoal('记录今天的关键决策', { useLLM: false });
+console.log(g.trace.perceive); // 已 resolved 的环境理解
+```
+
+### 调用方式（兼容：shell 中子进程执行）
+
+若工具脚本是 CommonJS、且不想改造模块类型，可让 Node 直接执行桥接脚本取 JSON：
 
 ```js
 const { execFileSync } = require('node:child_process');
@@ -58,9 +78,19 @@ const out = execFileSync(execPath, [bridge, 'hand', 'calc', JSON.stringify({ exp
 console.log(JSON.parse(out));
 ```
 
+## API 速查
+
+| 导出 | 来源 | 说明 |
+|------|------|------|
+| `runOrgan(organ, rawArgs)` | `omni-body.mjs` | 执行单个器官动作，返回结果对象（供测试与脚本复用） |
+| `runGoal(goal, opts)` | `omnisense-bridge.mjs` | 一句话目标 → 感知→思考→动手，返回 `{ goal, usedLLM, trace }` |
+| `ORGANS` | `index.mjs` | 七器官常量数组 `['eye','ear','mouth','brain','hand','perceive','foot']` |
+| `listOrgans()` | `index.mjs` | 返回器官副本，避免调用方误改常量 |
+
 ## 设计要点（诚实说明）
 
 - 桥接脚本直接 `import` 同仓库的 `OmniSense`，**不是**伪造接口，所有能力都复用 `src/` 真实实现。
 - 联网类器官（眼/耳抓站、脑在线思考）在无网关/无模型时**诚实降级**，绝不假装成功。
 - 内建 120s 超时守卫，单个器官调用不会无限挂起。
+- `runGoal` 的感知步骤已 `await` 解析，`trace.perceive` 是真实环境理解，而非未决 Promise。
 - 无需任何外部密钥即可离线运行（计算 / 记忆 / 感知 / 生命循环骨架全部本地真实执行）。

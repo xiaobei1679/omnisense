@@ -359,11 +359,11 @@ for (let i = 1; i < rawArgs.length; i++) {
 }
 
 switch (cmd) {
-  case 'scan': return cmdScan(args);
-  case 'propose': return cmdPropose(args);
-  case 'apply': return cmdApply(args);
-  case 'apply-all': return cmdApplyAll(args);
-  case 'stats': return cmdStats();
+  case 'scan': cmdScan(args); break;
+  case 'propose': cmdPropose(args); break;
+  case 'apply': cmdApply(args); break;
+  case 'apply-all': cmdApplyAll(args); break;
+  case 'stats': cmdStats(); break;
   default:
     console.log('skill-evolution.js v1.0 — Skill自进化机制');
     console.log('  scan [--days N] [--min-score 4]  — 扫描成功Spec模式');

@@ -16,8 +16,8 @@ export async function runGoal(goal, { useLLM = false, remember = true, allowShel
   const omni = OmniSense.create();
   const body = omni.body;
   const trace = {};
-  // 1) 感知：聚合近期眼耳输入 + 实时环境，形成上下文
-  trace.perceive = body.perceive();
+  // 1) 感知：聚合近期眼耳输入 + 实时环境，形成上下文（必须 await，否则 trace 里是未决 Promise）
+  trace.perceive = await body.perceive();
   // 2) 思考：围绕目标推演该怎么做（离线本地推理；在线时走网关/驱动模型）
   trace.think = await omni.brain.think(`目标：${goal}`, '').catch(e => ({ error: e.message }));
   // 3) 动手：把目标落盘到长期记忆（确定性、离线）

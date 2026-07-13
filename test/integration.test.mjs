@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runOrgan } from '../integrations/openclaw/omni-body.mjs';
 import { runGoal } from '../integrations/openclaw/omnisense-bridge.mjs';
+import { ORGANS, listOrgans } from '../integrations/openclaw/index.mjs';
 
 test('hand calc：离线确定性计算', async () => {
   const r = await runOrgan('hand', ['calc', '{"expression":"2+2"}']);
@@ -47,5 +48,15 @@ test('runGoal：感知→思考→动手 返回 trace（离线）', async () => 
   const r = await runGoal('记录一条集成测试记忆', { useLLM: false });
   assert.equal(r.goal, '记录一条集成测试记忆');
   assert.ok(r.trace, '应有 trace');
+  // 感知必须已 await 解析，不能是未决 Promise
+  assert.ok(!(r.trace.perceive instanceof Promise), 'trace.perceive 不能是未决 Promise');
   assert.ok(r.trace.perceive, '应已感知');
+  assert.ok('think' in r.trace, 'trace 应含 think');
+});
+
+test('barrel index：导出七器官清单且不被外部篡改', () => {
+  assert.deepEqual(ORGANS, ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot']);
+  const copy = listOrgans();
+  copy.push('hacked');
+  assert.equal(ORGANS.length, 7, '原常量不应被 listOrgans 返回值影响');
 });

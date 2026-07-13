@@ -184,23 +184,55 @@ function safeParse(s) {
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
+function repoScope() {
+  // openclaw-workspace 被并入 OmniSense 单体仓库后，自身没有 .git。
+  // 这里向上找到真正的 git 仓库根，并算出本子包在仓库里的相对子目录，
+  // 后续 git 命令一律用 `git -C <root> ... -- <subdir>` 限定范围，
+  // 避免越界审查父仓库（OmniSense）的 ESM 文件。
+  try {
+    const top = execSync('git rev-parse --show-toplevel', { cwd: ROOT, encoding: 'utf8' })
+      .trim()
+      .replace(/\\/g, '/');
+    const sub = relative(top, ROOT).replace(/\\/g, '/');
+    return { top, sub };
+  } catch {
+    return { top: ROOT.replace(/\\/g, '/'), sub: '' };
+  }
+}
+
+// 把 git 返回的「仓库根相对路径」裁剪成本子包内的相对路径（去掉 subdir 前缀）
+function stripSub(f, sub) {
+  const nf = f.replace(/\\/g, '/');
+  if (sub && (nf === sub || nf.startsWith(sub + '/'))) {
+    return nf === sub ? '.' : nf.slice(sub.length + 1);
+  }
+  return nf;
+}
+
 function collectChanged() {
+  const { top, sub } = repoScope();
+  const pathspec = sub ? ` -- ${sub}` : '';
   const parts = [];
   for (const cmd of [
-    'git diff --name-only HEAD',
-    'git diff --cached --name-only',
-    'git ls-files --others --exclude-standard',
+    `git -C "${top}" diff --name-only HEAD${pathspec}`,
+    `git -C "${top}" diff --cached --name-only${pathspec}`,
+    `git -C "${top}" ls-files --others --exclude-standard${pathspec}`,
   ]) {
     try {
-      parts.push(execSync(cmd, { cwd: ROOT, encoding: 'utf8' }));
+      parts.push(execSync(cmd, { encoding: 'utf8' }));
     } catch {
       /* branch with no HEAD, or unrelated git error — ignore that source */
     }
   }
-  return [...new Set(parts.join('\n').split('\n').filter(Boolean))];
+  return [...new Set(parts.join('\n').split('\n').filter(Boolean))].map((f) => stripSub(f, sub));
 }
 function collectAll() {
-  return execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  const { top, sub } = repoScope();
+  const pathspec = sub ? ` -- ${sub}` : '';
+  return execSync(`git -C "${top}" ls-files${pathspec}`, { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+    .map((f) => stripSub(f, sub));
 }
 
 async function main() {
