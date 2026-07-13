@@ -1,6 +1,9 @@
 // 常驻感知循环（Watch Loop）：让 OmniSense 成为持续感知系统。
-// - runWatchTick：单次快照（热搜聚合 + 感知合成 + 离线规划 + 可选在线思考）
+// - runWatchTick：单次快照（热搜聚合 + 感知合成 + 离线规划 + 可选在线思考 + 可选常驻自驱身体）
 // - runWatch：按间隔循环执行，写 JSON 快照历史，支持 SIGINT/SIGTERM 优雅停止
+// 常驻自驱身体（autopilot 选项）：每 tick 由身体自身能力卡自主决策并离线执行，
+// 把"常驻感知"升级为"常驻自驱"——脚(foot)持续自我驱动的活身体（借鉴 OpenClaw 类自主智能体
+// 心跳闭环 Heartbeat Loop 与 Sophia System 3 持久自驱层，离线启发式实现）。
 // 设计要点：纯逻辑可测——omni 作为参数传入（依赖 seeHotAll/sense/plan/think/remember），
 // 测试用 fake omni 即可离线覆盖。
 import { writeFileSync } from 'node:fs';
@@ -93,6 +96,18 @@ export async function runWatchTick(omni, {
   agentCooldownMs = 60000,  // 两次自主行动最小间隔（防刷）
   summarizeNew = false,     // 是否对新增热点联网抓 URL 并摘要（默认关闭，需显式开启避免意外联网）
   summarizeMaxWords = 60,   // 单条摘要字数上限
+  // —— 常驻自驱身体：每 tick 由身体自身能力卡自主决策（autopilot 自驱）——
+  // 与「变化即行动」(agent 模式) 互补：agent 模式只在热点变化且过冷却时派发固定目标；
+  // autopilot 模式让身体每 tick 都"自己决定做什么"并离线执行（脑/嘴/耳类离线器官），
+  // 把"常驻感知"升级为"常驻自驱"——脚(foot)不再只是巡逻，而是持续自我驱动的活身体。
+  // 借鉴 OpenClaw 类自主智能体「心跳闭环 / Heartbeat Loop」(https://www.aigcopen.com/content/omni-channel/39278.html)
+  // 与 Sophia「System 3 持久自驱层」(https://arxiv.org/abs/2512.18202：智能体独立发起内驱任务) 的离线启发式实现。
+  autopilot = false,        // 开启常驻自驱身体：每 tick 由身体自身能力卡 self-decide 并离线执行
+  autopilotTicks = 1,       // 每 tick 自驱的 autopilot 步数
+  autopilotUseLLM = false,  // 自驱默认离线（零成本、诚实不伪造）；有网关时显式开启
+  autopilotAllowShell = false,
+  autopilotAgenda,          // 自定义自驱议程（数组）；不传用身体默认离线议程
+  autopilotDynamic,         // 显式 true/false 强制动态重排；不传跟随身体默认（自定义议程=静态、默认议程=动态）
   prevSig,                  // 上一轮热点签名（变化检测；不传视为首轮）
   prevAgentAt = 0,          // 上一次自主行动时间戳（冷却）
 } = {}) {
@@ -164,6 +179,38 @@ export async function runWatchTick(omni, {
     }
   }
 
+  // —— 常驻自驱身体：每 tick 由身体自身能力卡自主决策（autopilot 自驱）——
+  // 与 agent 模式（变化即行动）互补：这里身体"自己决定做什么"（而非被固定目标驱动），
+  // 把"常驻感知循环"升级为"常驻自驱身体"——脚(foot)持续在世界上自我驱动地活着。
+  // 离线安全：autopilot 默认只映射离线器官（脑/嘴/耳），不触发联网；失败也诚实降级、不中断循环。
+  let autopilotAction = null;
+  if (autopilot) {
+    try {
+      const apRes = await omni.body.autopilot({
+        ticks: autopilotTicks || 1,
+        useLLM: autopilotUseLLM,
+        allowShell: autopilotAllowShell,
+        agenda: autopilotAgenda,
+        dynamic: autopilotDynamic,
+      });
+      const steps = apRes?.trace || [];
+      const last = steps[steps.length - 1] || {};
+      autopilotAction = {
+        fired: true,
+        reason: '常驻自驱身体（每 tick 由身体自身能力卡自主决策）',
+        mode: apRes?.mode || 'autopilot',
+        agendaDynamic: apRes?.agendaDynamic ?? null,
+        executed: last.executed || null,
+        intent: last.intent || null,
+        weights: last.agendaWeights || null,
+        ticks: steps.length,
+        at: Date.now(),
+      };
+    } catch (e) {
+      autopilotAction = { fired: false, reason: 'autopilot 调用失败', error: e?.message || String(e), at: Date.now() };
+    }
+  }
+
   return {
     at: Date.now(),
     hotCount: Array.isArray(hot?.topics) ? hot.topics.length : 0,
@@ -174,6 +221,7 @@ export async function runWatchTick(omni, {
     diff,           // 本轮热点相对上轮的结构化差异（新增/消失）
     newSummaries,   // 新增热点联网摘要（summarizeNew 开启时；否则空数组）
     agentAction,
+    autopilotAction, // 常驻自驱身体：每 tick 身体自我决策的结果（开启 autopilot 时存在）
   };
 }
 
@@ -192,6 +240,12 @@ export async function runWatch(omni, {
   agentCooldownMs = 60000,
   summarizeNew = false,
   summarizeMaxWords = 60,
+  autopilot = false,        // 常驻自驱身体：每 tick 由身体自身能力卡自主决策（见 runWatchTick）
+  autopilotTicks = 1,
+  autopilotAgenda,
+  autopilotDynamic,
+  autopilotUseLLM = false,
+  autopilotAllowShell = false,
   onTick,
 } = {}) {
   const snapshots = [];
@@ -206,7 +260,7 @@ export async function runWatch(omni, {
   try {
     while (!stopped && tick < maxTicks) {
       tick++;
-      const snapshot = await runWatchTick(omni, { enableThink, agent, agentGoal, agentMode, agentUseLLM, agentCooldownMs, summarizeNew, summarizeMaxWords, prevSig, prevAgentAt });
+      const snapshot = await runWatchTick(omni, { enableThink, agent, agentGoal, agentMode, agentUseLLM, agentCooldownMs, summarizeNew, summarizeMaxWords, autopilot, autopilotTicks, autopilotAgenda, autopilotDynamic, autopilotUseLLM, autopilotAllowShell, prevSig, prevAgentAt });
       snapshot.tick = tick;
       if (snapshot.sig !== undefined) prevSig = snapshot.sig;
       if (snapshot.agentAction?.fired) prevAgentAt = snapshot.agentAction.at;
@@ -226,6 +280,9 @@ export async function runWatch(omni, {
             agentFired: snapshot.agentAction?.fired || false,
             agentMode: snapshot.agentAction?.mode || null,
             agentGoal: snapshot.agentAction?.goal || null,
+            autopilotFired: snapshot.autopilotAction?.fired || false,
+            autopilotExecuted: snapshot.autopilotAction?.executed || null,
+            autopilotIntent: snapshot.autopilotAction?.intent || null,
             added: snapshot.diff?.added || [],
             removed: snapshot.diff?.removed || [],
           }));
@@ -236,7 +293,8 @@ export async function runWatch(omni, {
       } else {
         const act = (snapshot.plan?.actions || []).join(', ') || '(无需行动)';
         const auto = snapshot.agentAction?.fired ? ` | 自主行动: ${snapshot.agentAction.goal}` : ` | 自主: ${snapshot.agentAction?.reason || '关'}`;
-        log.info(`[watch] tick ${tick}: ${snapshot.hotCount} 热点 | 建议: ${act}${auto}`);
+        const ap = snapshot.autopilotAction?.fired ? ` | 自驱: ${snapshot.autopilotAction.executed}` : (autopilot ? ` | 自驱: ${snapshot.autopilotAction?.reason || '失败'}` : '');
+        log.info(`[watch] tick ${tick}: ${snapshot.hotCount} 热点 | 建议: ${act}${auto}${ap}`);
       }
       if (stopped || tick >= maxTicks) break;
       await sleep(interval);
@@ -245,5 +303,5 @@ export async function runWatch(omni, {
     process.off('SIGINT', onSig);
     process.off('SIGTERM', onSig);
   }
-  return { ticks: snapshots, stopped: stopped || tick >= maxTicks, total: snapshots.length, agentFired: snapshots.filter(s => s.agentAction?.fired).length };
+  return { ticks: snapshots, stopped: stopped || tick >= maxTicks, total: snapshots.length, agentFired: snapshots.filter(s => s.agentAction?.fired).length, autopilotFired: snapshots.filter(s => s.autopilotAction?.fired).length };
 }

@@ -136,6 +136,10 @@ node "{SKILL_DIR}/src/cli.mjs" watch --interval=60      # 常驻感知循环(写
 node "{SKILL_DIR}/src/cli.mjs" watch --agent --interval=120   # 开启"变化即行动"(remember)
 node "{SKILL_DIR}/src/cli.mjs" watch --agent --agent-mode=alert --interval=120   # 仅"突变"时写告警记忆
 node "{SKILL_DIR}/src/cli.mjs" watch --agent --agent-mode=digest --interval=120  # 变化即把热点+差异写成 markdown 摘要落盘
+node "{SKILL_DIR}/src/cli.mjs" watch --interval=60 --autopilot   # 常驻自驱身体：每 tick 由身体自身能力卡自主决策并离线执行（像真人一样持续自我驱动地活着）
+node "{SKILL_DIR}/src/cli.mjs" watch --interval=60 --autopilot --autopilot-agenda="思考当前环境,规划下一步行动"  # 自定义自驱议程（逗号分隔）
+node "{SKILL_DIR}/src/cli.mjs" watch --interval=60 --autopilot --no-dynamic   # 关闭动态重排、严格按默认/自定义顺序
+node "{SKILL_DIR}/src/cli.mjs" watch --interval=60 --autopilot --agent   # 常驻自驱 + 变化即行动，两者互补叠加
 node "{SKILL_DIR}/src/cli.mjs" body                   # 身体自检：打印七器官(眼/耳/嘴/脑/手/感知/脚)及能力
 node "{SKILL_DIR}/src/cli.mjs" live --ticks=3 --speak   # 生命循环：自驱地感知→思考→动手→说话→移动(像真人一样活着)
 node "{SKILL_DIR}/src/cli.mjs" serve 8787              # 启动本地驱动服务(127.0.0.1；OMNI_TOKEN 启用 Bearer 鉴权)
@@ -146,7 +150,7 @@ node "{SKILL_DIR}/src/cli.mjs" agent "抓取 https://example.com 并写入 ./pag
 node "{SKILL_DIR}/src/cli.mjs" dispatch "计算 2+2"              # → 自动委派 hand.calc
 node "{SKILL_DIR}/src/cli.mjs" dispatch "思考当前热点" [--detail] # → 自动委派 brain.think；--detail 仅展示
 ```
-> 选项：`--json`（结构化 JSON，便于解析）、`--quiet`（静默过程日志）、`--tts`（出声）。`watch` 专属：`--interval=<秒>` `--max=<次数>` `--think` `--out=<文件>` `--remember` `--agent`（变化即行动自主编排，含结构化差异检测）`--agent-mode=remember|alert|digest`（多模式）`--agent-cooldown=<秒>`（防刷冷却，默认60）`--agent-goal=<模板>`（`{date}{top3}{topics}{added}{removed}{count}` 占位）`--summarize-new`（对新增热点联网抓 URL 并摘要，digest 模式写入摘要段，默认关闭）。`agent` 专属：`--max=<步数>`（默认8）`--no-llm`（强制本地规划器）`--allow-shell`（启用 shell 工具，默认禁用）。
+> 选项：`--json`（结构化 JSON，便于解析）、`--quiet`（静默过程日志）、`--tts`（出声）。`watch` 专属：`--interval=<秒>` `--max=<次数>` `--think` `--out=<文件>` `--remember` `--agent`（变化即行动自主编排，含结构化差异检测）`--agent-mode=remember|alert|digest`（多模式）`--agent-cooldown=<秒>`（防刷冷却，默认60）`--agent-goal=<模板>`（`{date}{top3}{topics}{added}{removed}{count}` 占位）`--summarize-new`（对新增热点联网抓 URL 并摘要，digest 模式写入摘要段，默认关闭）`--autopilot`（常驻自驱身体：每 tick 由身体能力卡自主决策并离线执行，把常驻感知升级为常驻自驱）`--autopilot-agenda="a,b,c"`（自定义自驱议程，逗号分隔）`--no-dynamic`/`--dynamic`（关闭/强制开启动态议程重排，仅自驱路径生效）。`agent` 专属：`--max=<步数>`（默认8）`--no-llm`（强制本地规划器）`--allow-shell`（启用 shell 工具，默认禁用）。
 
 ### B2. 🤖 Agent 行动闭环（核心能力升级）
 `agent "<目标>"` 让 OmniSense 从"感知+汇报"变成"能推理、能调用工具、能完成目标"的 agent：

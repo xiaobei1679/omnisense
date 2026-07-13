@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v4.1.0 — 2026-07-13 (minor)
+
+- 常驻自驱身体（watch --autopilot）：脚(foot) 每 tick 由身体自身能力卡 skillResolve 自主决策并 skillDispatch 离线执行，把常驻感知循环升级为常驻自驱之活身体；与 --agent(变化即行动) 互补、可叠加。内核 src/core/watch.mjs 增 autopilot 选项(runWatchTick/runWatch)，src/cli.mjs watch 增 --autopilot/--autopilot-agenda/--no-dynamic/--dynamic；工作区 omnisense-link.mjs watch 增 --autopilot/--no-autopilot/--no-dynamic/--dynamic + 跨层测试。内核 test/watch.test.mjs +5、工作区 +2。借鉴 OpenClaw Heartbeat Loop 与 Sophia System 3 持久自驱层(离线启发式,零网络零 key)。两测试套件全绿(224/224、268/268)、lint 50 文件 OK、E2E 离线真跑通(每 tick 自驱委派 mouth.getStyle)。本地提交+tag，未推送。
+
 ## v4.0.0 — 2026-07-13 (major)
 
 - 工具级缓存/熔断扩展到 Agent 工具调用：复用 breaker.mjs 的 TTL 缓存+熔断器（此前仅热搜），覆盖 web_fetch/summarize_url/hot_topics——同一目标 TTL 内命中缓存直接返回(避免重复联网)、连续失败达阈值则熔断短路(防反复超时)；声明式启用(cacheTtl/circuit)、默认工具行为不变。新增 facade toolCacheStats/clearToolCache/toolBreakerStatus、CLI cache [--clear]、工作区 omnisense-link cache [--clear] 可观测；内核 tools.test 增 4 项单测、工作区增 2 项跨层断言。

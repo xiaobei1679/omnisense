@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] | cache [--clear] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] | cache [--clear] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -132,6 +132,24 @@ export async function runLink(args) {
     if (rest.includes('--dynamic')) opts.dynamic = true;
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const r = await withTimeout(omni.live(opts), TIMEOUT_MS);
+    return r;
+  }
+  if (cmd === 'watch') {
+    // 常驻自驱身体：工作区驱动身体"脚"(watch) 持续感知 + 自驱决策。
+    // 合并后"新项目"的活证据：工作区能真正让身体"常驻活着并自己决定做什么"（脚不再只巡逻，
+    // 而是持续自我驱动的活身体；借鉴 OpenClaw 类自主智能体心跳闭环 Heartbeat Loop 与 Sophia System3 持久自驱层）。
+    // 每 tick 快照含 autopilotAction（身体自我决策的结果）；可与 --agent 互补（变化即行动）。
+    const ticks = Number(rest[0]) || 1;
+    const opts = { maxTicks: ticks };
+    if (rest.includes('--autopilot')) opts.autopilot = true;
+    if (rest.includes('--no-autopilot')) opts.autopilot = false;
+    if (rest.includes('--no-dynamic')) opts.autopilotDynamic = false;
+    if (rest.includes('--dynamic')) opts.autopilotDynamic = true;
+    if (rest.includes('--remember')) opts.rememberLatest = true;
+    if (rest.includes('--think')) opts.enableThink = true;
+    if (rest.includes('--agent')) opts.agent = true;
+    const omni = (await import('../../src/index.mjs')).OmniSense.create();
+    const r = await withTimeout(omni.body.foot('watch', opts), TIMEOUT_MS);
     return r;
   }
   if (cmd === 'trace') {

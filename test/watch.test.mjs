@@ -200,3 +200,61 @@ test('runWatchTick digest 模式：变化即写入摘要文件目标', async () 
   assert.match(snap.agentAction.goal, /^写入 \.\/watch_digest_/);
   assert.equal(snap.agentAction.mode, 'digest');
 });
+
+// ───────── 常驻自驱身体（watch + autopilot） ─────────
+// fakeOmni 带身体 autopilot 桩：每 tick 由身体自身能力卡自驱决策（离线、可测）。
+function fakeOmniAuto() {
+  const base = fakeOmni();
+  base.body = {
+    autopilot: async (opts = {}) => ({
+      mode: 'autopilot',
+      agendaDynamic: opts.dynamic !== false,
+      ticks: opts.ticks || 1,
+      trace: [{ tick: 1, intent: '思考当前感知并决定下一步该关注什么', executed: 'brain.think', agendaWeights: [{ intent: '思考当前感知并决定下一步该关注什么', w: 1.3 }] }],
+    }),
+  };
+  return base;
+}
+
+test('runWatchTick autopilot 开启：每 tick 由身体自驱决策并记录 autopilotAction', async () => {
+  const omni = fakeOmniAuto();
+  const snap = await runWatchTick(omni, { autopilot: true });
+  assert.ok(snap.autopilotAction?.fired, '常驻自驱身体应触发');
+  assert.equal(snap.autopilotAction.mode, 'autopilot');
+  assert.equal(snap.autopilotAction.executed, 'brain.think', '应记录委派到的器官');
+  assert.ok(snap.autopilotAction.intent, '应记录自生成意图');
+  assert.equal(snap.agentAction, null, '未开启 agent 时 agentAction 应为 null（互补而非互斥）');
+});
+
+test('runWatchTick autopilot 与 agent 可互补同时开启', async () => {
+  const omni = fakeOmniAuto();
+  omni.act = async () => ({ completed: true, result: 'done' });
+  const snap = await runWatchTick(omni, { autopilot: true, agent: true, agentCooldownMs: 0 });
+  assert.ok(snap.autopilotAction?.fired, 'autopilot 应触发');
+  assert.ok(snap.agentAction?.fired, 'agent 也应触发（首轮播种）');
+});
+
+test('runWatch autopilot 开启：循环内每 tick 自驱并写入快照 autopilotAction', async () => {
+  const omni = fakeOmniAuto();
+  const res = await runWatch(omni, { interval: 1, maxTicks: 2, autopilot: true });
+  assert.equal(res.total, 2);
+  assert.equal(res.autopilotFired, 2, '每 tick 自驱都应触发');
+  assert.ok(res.ticks.every(t => t.autopilotAction?.fired), '每个快照应含 autopilotAction');
+  assert.equal(res.ticks[0].autopilotAction.executed, 'brain.think');
+});
+
+test('runWatchTick autopilot 关闭时快照不含 autopilotAction（向后兼容）', async () => {
+  const omni = fakeOmniAgent(['热点A', '热点B']);
+  const snap = await runWatchTick(omni, { autopilot: false });
+  assert.equal(snap.autopilotAction, null, '未开启 autopilot 不应有 autopilotAction');
+});
+
+test('runWatchTick autopilot 调用失败诚实降级（不中断循环）', async () => {
+  const omni = fakeOmni();
+  omni.body = { autopilot: async () => { throw new Error('boom'); } };
+  const snap = await runWatchTick(omni, { autopilot: true });
+  assert.equal(snap.autopilotAction?.fired, false, '失败应标记未触发');
+  assert.match(snap.autopilotAction.reason, /失败/, '应说明失败原因');
+  assert.ok(snap.autopilotAction.error, '应记录错误信息');
+});
+

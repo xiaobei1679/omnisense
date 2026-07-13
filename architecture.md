@@ -106,6 +106,17 @@
 6. 全部候选都不可执行 → 诚实降级到 `perceive.sense` 并标注 `fallback` 原因（如 `matched-hand-needs-args` / `no-exec-organ`），绝不因缺参数报错或联网。
 7. 借鉴 BabyAGI「任务创建→排序→执行→重排→再生成」自生成任务队列思想（https://github.com/yoheinakajima/babyagi · https://www.ibm.com/think/topics/babyagi · https://tinyagents.dev/compare/babyagi），但离线即可自驱，无需 LLM 即可让身体在世界里自主行动、并据结果自我调整下一步关注。
 
+## 数据流（watch + autopilot：常驻自驱身体）
+
+`watch` 原本只做"常驻感知循环"（见上一节）。开启 `--autopilot` 后，每 tick 在感知/规划之后**再让身体自身能力卡自主决策并离线执行**，把"常驻感知"升级为"常驻自驱"——脚（foot）持续在世界里自我驱动地活着：
+
+1. 每 tick 先走原有 `seeHotAll` + 感知合成 + 离线规划 + 可选差异检测 / `--agent` 派发（兼容旧行为）。
+2. 然后（若 `autopilot` 开）调 `omni.body.autopilot({ticks:1, useLLM, allowShell, agenda, dynamic})`——身体用 `skillResolve` 自己决定做什么、`skillDispatch` 离线执行。
+3. 取 `autopilot` 返回的 `trace` 最后一步，记入该 tick 快照 `autopilotAction:{fired,reason,mode,executed,intent,weights,ticks,at}`；`runWatch` 的 `autopilotFired` 累计每 tick 自驱命中次数。
+4. `--agent` 与 `--autopilot` **互补**：前者只在热点变化且过冷却时派发固定目标，后者每 tick 都让身体自驱决策，两者可同时开、互相叠加。
+5. `autopilot` 调用异常被 `try/catch` 捕获 → `autopilotAction.fired=false`（reason: `autopilot 调用失败` + 错误），**不中断 watch 循环**。
+6. 借鉴 OpenClaw「心跳闭环 / Heartbeat Loop」（周期性感知→决策→行动的自驱循环，https://www.aigcopen.com/content/omni-channel/39278.html）与 Sophia「System 3 持久自驱层」（https://arxiv.org/abs/2512.18202：智能体可独立发起内驱任务）的离线启发式实现——零网络零 key 即可让身体在常驻循环里持续自驱。
+
 ## 目录结构
 
 ```
@@ -127,7 +138,7 @@ src/
     agents.mjs        多 Agent 协作（协调器 planSubtasks/planSubtasksSmart[LLM 智能拆解] + 角色子 agent 委派[并行/工具集沙箱] + 共享黑板 + 协调器综合 + 诚实部分失败）
     tracer.mjs        Agent 执行轨迹追踪（可回放 trace 落盘 + 聚合指标；对齐 OpenTelemetry GenAI 语义约定 gen_ai.*）。增强：compareRuns(idA,idB) 回放对比（Forkline 式 first-divergence 检测：定位行为首次分歧步 + verdict identical/similar/improved/regressed）、findRunsByGoal(goal) 同目标多次运行检索、exportDataset() 导出回归数据集（LangSmith 式 trace→dataset）、setBaseline/regressionCheck 行为回归门禁（recut-ai/shadow 思想：退化即 FAIL，可接 CI）、exportOtlp() 导出 OTLP/JSON（OTel-native：run→trace，root span invoke_agent + 每步 execute_tool child span，gen_ai.*/error.type/status.code，可直接投 Grafana Tempo/Phoenix/Jaeger/OTel Collector）
   body.mjs            身体：把七器官整合成像真人一样的智能体 + live() 生命循环；`describe()`（器官树，含每能力 desc/net/examples）+ `agentCard()`（A2A 风格能力卡：把全部能力扁平化为 skills[]，借鉴 Google A2A Protocol 的 AgentCard 思想，仅取结构语义；net 诚实标注联网依赖）
-    watch.mjs         常驻感知循环 + 差异检测(diffTopics) + 多模式(remember/alert/digest) + 新增热点联网摘要(summarizeNewTopics) 自主派发 Agent 编排
+    watch.mjs         常驻感知循环 + 差异检测(diffTopics) + 多模式(remember/alert/digest) + 新增热点联网摘要(summarizeNewTopics) 自主派发 Agent 编排；开启 autopilot 后每 tick 由身体能力卡自主决策并离线执行（常驻自驱身体，脚 foot 持续自我驱动，借鉴 OpenClaw Heartbeat Loop / Sophia System 3，零网络零 key）
   providers/index.mjs 模型适配层（LLM/VLM/ASR/TTS 统一接口）
   modules/
     eyes.mjs         眼睛：网站/热搜/图像/视频 + readability 正文提取 + WBI 签名

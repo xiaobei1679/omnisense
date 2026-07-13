@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { runLink } from '../scripts/omnisense-link.mjs';
 import { listOrgans } from '../../integrations/openclaw/index.mjs';
 import { Tracer } from '../../src/core/tracer.mjs';
+import * as coreSrc from '../../src/index.mjs';
 
 // 把 OmniSense 运行时产物指向临时目录，避免在工作区根目录创建 .omni-*.json 污染仓库。
 const _td = mkdtempSync(join(tmpdir(), 'omni-xlink-'));
@@ -247,6 +248,33 @@ it('runLink cache --clear 清空工具缓存（跨层）', async () => {
   const after = await runLink(['cache']);
   assert.equal(after.cache.size, 0, '清空后缓存条目应为 0');
 });
+it('runLink watch --autopilot 跑常驻自驱身体（跨层：工作区->桥->身体，stub 网络离线）', async () => {
+  // watch 的 seeHotAll 是联网叶子；此处 stub 为离线 fixture，避免挂起测试套件（核心既有特性：
+  // CLI 由 process.exit 兜底；这里用替换 OmniSense.create 的 seeHotAll 叶节点，注入同模块实例后
+  // runLink 的 watch 命令（动态 import 同一份 src/index.mjs）自然复用，断言在 stub 内离线完成）。
+  const _create = coreSrc.OmniSense.create;
+  coreSrc.OmniSense.create = () => {
+    const o = _create();
+    o.seeHotAll = async () => ({ topics: [{ title: 't1' }, { title: 't2' }], source: 'all' });
+    return o;
+  };
+  try {
+    const r = await runLink(['watch', '1', '--autopilot']);
+    assert.ok(r.ticks && r.ticks.length === 1, '应产出 1 个 watch 快照');
+    assert.ok(r.ticks[0].autopilotAction?.fired, '常驻自驱身体应触发');
+    assert.ok(r.ticks[0].autopilotAction.executed, '应委派到某器官');
+    assert.ok(r.ticks[0].autopilotAction.intent, '应记录自生成意图');
+  } finally {
+    coreSrc.OmniSense.create = _create;
+  }
+});
+
+it('runLink watch 用法串包含 watch 命令与 --autopilot（跨层：工作区入口可见常驻自驱身体）', async () => {
+  const r = await runLink(['--help']);
+  assert.match(r.usage, /watch \[ticks\]/);
+  assert.match(r.usage, /--autopilot/);
+});
+
 // 不依赖 node:test 的 after 兜底（route brain.think 等离线器官调用 await 外部资源，会让 node:test 提前
 // finalize 文件并截断后续用例）；改为模块顶层独立定时器：留足 20s 让全部用例跑完后强制退出，
 // 既跑完所有断言（成败真实）又避免 undici keep-alive socket 导致套件无限挂起。

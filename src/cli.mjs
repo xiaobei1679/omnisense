@@ -201,13 +201,17 @@ async function main() {
       const out = (rest.find(a => /^--out=/.test(a)) || '').split('=')[1] || './.omni-watch.json';
       const enableThink = flag('--think');
       const remember = flag('--remember');
+      const useLLM = flag('--llm');
       const agentEnabled = flag('--agent');
       const agentCooldown = Number((rest.find(a => /^--agent-cooldown=(\d+)$/.test(a)) || '').split('=')[1]) || 60;
       const agentGoal = (rest.find(a => /^--agent-goal=/.test(a)) || '').split('=')[1] || undefined;
       const agentMode = (rest.find(a => /^--agent-mode=/.test(a)) || '').split('=')[1] || 'remember';
       const summarizeNew = flag('--summarize-new');
-      log.info(`[watch] 启动常驻感知循环: 间隔 ${interval}s, 最大 ${max === Infinity ? '∞' : max} 次, 思考=${enableThink}, 落盘=${out}, 自主编排=${agentEnabled}(模式=${agentMode} 冷却${agentCooldown}s) 摘要新增=${summarizeNew}`);
-      result = await omni.watch({ interval: interval * 1000, maxTicks: max, enableThink, outFile: out, rememberLatest: remember, agent: agentEnabled, agentCooldownMs: agentCooldown * 1000, agentGoal, agentMode, summarizeNew });
+      const autopilotEnabled = flag('--autopilot');
+      const autopilotDynamic = rest.includes('--no-dynamic') ? false : (rest.includes('--dynamic') ? true : undefined);
+      const autopilotAgenda = (rest.find(a => /^--autopilot-agenda=/.test(a)) || '').split('=')[1] || undefined;
+      log.info(`[watch] 启动常驻感知循环: 间隔 ${interval}s, 最大 ${max === Infinity ? '∞' : max} 次, 思考=${enableThink}, 落盘=${out}, 自主编排=${agentEnabled}(模式=${agentMode} 冷却${agentCooldown}s) 摘要新增=${summarizeNew} 常驻自驱身体=${autopilotEnabled}`);
+      result = await omni.watch({ interval: interval * 1000, maxTicks: max, enableThink, outFile: out, rememberLatest: remember, agent: agentEnabled, agentCooldownMs: agentCooldown * 1000, agentGoal, agentMode, summarizeNew, autopilot: autopilotEnabled, autopilotTicks: 1, autopilotDynamic, autopilotAgenda: autopilotAgenda ? autopilotAgenda.split(',').map(s => s.trim()).filter(Boolean) : undefined, autopilotUseLLM: useLLM });
       log.info('[watch] 循环结束。');
       break;
     }
@@ -332,7 +336,7 @@ const USAGE = `OmniSense 命令行
   autopilot [--ticks=3] [--interval=0] [--llm] [--allow-shell] [--no-dynamic]   自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列；默认动态议程——每轮结果回写议程、据结果重排下一步；--no-dynamic 关闭重排、尊重用户顺序）
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行
-  watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
+  watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new] [--autopilot] [--autopilot-agenda="a,b,c"]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--autopilot 升级为"常驻自驱身体"：每 tick 由身体自身能力卡自主决策并离线执行(像真人一样活着，借鉴 OpenClaw 心跳闭环/Sophia System3)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   cache [--clear]      工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时）
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)
   trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)
@@ -356,6 +360,9 @@ const USAGE = `OmniSense 命令行
   --agent-cooldown=<秒>  watch --agent 两次自主行动最小间隔(默认60，防刷)
   --agent-mode=<模式>    watch --agent 自主行动模式: remember(默认,记当前/新增/消失) | alert(仅突变触发,写告警记忆) | digest(写 markdown 摘要落盘)
   --agent-goal=<模板>     watch --agent 自定义目标模板，可用 {date}{top3}{topics}{added}{removed}{count} 占位(覆盖默认模式目标)
+  --autopilot           watch 升级为"常驻自驱身体"：每 tick 由身体自身能力卡自主决策并离线执行(脚不再只巡逻，而是持续自我驱动的活身体；借鉴 OpenClaw 心跳闭环/Sophia System3 持久自驱层)；可与 --agent 同开(互补)
+  --autopilot-agenda=<逗号分隔>   watch --autopilot 自定义自驱议程(如 "思考当前环境,规划下一步")；不传用身体默认离线议程
+  --no-dynamic / --dynamic   watch --autopilot 控制动态议程重排(默认议程开启动态、自定义议程尊重顺序)
 
 所有抓取均本机真实联网、零 key；文本推理免 key 双模式（框架网关 / 运行体驱动）。
 serve 安全：仅监听 127.0.0.1；设 OMNI_TOKEN 环境变量后要求 Authorization: Bearer <token>，切勿用 -h 0.0.0.0 或端口转发暴露公网。
