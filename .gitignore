@@ -3,6 +3,8 @@
 *.omni-memory.json
 /.omni-watch.json
 *.omni-watch.json
+/.omni-traces.json
+*.omni-traces.json
 # 自治自动化运行时日志（agent 本地跑遗留，不入库）
 .agent-runs/
 

@@ -114,7 +114,8 @@ export class Brain {
   // 有在线模型(网关/key)时走 LLM ReAct 动态推理；无模型时走本地确定性规划器完成具体多步任务。
   async act(goal, opts = {}) {
     log.info(`\n[脑·行动] 目标: ${goal || '(空)'}`);
-    const res = await runAgent(this, { goal, ...opts });
+    // 优先用父级 OmniSense 实例（含 tracer 等可观测性）；无反向引用时回退到自身
+    const res = await runAgent(this.omni || this, { goal, ...opts });
     log.info(`   ✓ 完成=${res.completed} 用模型=${res.usedLLM} 步数=${res.steps.length}`);
     if (res.result != null) log.info(`   ✓ 结果: ${String(res.result).slice(0, 400)}`);
     return res;

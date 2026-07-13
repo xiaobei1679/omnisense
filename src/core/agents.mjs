@@ -267,6 +267,30 @@ export async function runMultiAgent(omni, {
   }
 
   const completed = anyCompleted;
+
+  // 可观测性：把本次多 Agent 编排记录为一条 dispatcher trace（非侵入，静默失败）
+  if (omni?.tracer?.recordRun) {
+    try {
+      omni.tracer.recordRun({
+        goal,
+        engine: 'dispatcher',
+        completed: allCompleted,
+        usedLLM,
+        finalAnswer: result,
+        steps: subtasks.map((s, i) => ({
+          step: i + 1,
+          action: `subagent:${s.role}`,
+          action_input: { goal: s.goal },
+          observation: { ok: s.completed, output: String(s.result || '').slice(0, 500) },
+        })),
+        tags: ['multiagent', ...subtasks.map(s => s.role)],
+        meta: {
+          allCompleted, parallelWorkers: parallel ? workers.length : 1,
+          coordinatorMode, batches: (workers.length ? 1 : 0) + (synthesis.length ? 1 : 0),
+        },
+      });
+    } catch { /* 静默 */ }
+  }
   // 团队经验沉淀（越用越强·团队层）
   try {
     if (omni?.memory?.note) omni.memory.note(`团队经验: ${goal} → 角色[${subAll.map(s => s.role).join(', ')}]`, 'multi-agent');

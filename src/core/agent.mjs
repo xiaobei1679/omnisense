@@ -358,8 +358,10 @@ async function executePlan(omni, toolList, steps, ctx, goal) {
   for (let i = 0; i < steps.length; i++) {
     const st = steps[i];
     const args = substPrev(st.args, last);
+    const t0 = Date.now();
     const obs = await executeTool(toolList, st.tool, args, ctx);
-    const entry = { step: i + 1, action: st.tool, action_input: args, observation: obs };
+    const tMs = Date.now() - t0; // 单步耗时（可观测性）
+    const entry = { step: i + 1, action: st.tool, action_input: args, observation: obs, durationMs: tMs };
     trace.push(entry);
     last = obs;
     if (obs?.ok === false) break; // 任一步失败即停，诚实返回
@@ -435,7 +437,9 @@ export async function runAgent(omni, {
         break;
       }
       if (!dec.action) { log.warn('[agent] 推理器未给出动作且未给结论，终止'); break; }
+      const t0 = Date.now();
       const obs = await executeTool(toolList, dec.action, dec.action_input, ctx);
+      const tMs = Date.now() - t0; // 单步耗时（可观测性）
       // 每步二次经验召回：基于本次观察再精炼相关经验，注入下一步推理（避免只靠初始目标召回的片面性）
       const obsText = obs?.ok !== false ? JSON.stringify(obs?.output).slice(0, 400) : '错误: ' + (obs?.error || '');
       if (omni?.memory) {
@@ -445,7 +449,7 @@ export async function runAgent(omni, {
           stepCtx = stepHints.map((it, i) => `${i + 1}. ${it.text}`).join('\n');
         } catch { /* 记忆不可用静默 */ }
       }
-      const entry = { step, thought: dec.thought, action: dec.action, action_input: dec.action_input, observation: obs };
+      const entry = { step, thought: dec.thought, action: dec.action, action_input: dec.action_input, observation: obs, durationMs: tMs };
       trace.push(entry);
       history.push(entry);
       if (step === maxSteps) result = '（达到最大步数，目标可能未完成）';
@@ -529,5 +533,31 @@ export async function runAgent(omni, {
     seenT.add(it.text);
     merged.push(it.text);
   }
+  // ── 5) 可观测性：把本次执行轨迹记录为可回放 trace（LangSmith/OTel 式）──
+  // 非侵入：tracer 不可用/异常一律静默，绝不阻断主流程或伪造成功。
+  if (omni?.tracer?.recordRun) {
+    try {
+      omni.tracer.recordRun({
+        goal,
+        engine: usedLLM ? 'llm' : 'local',
+        completed,
+        usedLLM,
+        reused,
+        playbookScore,
+        finalAnswer: result,
+        steps: trace.map(t => ({
+          step: t.step,
+          thought: t.thought,
+          action: t.action != null ? t.action : (t.final_answer != null ? '(final_answer)' : null),
+          action_input: t.action_input,
+          observation: t.observation,
+          durationMs: t.durationMs,
+        })),
+        tags: ['agent'],
+        meta: { reused, playbookScore, reflectionMode: reflection?.mode || 'offline', steps: trace.length },
+      });
+    } catch { /* tracer 失败不影响主流程 */ }
+  }
+
   return { goal, completed, usedLLM, reused, playbookScore, steps: trace, result, experienceHints: merged, reflection };
 }

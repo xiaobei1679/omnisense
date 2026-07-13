@@ -17,6 +17,10 @@ function stubOmni() {
     recall: (k) => null,
     search: (q) => [],
     sense: () => ({ topicCount: 0 }),
+    traces: () => [{ runId: 'run_x', goal: 'g', engine: 'local', completed: true, steps: [] }],
+    traceSummary: () => ({ total: 1, completed: 1, successRate: 1, avgSteps: 0, avgDurationMs: 0, perTool: [], errorTools: {}, engineBreakdown: { local: 1 } }),
+    getTrace: (id) => (id === 'run_x' ? { runId: 'run_x', goal: 'g' } : null),
+    clearTraces: () => ({ cleared: true }),
   };
 }
 
@@ -74,6 +78,36 @@ test('serve: 路由错误返回 500', async () => {
     assert.equal(r.status, 500);
     const j = await r.json();
     assert.equal(j.ok, false);
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: GET /trace-summary 返回聚合指标', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/trace-summary`);
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.result.total, 1);
+    assert.equal(j.result.successRate, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: GET /traces?engine=local 按引擎过滤', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/traces?engine=local&limit=5`);
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.result.length, 1);
+    assert.equal(j.result[0].runId, 'run_x');
   } finally {
     server.close();
   }

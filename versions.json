@@ -19,5 +19,12 @@
     "date": "2026-07-13T03:58:23.340Z",
     "tag": "v1.2.0",
     "notes": "版本心跳机制收口：package.json 增加 release 脚本 + files 纳入 VERSION/CHANGELOG/versions.json/scripts；README/SKILL 增补『版本与回退』章节；版本逻辑单测已落地(test/version.test.mjs)。注：本次 auto 判定为 minor——按本机时钟距基线 v1.0.0 仅约 6 分钟，未满 3h，故不升 major（major 将在距基线满 3h 后的首次心跳触发）。"
+  },
+  {
+    "version": "1.3.0",
+    "type": "minor",
+    "date": "2026-07-13T05:10:12.902Z",
+    "tag": "v1.3.0",
+    "notes": "新增 Agent 执行轨迹追踪层(src/core/tracer.mjs)：agent/multiagent/live 运行自动落盘可回放 trace，对齐 OpenTelemetry GenAI 语义约定(gen_ai.*)；CLI trace 命令(聚合/列表/回放/清空)；serve 新增 GET /traces 与 /trace-summary 路由；brain.act 修正为传递父级 OmniSense 实例以接入 tracer"
   }
 ]

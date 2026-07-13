@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v1.3.0 — 2026-07-13 (minor)
+
+- 新增 Agent 执行轨迹追踪层(src/core/tracer.mjs)：agent/multiagent/live 运行自动落盘可回放 trace，对齐 OpenTelemetry GenAI 语义约定(gen_ai.*)；CLI trace 命令(聚合/列表/回放/清空)；serve 新增 GET /traces 与 /trace-summary 路由；brain.act 修正为传递父级 OmniSense 实例以接入 tracer
+
 ## v1.2.0 — 2026-07-13 (minor)
 
 - 版本心跳机制收口：package.json 增加 release 脚本 + files 纳入 VERSION/CHANGELOG/versions.json/scripts；README/SKILL 增补『版本与回退』章节；版本逻辑单测已落地(test/version.test.mjs)。

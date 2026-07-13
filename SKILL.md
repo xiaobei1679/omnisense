@@ -52,6 +52,19 @@ license: MIT
 
 加 `hand` 工具无需改核心：在 `src/tools/`（或 `OMNI_PLUGINS_DIR`）放一个 `.mjs`，默认导出 `{ name, description, parameters, run }`，`buildDefaultTools` 自动注册。内置示范：`src/tools/hash.mjs`（离线 SHA-256）。详见 README「🔌 工具插件自发现」。
 
+## Agent 执行轨迹追踪（🔭 可观测性，借鉴 LangSmith / OpenTelemetry GenAI 语义约定）
+
+每次 `agent` / `multiagent`（含 `live` 生命循环、`watch` 自主编排派发的 agent）自动把整次运行落盘为**可回放 trace**（trace→run→step）：每步含耗时、成功/失败、OTel 对齐的 `gen_ai.*` 属性与错误归类。数据自持、不进仓库（`.omni-traces.json` 已 gitignore）。
+
+```bash
+node "{SKILL_DIR}/src/cli.mjs" trace --summary          # 聚合：成功率/平均步数·耗时/工具级调用·成功·失败·平均耗时/错误归类
+node "{SKILL_DIR}/src/cli.mjs" trace --list --limit=10  # 最近 10 条 run（含 runId）
+node "{SKILL_DIR}/src/cli.mjs" trace --get=<runId>      # 回放单条 trace（模型看见了什么→决定了什么→执行了什么）
+node "{SKILL_DIR}/src/cli.mjs" trace --clear            # 清空本地轨迹
+```
+
+作为库：`omni.traceSummary()` · `omni.traces({limit,engine})` · `omni.getTrace(id)` · `omni.clearTraces()`。serve 暴露 `GET /trace-summary`、`GET /traces?engine=&limit=`。详见 README「🔭 Agent 执行轨迹追踪」。
+
 ## 快速使用
 
 ### A. 作为库（在另一段脚本中 import）

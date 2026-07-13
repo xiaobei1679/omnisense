@@ -94,3 +94,4 @@ console.log(JSON.parse(out));
 - 内建 120s 超时守卫，单个器官调用不会无限挂起。
 - `runGoal` 的感知步骤已 `await` 解析，`trace.perceive` 是真实环境理解，而非未决 Promise。
 - 无需任何外部密钥即可离线运行（计算 / 记忆 / 感知 / 生命循环骨架全部本地真实执行）。
+- **可观测性**：经 `src/core/tracer.mjs`，`runGoal`/`runOrgan` 驱动的 agent 运行会自动落盘为可回放 trace（数据自持于 `.omni-traces.json`，不进仓库）。可在仓库根用 `node src/cli.mjs trace --summary` 聚合成功率/平均步数·耗时/工具级指标，或 `trace --list`/`--get=<id>` 回放。设计借鉴 LangSmith 全链路 Trace 与 OpenTelemetry GenAI 语义约定。

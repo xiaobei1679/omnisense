@@ -30,6 +30,11 @@ const ROUTES = {
   'POST /search': async (omni, b) => omni.search(b.q || b.query || ''),
   'POST /sense': async (omni) => omni.sense(),
   'POST /status': async (omni) => omni.status(),
+  'GET /traces': async (omni, b, url) => omni.traces({
+    limit: url?.searchParams?.get('limit') ? Number(url.searchParams.get('limit')) : 10,
+    engine: url?.searchParams?.get('engine') || undefined,
+  }),
+  'GET /trace-summary': async (omni) => omni.traceSummary(),
 };
 
 function send(res, code, obj) {
@@ -69,7 +74,7 @@ export function startServer(omni, { port = 8787, host = '127.0.0.1', token = pro
         const raw = Buffer.concat(chunks).toString('utf8');
         if (raw) body = JSON.parse(raw);
       }
-      const result = await route(omni, body || {});
+      const result = await route(omni, body || {}, url);
       send(res, 200, { ok: true, result });
     } catch (e) {
       log.error('[serve]', e?.message || e);

@@ -2,6 +2,7 @@
 // 任意宿主/调用方只需：import { OmniSense } from 'omnisense/src/index.mjs'，即可获得眼睛/耳朵/嘴巴/大脑/感知。
 import { Bus, EVENTS } from './core/bus.mjs';
 import { Memory } from './core/memory.mjs';
+import { Tracer } from './core/tracer.mjs';
 import { Models, loadEnv } from './providers/index.mjs';
 import { Eyes } from './modules/eyes.mjs';
 import { Ears } from './modules/ears.mjs';
@@ -24,9 +25,12 @@ export class OmniSense {
     this.ears = new Ears(this.bus, this.models);
     this.mouth = new Mouth(this.bus, this.models);
     this.brain = new Brain(this.bus, this.models, this.memory);
+    this.brain.omni = this; // 反向引用，使 brain.act → runAgent 能访问 tracer 等父级能力
     this.perception = new Perception(this.bus);
     // 身体：把七种器官整合成一个像真人一样的智能体
     this.body = new Body(this);
+    // 可观测性：Agent 执行轨迹追踪（落盘，可回放 / 聚合指标）
+    this.tracer = new Tracer(env.OMNI_TRACES || './.omni-traces.json');
   }
 
   static create() { loadEnv(); return new OmniSense(); }
@@ -67,6 +71,13 @@ export class OmniSense {
 
   // —— 感知 ——
   sense() { return this.perception.sense(); }
+
+  // —— 可观测性：Agent 执行轨迹追踪（LangSmith/OTel 式，离线落盘）——
+  // trace = 一次运行；step = 可回放因果事件（thought/action/observation/耗时）。
+  traces(opts) { return this.tracer.listRuns(opts); }
+  traceSummary() { return this.tracer.summarize(); }
+  getTrace(id) { return this.tracer.getRun(id); }
+  clearTraces() { return this.tracer.clear(); }
 
   // —— 常驻感知循环 ——
   watchTick(opts) { return runWatchTick(this, opts); }

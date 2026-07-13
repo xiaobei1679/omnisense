@@ -127,6 +127,18 @@ async function main() {
       log.info('[watch] 循环结束。');
       break;
     }
+    case 'trace': {
+      // Agent 执行轨迹追踪：默认汇总；--list 列表；--get=<id> 回放；--clear 清空
+      const limit = Number((rest.find(a => /^--limit=/.test(a)) || '').split('=')[1]) || 10;
+      const engine = (rest.find(a => /^--engine=/.test(a)) || '').split('=')[1] || undefined;
+      const get = (rest.find(a => /^--get=/.test(a)) || '').split('=')[1];
+      if (flag('--clear')) { result = omni.clearTraces(); break; }
+      if (get) { result = omni.getTrace(get); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (flag('--list')) { result = omni.traces({ limit, engine }); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      result = omni.traceSummary();
+      if (!jsonMode) console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     case 'serve': {
       const { startServer } = await import('./server.mjs');
       const port = Number(rest.find(a => /^\d+$/.test(a))) || 8787;
@@ -170,6 +182,7 @@ const USAGE = `OmniSense 命令行
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)
+  trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)
   help                 显示本帮助
 
 选项:
