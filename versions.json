@@ -26,5 +26,12 @@
     "date": "2026-07-13T05:10:12.902Z",
     "tag": "v1.3.0",
     "notes": "新增 Agent 执行轨迹追踪层(src/core/tracer.mjs)：agent/multiagent/live 运行自动落盘可回放 trace，对齐 OpenTelemetry GenAI 语义约定(gen_ai.*)；CLI trace 命令(聚合/列表/回放/清空)；serve 新增 GET /traces 与 /trace-summary 路由；brain.act 修正为传递父级 OmniSense 实例以接入 tracer"
+  },
+  {
+    "version": "1.4.0",
+    "type": "minor",
+    "date": "2026-07-13T05:53:32.184Z",
+    "tag": "v1.4.0",
+    "notes": "跨层迭代：新增 openclaw-workspace/scripts/omnisense-link.mjs（工作区驱动 OmniSense 七器官/目标的一体化入口）+ 跨层测试 tests/omnisense-link.test.mjs（离线，after 兜底退出避免 undici keep-alive 挂起）；工作区 README 增补联动说明；.gitignore 忽略 .workbuddy/ 本地记忆。落实用户要求：合并后的新项目两轮同迭代、不再只动内核。"
   }
 ]

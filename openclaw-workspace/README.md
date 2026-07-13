@@ -29,6 +29,27 @@
 - **Router Agent 任务路由**：`scripts/agent/router.mjs` 把一句话任务分类意图、拆成子步骤、派给对应专家 agent（research/coding/writing/review/data），纯确定性逻辑、零密钥、`make router` 即可用
 - **Reviewer 专员自动审核**：`scripts/ci/reviewer.mjs` 把语法 / 配置 / 测试 / Observer 四项确定性零密钥检查聚合成一个 PASS/FAIL verdict；自主迭代自动化**只本地 commit、绝不推送远端**，返回 PASS 后由用户每日 review 手动推送
 - **一键部署**：内置 PowerShell / Bash 部署脚本，自动复制并校验
+- **与 OmniSense 身体联动**：`scripts/omnisense-link.mjs` 让工作区智能体直接驱动 OmniSense 七器官（眼/耳/嘴/脑/手/感知/脚）与目标，是合并后"新项目"的一体化入口（见下节）
+
+---
+
+## 🔗 与 OmniSense 身体联动（合并后的新项目）
+
+两个项目合并后不再是"并排两个仓库"，而是工作区能真正调用 OmniSense 身体的活组件。
+`scripts/omnisense-link.mjs` 直接 import 仓库根 `integrations/openclaw/index.mjs`（桥接层），
+无需 shell 中转、可单测、离线可跑。
+
+```bash
+# 列出七器官
+node scripts/omnisense-link.mjs list
+# 用手器官做离线计算（跨层：工作区 -> 桥接层 -> OmniSense 身体）
+node scripts/omnisense-link.mjs hand calc '{"expression":"3*14"}'
+# 用一句话目标驱动身体（感知->思考->记忆；联网路径由 CLI 的 process.exit 兜底退出）
+node scripts/omnisense-link.mjs goal "记录一次跨层迭代验证" --json
+```
+
+`config/openclaw.json.example` 中的 `omnisense-engine` 角色即基于此入口，把"做事"统一收口到身体。
+跨层测试见 `tests/omnisense-link.test.mjs`（离线断言，不触发联网挂起）。
 
 ---
 
