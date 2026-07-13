@@ -51,18 +51,24 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'card': return body.agentCard();
     case 'live': {
       // 生命循环：默认每拍由身体自身能力卡自主决策（autopilot 自驱）；--no-autopilot 回到写死步骤；
-      // --no-dynamic/--dynamic 控制动态议程重排（仅 autopilot 路径生效）。
+      // --no-dynamic/--dynamic 控制动态议程重排（仅 autopilot 路径生效）；
+      // --trace/--no-trace 透传 recordTrace：把每拍自驱决策记录为可回放 trace（可观测性闭环）。
       const base = parseJsonArg(args[0]) || {};
       const opts = { ...base };
       if (args.includes('--no-autopilot')) opts.autopilot = false;
       if (args.includes('--no-dynamic')) opts.dynamic = false;
       if (args.includes('--dynamic')) opts.dynamic = true;
+      if (args.includes('--trace')) opts.recordTrace = true;
+      if (args.includes('--no-trace')) opts.recordTrace = false;
       return await body.live(opts);
     }
     case 'autopilot': {
+      // --trace/--no-trace 透传 recordTrace：每轮自驱决策记录为可回放 trace（可观测性闭环）。
       const opts = parseJsonArg(args[0]) || {};
       if (args.includes('--no-dynamic')) opts.dynamic = false;
       if (args.includes('--dynamic')) opts.dynamic = true;
+      if (args.includes('--trace')) opts.recordTrace = true;
+      if (args.includes('--no-trace')) opts.recordTrace = false;
       return await body.autopilot(opts);
     }
     case 'dispatch': return await body.skillDispatch(args.join(' ') || '');

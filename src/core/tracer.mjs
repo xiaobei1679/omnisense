@@ -45,6 +45,15 @@ function clip(v, n) {
 function normGoal(g) {
   return String(g || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
+// 目标匹配：精确归一化匹配优先；无果则回退「归一化包含」匹配。
+// 让 `trace --find="autopilot:"` 能检索所有 `autopilot: <intent>` 自驱轨迹（可观测性闭环前缀检索），
+// 同时保留精确匹配语义（既有「同目标多次运行」回归检索不受影响）。
+function matchGoal(runs, ng) {
+  if (!ng) return [];
+  let arr = runs.filter(r => normGoal(r.goal) === ng);
+  if (arr.length === 0) arr = runs.filter(r => normGoal(r.goal).includes(ng));
+  return arr;
+}
 // 一步的稳定动作名（final_answer 归一化）
 function stepAction(s) {
   return s.action != null ? s.action
@@ -297,7 +306,7 @@ export class Tracer {
   findRunsByGoal(goal, opts = {}) {
     const ng = normGoal(goal);
     if (!ng) return [];
-    let arr = this.runs.filter(r => normGoal(r.goal) === ng);
+    let arr = matchGoal(this.runs, ng);
     arr.reverse(); // 最新在前
     if (opts.limit) arr = arr.slice(0, opts.limit);
     return arr.map(r => ({
@@ -311,7 +320,7 @@ export class Tracer {
     let arr = this.runs.slice();
     if (opts.goal) {
       const ng = normGoal(opts.goal);
-      arr = arr.filter(r => normGoal(r.goal) === ng);
+      arr = matchGoal(arr, ng);
     }
     if (opts.engine) arr = arr.filter(r => r.engine === opts.engine);
     if (typeof opts.completed === 'boolean') arr = arr.filter(r => r.completed === opts.completed);

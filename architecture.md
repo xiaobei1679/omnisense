@@ -105,6 +105,7 @@
 5. **结果驱动重排（BabyAGI「优先级随结果重排」思想的离线实现）**：本轮委派结果回写议程——动作成功 → 提权（且"想清楚/规划"成功会带升"记忆类"意图，因为该记住/回顾）；退化到感知（无动作）→ 惩罚并逼出"真正动手"的意图。每步 `trace.agendaWeights` 快照当前权重，可观测"权重如何随结果变化"。
 6. 全部候选都不可执行 → 诚实降级到 `perceive.sense` 并标注 `fallback` 原因（如 `matched-hand-needs-args` / `no-exec-organ`），绝不因缺参数报错或联网。
 7. 借鉴 BabyAGI「任务创建→排序→执行→重排→再生成」自生成任务队列思想（https://github.com/yoheinakajima/babyagi · https://www.ibm.com/think/topics/babyagi · https://tinyagents.dev/compare/babyagi），但离线即可自驱，无需 LLM 即可让身体在世界里自主行动、并据结果自我调整下一步关注。
+8. **可观测性闭环（opt-in `--trace`）**：`autopilot` 每轮自驱决策可经**同一份 tracer** 落盘为 `engine='autopilot'` 的 run（记录意图→委派器官→结果，含每步 `agendaWeights` 快照），复用与 `agent` 完全一致的 tracer / OTLP 导出 / 回归门禁——身体"自己活着"的行为同样可追溯、可回放、可防退化（对齐 Agent 可观测性四要素 Traces/Replay/Decision Log/Cost Attribution；借鉴 LangGraph checkpointer 每步落盘 + Octopoda 时间线回放思想，https://docs.langchain.com/oss/python/langgraph/persistence · https://ai-curator.jp/articles/cmo08r7qd00urdo1edgf942tn）。开启方式：CLI `autopilot --trace`、桥接 `omni-body.mjs autopilot '{"ticks":N}' --trace`、工作区 `omnisense-link autopilot N --trace`；检索：`trace --find="autopilot:"`。
 
 ## 数据流（watch + autopilot：常驻自驱身体）
 
@@ -116,6 +117,7 @@
 4. `--agent` 与 `--autopilot` **互补**：前者只在热点变化且过冷却时派发固定目标，后者每 tick 都让身体自驱决策，两者可同时开、互相叠加。
 5. `autopilot` 调用异常被 `try/catch` 捕获 → `autopilotAction.fired=false`（reason: `autopilot 调用失败` + 错误），**不中断 watch 循环**。
 6. 借鉴 OpenClaw「心跳闭环 / Heartbeat Loop」（周期性感知→决策→行动的自驱循环，https://www.aigcopen.com/content/omni-channel/39278.html）与 Sophia「System 3 持久自驱层」（https://arxiv.org/abs/2512.18202：智能体可独立发起内驱任务）的离线启发式实现——零网络零 key 即可让身体在常驻循环里持续自驱。
+7. **可观测性闭环（可观测性闭环）**：`--autopilot` 开启时，每 tick 自驱决策**默认**经同一份 tracer 落盘为 `engine='autopilot'` 的 run（`--no-trace` 关闭，`autopilotRecordTrace` 默认跟随 `autopilot`），让常驻自驱身体"活着"的行为同样可追溯/可回放/可防退化（可接 `trace --find="autopilot:"` / `--diff` / `--regression`）；工作区侧复用内核同一份 tracer，跨层一致。
 
 ## 目录结构
 

@@ -108,6 +108,7 @@ export async function runWatchTick(omni, {
   autopilotAllowShell = false,
   autopilotAgenda,          // 自定义自驱议程（数组）；不传用身体默认离线议程
   autopilotDynamic,         // 显式 true/false 强制动态重排；不传跟随身体默认（自定义议程=静态、默认议程=动态）
+  autopilotRecordTrace,     // 可观测性闭环：把每 tick 自驱决策记录为可回放 trace（默认：autopilot 开时为真）
   prevSig,                  // 上一轮热点签名（变化检测；不传视为首轮）
   prevAgentAt = 0,          // 上一次自主行动时间戳（冷却）
 } = {}) {
@@ -186,12 +187,16 @@ export async function runWatchTick(omni, {
   let autopilotAction = null;
   if (autopilot) {
     try {
+      // autopilotRecordTrace 默认跟随 autopilot（常驻自驱身体开启时默认记录每 tick 自驱轨迹，
+      // 让身体"活着"的行为可追溯/可回放/可防退化）；显式 true/false 可强制开关。
+      const recordTrace = autopilotRecordTrace !== undefined ? autopilotRecordTrace : true;
       const apRes = await omni.body.autopilot({
         ticks: autopilotTicks || 1,
         useLLM: autopilotUseLLM,
         allowShell: autopilotAllowShell,
         agenda: autopilotAgenda,
         dynamic: autopilotDynamic,
+        recordTrace,
       });
       const steps = apRes?.trace || [];
       const last = steps[steps.length - 1] || {};
@@ -244,6 +249,7 @@ export async function runWatch(omni, {
   autopilotTicks = 1,
   autopilotAgenda,
   autopilotDynamic,
+  autopilotRecordTrace,     // 常驻自驱身体：每 tick 自驱决策是否记录为可回放 trace（见 runWatchTick）
   autopilotUseLLM = false,
   autopilotAllowShell = false,
   onTick,
@@ -260,7 +266,7 @@ export async function runWatch(omni, {
   try {
     while (!stopped && tick < maxTicks) {
       tick++;
-      const snapshot = await runWatchTick(omni, { enableThink, agent, agentGoal, agentMode, agentUseLLM, agentCooldownMs, summarizeNew, summarizeMaxWords, autopilot, autopilotTicks, autopilotAgenda, autopilotDynamic, autopilotUseLLM, autopilotAllowShell, prevSig, prevAgentAt });
+      const snapshot = await runWatchTick(omni, { enableThink, agent, agentGoal, agentMode, agentUseLLM, agentCooldownMs, summarizeNew, summarizeMaxWords, autopilot, autopilotTicks, autopilotAgenda, autopilotDynamic, autopilotRecordTrace, autopilotUseLLM, autopilotAllowShell, prevSig, prevAgentAt });
       snapshot.tick = tick;
       if (snapshot.sig !== undefined) prevSig = snapshot.sig;
       if (snapshot.agentAction?.fired) prevAgentAt = snapshot.agentAction.at;

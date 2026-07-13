@@ -62,6 +62,7 @@ node scripts/omnisense-link.mjs dispatch "看今日热搜"
 # 默认开启动态议程（结果驱动重排，每步 trace 带 agendaWeights 快照）；--no-dynamic 关闭重排、尊重顺序
 node scripts/omnisense-link.mjs autopilot 2 --json
 node scripts/omnisense-link.mjs autopilot 2 --no-dynamic --json
+node scripts/omnisense-link.mjs autopilot 2 --trace --json   # 每轮自驱决策记录为可回放 trace（可观测性闭环）
 # 生命循环：默认每拍由身体自身能力卡自主决策（autopilot 自驱，像真人一样活着；借鉴 Stanford Generative Agents 持续自驱生命周期）
 # --no-autopilot 回到写死步骤（感知→思考→动手→说话→移动）
 node scripts/omnisense-link.mjs live 2 --json
@@ -72,12 +73,14 @@ node scripts/omnisense-link.mjs cache --clear     # 清空工具级缓存
 # 常驻自驱身体：驱动身体"脚"(watch) 持续感知 + 每 tick 自驱决策（autopilot 自驱，像真人一样持续自我驱动地活着）
 # 与 --agent 互补（变化即行动）：可同时开启（--autopilot --agent），互相叠加
 node scripts/omnisense-link.mjs watch 2 --autopilot --json
+node scripts/omnisense-link.mjs watch 2 --autopilot --trace --json   # 每 tick 自驱决策记录为可回放 trace（--autopilot 默认即记录，--no-trace 关闭）
 node scripts/omnisense-link.mjs watch 2 --autopilot --no-dynamic --json     # 关闭动态重排、尊重默认顺序
 node scripts/omnisense-link.mjs watch 2 --autopilot --agent --json          # 常驻自驱 + 变化即行动，两者互补
 # 可观测性：工作区侧消费身体的 Agent 轨迹（回放对比 / 检索 / 导出 / 回归门禁）
 node scripts/omnisense-link.mjs trace --summary        # 聚合指标
 node scripts/omnisense-link.mjs trace --list --limit=5 # 列出历史运行
 node scripts/omnisense-link.mjs trace --find="计算 2+2" # 同目标多次运行检索
+node scripts/omnisense-link.mjs trace --find="autopilot:" # 检索全部自驱身体轨迹（engine=autopilot；可接 --diff/--regression 防退化）
 node scripts/omnisense-link.mjs trace --diff=<idA>,<idB> # 回放对比两次运行，定位首次分歧
 node scripts/omnisense-link.mjs trace --export=reg.jsonl --export-format=jsonl # 导出回归数据集
 node scripts/omnisense-link.mjs trace --export=spans.otlp.json --export-format=otlp # 导出 OTLP/JSON（OTel-native，可投 Grafana Tempo/Phoenix/Jaeger）

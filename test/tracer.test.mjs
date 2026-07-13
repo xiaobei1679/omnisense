@@ -38,6 +38,27 @@ test('Tracer: recordRun 落盘并可 getRun / listRuns 回放', () => {
   rmSync(p, { force: true });
 });
 
+test('Tracer: findRunsByGoal 精确优先，无果回退「包含」检索（autopilot 前缀可观测性闭环）', () => {
+  const p = tmpPath('b.json');
+  const tr = new Tracer(p);
+  tr.recordRun({ goal: 'autopilot: 思考当前感知并决定下一步该关注什么', engine: 'autopilot', completed: true, steps: [{ step: 1, action: 'brain.think', observation: { ok: true } }] });
+  tr.recordRun({ goal: 'autopilot: 把最值得关注的话题记入长期记忆', engine: 'autopilot', completed: true, steps: [{ step: 1, action: 'brain.remember', observation: { ok: true } }] });
+  tr.recordRun({ goal: '计算 2+2', engine: 'local', completed: true, steps: [{ step: 1, action: 'calc', observation: { ok: true } }] });
+  // 精确匹配仍可用（既有同目标回归检索不受影响）
+  const exact = tr.findRunsByGoal('计算 2+2');
+  assert.equal(exact.length, 1);
+  assert.equal(exact[0].engine, 'local');
+  // 前缀/包含检索：'autopilot:' 应命中全部 autopilot 自驱轨迹（可观测性闭环）
+  const byPrefix = tr.findRunsByGoal('autopilot:');
+  assert.equal(byPrefix.length, 2, '应包含检索命中全部 autopilot 轨迹');
+  assert.ok(byPrefix.every(r => r.engine === 'autopilot'));
+  // exportDataset 用同一匹配逻辑，--find="autopilot:" 应导出全部自驱轨迹
+  const exp = tr.exportDataset({ goal: 'autopilot:', format: 'json' });
+  assert.equal(exp.count, 2, '导出目标过滤应与 find 一致');
+  rmSync(p, { force: true });
+});
+
+
 test('Tracer: 失败步骤标记 error.type（对齐 OTel GenAI 语义约定）', () => {
   const tr = new Tracer(tmpPath('b.json'));
   const run = tr.recordRun({

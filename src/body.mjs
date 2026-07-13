@@ -311,6 +311,7 @@ export class Body {
       autopilot = true,   // 默认：每拍由身体自身能力卡自主决策（autopilot 自驱）；false 回到写死步骤
       agenda,
       dynamic,
+      recordTrace,       // 透传给 autopilot：每拍自驱决策是否记录为可回放 trace（可观测性闭环）
       onTick,
     } = opts;
 
@@ -354,7 +355,7 @@ export class Body {
     } : null;
     const wrappedOnTick = (step) => { if (speakHook) speakHook(step); if (onTick) onTick(step); };
     log.info(`\n[身体·生命循环 live] 启动：${ticks} 轮 | autopilot 自驱（每拍身体用自身能力卡自主决策）| 说话=${speak}`);
-    const ap = await this.autopilot({ ticks, intervalMs, useLLM, allowShell, onTick: wrappedOnTick, agenda, dynamic });
+    const ap = await this.autopilot({ ticks, intervalMs, useLLM, allowShell, onTick: wrappedOnTick, agenda, dynamic, recordTrace });
     log.info('[身体·生命循环 live] 结束（autopilot 自驱）。');
     return { ticks, mode: 'live(autopilot)', agendaDynamic: ap.agendaDynamic, trace: ap.trace, stopped: false };
   }
@@ -378,6 +379,9 @@ export class Body {
       allowShell = false,
       onTick,
       agenda,
+      recordTrace = false,   // 可观测性闭环（借鉴 LangGraph checkpointer / Octopoda 时间线回放思想）：
+      // 为真时把每拍自驱决策记录为可回放 trace（engine='autopilot'），让身体"自驱活着"的行为可追溯、
+      // 可回放、可跑回归门禁，而非黑盒自走。默认关（避免无谓落盘），由 watch --autopilot / --trace 显式开启。
     } = opts;
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     // 离线安全的默认议程：每个意图都映射到离线器官（脑/感知），不触发联网。
@@ -410,6 +414,7 @@ export class Body {
     log.info(`\n[身体·自主循环 autopilot] 启动：${ticks} 轮 | 模型=${useLLM ? '在线' : '离线'} | 自驱决策(基于能力卡 skillResolve)${dynamic ? ' | 动态议程(结果驱动重排 · 借鉴 BabyAGI 优先级重排)' : ' | 静态议程(尊重用户顺序)'}`);
     for (let i = 1; i <= ticks; i++) {
       const step = { tick: i, agendaDynamic: dynamic };
+      const _t0 = Date.now(); // 自驱决策起始时刻（用于可追溯 trace 的时间窗）
       // 1) 感知：聚合近期眼耳输入 + 热搜，合成环境理解（离线）
       step.perceive = this.perceive();
       // 2) 自生成任务：动态模式用优先级队列据"已跑/权重"选意图；静态模式按轮转取下一个。
@@ -460,6 +465,40 @@ export class Body {
           for (const q of queue) if (/记忆|记/.test(q.intent)) q.w = Math.min(3, q.w + 0.25);
         }
         step.agendaWeights = queue.map(q => ({ intent: q.intent, w: Math.round(q.w * 100) / 100 }));
+      }
+      // ── 可观测性闭环：把每拍自驱决策记录为可回放 trace ──
+      // 借鉴（思想/模式，非代码）：LangGraph checkpointer（每 super-step 落盘、可"time travel"回放
+      // https://docs.langchain.com/oss/python/langgraph/persistence）与 Octopoda（把智能体每个
+      // 记忆写入/决策/召回记成时间线、可回放、可侦测"空转循环" https://ai-curator.jp/articles/cmo08r7qd00urdo1edgf942tn）。
+      // OmniSense 离线启发式实现：自驱身体每拍的"意图→委派器官→结果"落盘为一条 engine='autopilot' 的
+      // tracer run，复用既有 tracer（与 agent 同一份实现、同一份 OTLP/JSON 导出 / 回归门禁），让身体
+      // "自己活着"的行为同样可追溯、可回放、可防退化（对齐 Agent 可观测性四要素：Traces/Replay/Decision Log/
+      // Cost Attribution，https://mukebb.blog.csdn.net/article/details/161963075）。默认关，由显式 recordTrace 开启。
+      if (recordTrace && this.omni?.tracer?.recordRun) {
+        try {
+          const _t1 = Date.now();
+          const acted = step.executed !== 'perceive.sense';
+          const observation = step.dispatch?.error
+            ? { ok: false, error: String(step.dispatch.error) }
+            : { ok: true, output: step.result ?? null };
+          this.omni.tracer.recordRun({
+            goal: `autopilot: ${intent}`,
+            engine: 'autopilot',
+            startedAt: _t0,
+            finishedAt: _t1,
+            completed: acted,
+            finalAnswer: step.executed,
+            steps: [{
+              step: 1,
+              thought: intent,                                  // 自生成的意图（决策日志："为什么做这件事"）
+              action: step.executed,                            // 实际委派到的器官.方法
+              action_input: { intent },
+              observation,
+            }],
+            tags: ['autopilot', dynamic ? 'dynamic' : 'static'],
+            meta: { tick: i, intent, executed: step.executed, fallback: step.fallback || null },
+          });
+        } catch { /* 追踪失败绝不影响身体自驱主流程 */ }
       }
       trace.push(step);
       log.info(`[身体·自主循环] tick ${i}/${ticks}：意图「${intent}」 → 委派 ${step.executed}${chosenIdx < 0 ? ' (降级)' : ' (基于能力卡)'}${dynamic ? ` | 权重[${queue.map(q => q.w.toFixed(2)).join(',')}]` : ''}`);

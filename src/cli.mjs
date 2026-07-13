@@ -135,8 +135,9 @@ async function main() {
       const useLLM = flag('--llm');
       const allowShell = flag('--allow-shell');
       const dynamic = !flag('--no-dynamic'); // 默认开启动态议程重排（据结果调权）；--no-dynamic 尊重用户顺序
-      log.info(`[autopilot] 启动自主循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, shell=${allowShell}, 动态议程=${dynamic ? '开' : '关'}`);
-      result = await omni.autopilot({ ticks, intervalMs: interval * 1000, useLLM, allowShell, dynamic });
+      const recordTrace = rest.includes('--trace') ? true : (rest.includes('--no-trace') ? false : false); // 默认不记录（显式 --trace 开启可观测性闭环）
+      log.info(`[autopilot] 启动自主循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, shell=${allowShell}, 动态议程=${dynamic ? '开' : '关'}${recordTrace ? ', 记录轨迹' : ''}`);
+      result = await omni.autopilot({ ticks, intervalMs: interval * 1000, useLLM, allowShell, dynamic, recordTrace });
       if (!jsonMode) {
         console.log('\n═══ 自主循环结果（身体自驱决策 · 借鉴 BabyAGI 自生成任务队列 · 结果驱动重排）═══');
         for (const t of (result.trace || [])) {
@@ -210,8 +211,10 @@ async function main() {
       const autopilotEnabled = flag('--autopilot');
       const autopilotDynamic = rest.includes('--no-dynamic') ? false : (rest.includes('--dynamic') ? true : undefined);
       const autopilotAgenda = (rest.find(a => /^--autopilot-agenda=/.test(a)) || '').split('=')[1] || undefined;
-      log.info(`[watch] 启动常驻感知循环: 间隔 ${interval}s, 最大 ${max === Infinity ? '∞' : max} 次, 思考=${enableThink}, 落盘=${out}, 自主编排=${agentEnabled}(模式=${agentMode} 冷却${agentCooldown}s) 摘要新增=${summarizeNew} 常驻自驱身体=${autopilotEnabled}`);
-      result = await omni.watch({ interval: interval * 1000, maxTicks: max, enableThink, outFile: out, rememberLatest: remember, agent: agentEnabled, agentCooldownMs: agentCooldown * 1000, agentGoal, agentMode, summarizeNew, autopilot: autopilotEnabled, autopilotTicks: 1, autopilotDynamic, autopilotAgenda: autopilotAgenda ? autopilotAgenda.split(',').map(s => s.trim()).filter(Boolean) : undefined, autopilotUseLLM: useLLM });
+      // --trace / --no-trace：常驻自驱身体每 tick 自驱决策是否记录为可回放 trace（可观测性闭环；默认跟随 autopilot）
+      const apTrace = rest.includes('--trace') ? true : (rest.includes('--no-trace') ? false : undefined);
+      log.info(`[watch] 启动常驻感知循环: 间隔 ${interval}s, 最大 ${max === Infinity ? '∞' : max} 次, 思考=${enableThink}, 落盘=${out}, 自主编排=${agentEnabled}(模式=${agentMode} 冷却${agentCooldown}s) 摘要新增=${summarizeNew} 常驻自驱身体=${autopilotEnabled}${apTrace ? ` 记录轨迹=${apTrace}` : ''}`);
+      result = await omni.watch({ interval: interval * 1000, maxTicks: max, enableThink, outFile: out, rememberLatest: remember, agent: agentEnabled, agentCooldownMs: agentCooldown * 1000, agentGoal, agentMode, summarizeNew, autopilot: autopilotEnabled, autopilotTicks: 1, autopilotDynamic, autopilotAgenda: autopilotAgenda ? autopilotAgenda.split(',').map(s => s.trim()).filter(Boolean) : undefined, autopilotRecordTrace: apTrace, autopilotUseLLM: useLLM });
       log.info('[watch] 循环结束。');
       break;
     }

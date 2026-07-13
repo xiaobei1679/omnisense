@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v4.2.0 — 2026-07-13 (minor)
+
+- watch autopilot 自驱决策接 tracer 可观测性闭环：autopilot / watch --autopilot 每 tick 自驱落盘 engine=autopilot trace（--trace 显式开启，watch --autopilot 默认记录），tracer.findRunsByGoal 增精确优先+包含回退前缀检索(trace --find=autopilot:)，内核+桥接+工作区三端同步 --trace。借鉴 LangGraph checkpointer / Octopoda 时间线回放。
+
 ## v4.1.0 — 2026-07-13 (minor)
 
 - 常驻自驱身体（watch --autopilot）：脚(foot) 每 tick 由身体自身能力卡 skillResolve 自主决策并 skillDispatch 离线执行，把常驻感知循环升级为常驻自驱之活身体；与 --agent(变化即行动) 互补、可叠加。内核 src/core/watch.mjs 增 autopilot 选项(runWatchTick/runWatch)，src/cli.mjs watch 增 --autopilot/--autopilot-agenda/--no-dynamic/--dynamic；工作区 omnisense-link.mjs watch 增 --autopilot/--no-autopilot/--no-dynamic/--dynamic + 跨层测试。内核 test/watch.test.mjs +5、工作区 +2。借鉴 OpenClaw Heartbeat Loop 与 Sophia System 3 持久自驱层(离线启发式,零网络零 key)。两测试套件全绿(224/224、268/268)、lint 50 文件 OK、E2E 离线真跑通(每 tick 自驱委派 mouth.getStyle)。本地提交+tag，未推送。

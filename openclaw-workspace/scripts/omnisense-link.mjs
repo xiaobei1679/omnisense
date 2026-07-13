@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] | cache [--clear] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -114,10 +114,13 @@ export async function runLink(args) {
     // 工作区侧驱动证据：合并后的新项目里，工作区能真正让身体"自驱"而非只被动委派。
     // 默认开启动态议程重排（每轮结果回写议程、据结果调权，借鉴 BabyAGI 优先级重排）；
     // --no-dynamic 关闭重排、尊重用户顺序；--dynamic 显式开启（含自定义议程时）。
+    // --trace/--no-trace 透传 recordTrace：把每轮自驱决策记录为可回放 trace（可观测性闭环，见 tracer）。
     const ticks = Number(rest[0]) || 2;
     const opts = { ticks };
     if (rest.includes('--no-dynamic')) opts.dynamic = false;
     if (rest.includes('--dynamic')) opts.dynamic = true;
+    if (rest.includes('--trace')) opts.recordTrace = true;
+    if (rest.includes('--no-trace')) opts.recordTrace = false;
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const r = await withTimeout(omni.autopilot(opts), TIMEOUT_MS);
     return r;
@@ -125,11 +128,14 @@ export async function runLink(args) {
   if (cmd === 'live') {
     // 生命循环：默认每拍由身体自身能力卡自主决策（autopilot 自驱，借鉴 Stanford Generative Agents
     // 持续自驱生命周期）；--no-autopilot 回到写死步骤。工作区侧"让身体活着"的活证据。
+    // --trace/--no-trace 透传 recordTrace：把每拍自驱决策记录为可回放 trace（可观测性闭环）。
     const ticks = Number(rest[0]) || 2;
     const opts = { ticks };
     if (rest.includes('--no-autopilot')) opts.autopilot = false;
     if (rest.includes('--no-dynamic')) opts.dynamic = false;
     if (rest.includes('--dynamic')) opts.dynamic = true;
+    if (rest.includes('--trace')) opts.recordTrace = true;
+    if (rest.includes('--no-trace')) opts.recordTrace = false;
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const r = await withTimeout(omni.live(opts), TIMEOUT_MS);
     return r;
@@ -139,12 +145,16 @@ export async function runLink(args) {
     // 合并后"新项目"的活证据：工作区能真正让身体"常驻活着并自己决定做什么"（脚不再只巡逻，
     // 而是持续自我驱动的活身体；借鉴 OpenClaw 类自主智能体心跳闭环 Heartbeat Loop 与 Sophia System3 持久自驱层）。
     // 每 tick 快照含 autopilotAction（身体自我决策的结果）；可与 --agent 互补（变化即行动）。
+    // --trace/--no-trace 透传 autopilotRecordTrace：把每 tick 自驱决策记录为可回放 trace（可观测性闭环；
+    // 默认跟随 autopilot：watch --autopilot 时自动记录，让身体"活着"的行为可追溯/可回放/可防退化）。
     const ticks = Number(rest[0]) || 1;
     const opts = { maxTicks: ticks };
     if (rest.includes('--autopilot')) opts.autopilot = true;
     if (rest.includes('--no-autopilot')) opts.autopilot = false;
     if (rest.includes('--no-dynamic')) opts.autopilotDynamic = false;
     if (rest.includes('--dynamic')) opts.autopilotDynamic = true;
+    if (rest.includes('--trace')) opts.autopilotRecordTrace = true;
+    if (rest.includes('--no-trace')) opts.autopilotRecordTrace = false;
     if (rest.includes('--remember')) opts.rememberLatest = true;
     if (rest.includes('--think')) opts.enableThink = true;
     if (rest.includes('--agent')) opts.agent = true;

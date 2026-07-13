@@ -45,11 +45,13 @@ node integrations/openclaw/omni-body.mjs live '{"ticks":2}' --no-autopilot --jso
 # 默认开启动态议程（结果驱动重排）；传 {"dynamic":false} 或加 --no-dynamic 关闭重排、尊重顺序
 node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2}' --json
 node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2,"dynamic":false}' --json  # 关闭动态重排
+node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2}' --trace --json  # 每轮自驱决策记录为可回放 trace（可观测性闭环）
 
 # 常驻自驱身体：脚(watch) 持续感知 + 每 tick 由身体自身能力卡自主决策（autopilot 自驱，离线，像真人一样持续自我驱动地活着）
 # 经桥接层 JSON 参数传入：{ "maxTicks":2, "autopilot":true }（"autopilotDynamic":false 关闭动态重排）
 node integrations/openclaw/omni-body.mjs foot watch '{"maxTicks":2,"autopilot":true}' --json
 node integrations/openclaw/omni-body.mjs foot watch '{"maxTicks":2,"autopilot":true,"autopilotDynamic":false}' --json  # 关闭动态重排
+node integrations/openclaw/omni-body.mjs foot watch '{"maxTicks":2,"autopilot":true}' --trace --json  # 每 tick 自驱决策记录为可回放 trace（--autopilot 默认即记录）
 
 # 把一句话目标交给身体去执行
 node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --json
