@@ -118,6 +118,17 @@ it('runLink dispatch 无参数报错（不伪造成功）', async () => {
   assert.equal(r.ok, false);
   assert.match(r.error, /需要文本/);
 });
+
+it('runLink autopilot 跑自主循环（跨层：工作区->桥->身体，离线自驱决策）', async () => {
+  const r = await runLink(['autopilot', '2']);
+  assert.equal(r.mode, 'autopilot', '应标记 autopilot 模式');
+  assert.equal(r.ticks, 2);
+  assert.equal(r.trace.length, 2);
+  for (const t of r.trace) {
+    assert.ok(t.intent && Array.isArray(t.candidates), '每轮应有自生成意图与候选技能');
+    assert.ok(t.executed, '应委派到某器官');
+  }
+});
 // 不依赖 node:test 的 after 兜底（route brain.think 等离线器官调用 await 外部资源，会让 node:test 提前
 // finalize 文件并截断后续用例）；改为模块顶层独立定时器：留足 20s 让全部用例跑完后强制退出，
 // 既跑完所有断言（成败真实）又避免 undici keep-alive socket 导致套件无限挂起。

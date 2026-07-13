@@ -39,6 +39,9 @@ node integrations/openclaw/omni-body.mjs card --json
 # 启动生命循环（像真人一样 感知→思考→动手→说话→移动）
 node integrations/openclaw/omni-body.mjs live '{"ticks":2}' --json
 
+# 启动自主循环：身体用自身能力卡自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列）
+node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2}' --json
+
 # 把一句话目标交给身体去执行
 node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --json
 
@@ -92,7 +95,7 @@ console.log(JSON.parse(out));
 
 | 导出 | 来源 | 说明 |
 |------|------|------|
-| `runOrgan(organ, rawArgs)` | `omni-body.mjs` | 执行单个器官动作，返回结果对象（供测试与脚本复用）；`organ='describe'` 返回七器官树、`'card'` 返回 A2A 技能卡、`'live'` 启动生命循环 |
+| `runOrgan(organ, rawArgs)` | `omni-body.mjs` | 执行单个器官动作，返回结果对象（供测试与脚本复用）；`organ='describe'` 返回七器官树、`'card'` 返回 A2A 技能卡、`'live'` 启动生命循环、`'autopilot'` 启动自主循环（身体用能力卡自驱决策） |
 | `runGoal(goal, opts)` | `omnisense-bridge.mjs` | 一句话目标 → 感知→思考→动手，返回 `{ goal, usedLLM, trace }` |
 | `agentCard()` | `body.mjs` | A2A 风格能力卡：`{ schema, name, description, version, skills[] }`，skills 含 `id/name/description/tags/examples/net` |
 | `dispatchSkill(goal)` | `index.mjs` | 技能匹配与委派：基于 Agent Card 自动找到最佳技能并执行（纯关键词匹配，零外部依赖） |

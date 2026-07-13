@@ -10,6 +10,7 @@
 //   node integrations/openclaw/omni-body.mjs describe [--json]
 //   node integrations/openclaw/omni-body.mjs card [--json]
 //   node integrations/openclaw/omni-body.mjs live '{"ticks":2}' [--json]
+//   node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2}' [--json]  # 身体自驱决策(基于能力卡)
 //   node integrations/openclaw/omni-body.mjs eye seeHotTopics bilibili [--json]   # 联网（离线降级）
 //   node integrations/openclaw/omni-body.mjs ear listenFeedback "用户说…" [--json]
 //   node integrations/openclaw/omni-body.mjs mouth giveOpinion "AI 感知" [--json]
@@ -49,6 +50,7 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'describe': return body.describe();
     case 'card': return body.agentCard();
     case 'live': return await body.live(parseJsonArg(args[0]) || {});
+    case 'autopilot': return await body.autopilot(parseJsonArg(args[0]) || {});
     case 'dispatch': return await body.skillDispatch(args.join(' ') || '');
     case 'foot': return await body.foot(args[0], parseJsonArg(args[1]));
     case 'eye':

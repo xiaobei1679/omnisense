@@ -58,9 +58,11 @@ node scripts/omnisense-link.mjs route brain.think "我该关注什么"
 node scripts/omnisense-link.mjs dispatch "计算 2+2"
 node scripts/omnisense-link.mjs dispatch "思考当前热点"
 node scripts/omnisense-link.mjs dispatch "看今日热搜"
+# 自主循环：让身体用自身能力卡自己决定每轮做什么并离线执行（合并后"新项目"的活证据）
+node scripts/omnisense-link.mjs autopilot 2 --json
 ```
 
-> 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` / `dispatch` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。`dispatch` 再借鉴 IETF AgentCard（能力发现）与 ARD（intent→tool 匹配）思想。
+> 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` / `dispatch` / `autopilot` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。`dispatch` 再借鉴 IETF AgentCard（能力发现）与 ARD（intent→tool 匹配）思想；`autopilot` 借鉴 BabyAGI 自生成任务队列思想，让工作区能真正驱动身体"自驱"而非只被动委派。
 
 `config/openclaw.json.example` 中的 `omnisense-engine` 角色即基于此入口，把"做事"统一收口到身体。
 跨层测试见 `tests/omnisense-link.test.mjs`（离线断言，不触发联网挂起）。

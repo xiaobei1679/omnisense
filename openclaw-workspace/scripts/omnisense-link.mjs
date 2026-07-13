@@ -43,7 +43,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>"',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks]',
       organs: listOrgans(),
     };
   }
@@ -76,6 +76,14 @@ export async function runLink(args) {
     if (!text) return { ok: false, error: 'dispatch 需要文本目标' };
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const r = await withTimeout(omni.skillDispatch(text), TIMEOUT_MS);
+    return r;
+  }
+  if (cmd === 'autopilot') {
+    // 自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行。
+    // 工作区侧驱动证据：合并后的新项目里，工作区能真正让身体"自驱"而非只被动委派。
+    const ticks = Number(rest[0]) || 2;
+    const omni = (await import('../../src/index.mjs')).OmniSense.create();
+    const r = await withTimeout(omni.autopilot({ ticks }), TIMEOUT_MS);
     return r;
   }
   // 其余默认当作器官调用：omnisense-link hand calc '{"expression":"2+2"}'

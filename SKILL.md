@@ -71,6 +71,22 @@ node "{SKILL_DIR}/src/cli.mjs" trace --clear            # 清空本地轨迹
 
 设计借鉴（思想/模式，非代码）：Google A2A Protocol · AgentCard `https://github.com/google/A2A` · 仅取「skill 自描述」结构用于能力发现，未引入其传输/协议依赖。
 
+## 🤖 自主循环（autopilot · 身体自己决定做什么，借鉴 BabyAGI）
+
+`live()` 让身体自驱活着，但每轮动作写死。`autopilot()` 更进一步：**身体用自身能力卡 `skillResolve`
+自己决定每轮做什么**，再 `skillDispatch` 离线执行——感知→自生成意图→选最佳器官→执行→记录委派结果。
+思想借鉴 BabyAGI 的「自生成任务队列」循环（任务创建→优先级排序→执行→据结果重排→再生成）：
+`https://github.com/yoheinakajima/babyagi` · `https://www.ibm.com/think/topics/babyagi`。区别：OmniSense
+**离线即可自驱**——默认议程只映射到离线器官（脑/嘴/耳），`hand.*` 需结构化参数的技能自动跳过降级，
+全程零网络、零挂起。
+
+```bash
+node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=3          # 身体自驱决策（基于能力卡 skillResolve）
+node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=2 --llm   # 有模型网关时在线思考
+# 工作区侧驱动身体自主循环（合并后的新项目：工作区能真正让身体"自驱"）
+node openclaw-workspace/scripts/omnisense-link.mjs autopilot 2 --json
+```
+
 ## 快速使用
 
 ### A. 作为库（在另一段脚本中 import）

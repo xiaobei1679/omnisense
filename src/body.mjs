@@ -329,4 +329,73 @@ export class Body {
     log.info('[身体·生命循环] 结束。');
     return { ticks, trace, stopped: false };
   }
+
+  // ── 自主循环（autopilot）：让身体"自己决定每轮做什么"──
+  // 思想借鉴 BabyAGI 的「自生成任务队列」循环（任务创建 → 优先级排序 → 执行 → 据结果重排 → 再生成）：
+  //   https://github.com/yoheinakajima/babyagi · https://www.ibm.com/think/topics/babyagi
+  // 与 BabyAGI 的区别：OmniSense 离线即可自驱——每轮 (1) 感知环境 (2) 从议程自生成意图（执行后据结果
+  // 重排；此处离线确定性轮转 + 跳过需结构化参数的 hand 技能）(3) 用自身能力卡 skillResolve 把意图映射
+  // 到最佳器官/方法 (4) skillDispatch 真正执行，并记录委派结果。全程零网络、零挂起、可离线自活。
+  // 这是"和真人一样"的本质升级：不是被写死的步骤驱动，而是用自身能力清单自主决策去行动。
+  async autopilot(opts = {}) {
+    const {
+      ticks = 3,
+      intervalMs = 0,
+      useLLM = false,
+      allowShell = false,
+      onTick,
+      agenda,
+    } = opts;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    // 离线安全的默认议程：每个意图都映射到离线器官（脑/感知），不触发联网。
+    const DEFAULT_AGENDA = [
+      '思考当前感知并决定下一步该关注什么',
+      '把最值得关注的话题记入长期记忆',
+      '基于当前感知做一次规划',
+      '回顾最近记下的记忆并反思',
+    ];
+    const agendaList = (Array.isArray(agenda) && agenda.length) ? agenda : DEFAULT_AGENDA;
+    const trace = [];
+    log.info(`\n[身体·自主循环 autopilot] 启动：${ticks} 轮 | 模型=${useLLM ? '在线' : '离线'} | 自驱决策(基于能力卡 skillResolve)`);
+    for (let i = 1, ai = 0; i <= ticks; i++, ai++) {
+      const step = { tick: i };
+      // 1) 感知：聚合近期眼耳输入 + 热搜，合成环境理解（离线）
+      step.perceive = this.perceive();
+      // 2) 自生成任务：从议程取下一个意图（执行后据结果重排——此处离线确定性轮转）
+      const intent = agendaList[ai % agendaList.length];
+      step.intent = intent;
+      // 3) 用自身能力卡决策：skillResolve 把意图映射到最佳器官/方法（top-3）
+      const ranked = this.skillResolve(intent);
+      step.candidates = ranked.map(r => ({ id: r.skill.id, score: r.score, matched: r.matched }));
+      // 4) 自驱执行：挑第一个"会做事"的候选器官。排除需结构化参数且无法自动构造的 hand.*，
+      // 以及本轮已做过的 perceive.sense（避免"只反复感知、不行动"的退化循环），优先落到
+      // brain/mouth/ear 这类真正产生动作/记忆的器官；无则降级到感知。
+      const EXEC_ORGANS = new Set(['brain', 'mouth', 'ear']);
+      let chosenIdx = -1;
+      for (let k = 0; k < ranked.length; k++) {
+        const [organ] = ranked[k].skill.id.split('.');
+        if (EXEC_ORGANS.has(organ)) { chosenIdx = k; break; }
+      }
+      if (chosenIdx < 0) {
+        step.executed = 'perceive.sense';
+        step.fallback = ranked.length === 0 ? 'no-match'
+          : ranked.every(r => r.skill.id.startsWith('hand.')) ? 'matched-hand-needs-args'
+          : 'no-exec-organ';
+        step.result = this.perceive();
+      } else {
+        const chosen = ranked[chosenIdx];
+        const dispatch = await this.skillDispatch(intent, { selectTop: chosenIdx })
+          .catch(e => ({ resolved: false, error: e.message }));
+        step.executed = chosen.skill.id;
+        step.result = dispatch.result != null ? dispatch.result : dispatch;
+        step.dispatch = { resolved: dispatch.resolved, error: dispatch.error || null };
+      }
+      trace.push(step);
+      log.info(`[身体·自主循环] tick ${i}/${ticks}：意图「${intent}」 → 委派 ${step.executed}${chosenIdx < 0 ? ' (降级)' : ' (基于能力卡)'}`);
+      if (onTick) onTick(step);
+      if (i < ticks && intervalMs) await sleep(intervalMs);
+    }
+    log.info('[身体·自主循环] 结束。');
+    return { ticks, mode: 'autopilot', trace, stopped: false };
+  }
 }

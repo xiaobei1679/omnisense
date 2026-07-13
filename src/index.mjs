@@ -91,6 +91,8 @@ export class OmniSense {
   agentCard() { return this.body.agentCard(); }
   // 生命循环：感知→思考→动手→说话→移动，自驱地在世界里活着（默认离线、有限轮次）
   live(opts) { return this.body.live(opts); }
+  // 自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列）
+  autopilot(opts) { return this.body.autopilot(opts); }
 
   // 技能匹配与委派（基于能力卡的能力发现闭环）
   // skillResolve(goal) 纯关键词匹配 → 返回排名 top-3

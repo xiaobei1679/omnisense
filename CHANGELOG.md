@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v2.3.0 — 2026-07-13 (minor)
+
+- 自主循环 autopilot：身体用自身能力卡 skillResolve 自驱决策每轮动作并 skillDispatch 离线执行（借鉴 BabyAGI 自生成任务队列）；内核+桥接+工作区三层同迭代，197+255 测试全绿
+
 ## v2.2.0 — 2026-07-13 (minor)
 
 - 四层记忆架构改造(AGI-Memory 借鉴)：1) Memory 类从单文件键值存储升级为四层派生架构——Layer1 Memory(原store/notes，向后兼容)+Layer2 Rule(IF-ELSE 门控规则，带 matchRule 引擎)+Layer3 Skill(技能定义/trigger搜索/hitCount追踪)+Layer4 Knowledge(结构化知识+derived_from+confidence+avoid_pitfall);2) 各层独立 json 文件持久化(原子 rename 写)，独立的 CRUD 与 BM25 搜索方法;3) Brain 新增 12 个总线方法(addRule/removeRule/getRules/checkRules/addSkill/findSkills/hitSkill/addKnowledge/searchKnowledge/learnFromCorrection/searchAll/layerSnapshot);4) 跨层 searchAll 支持 from 参数筛选各层;5) learnFromCorrection 自动从纠错中生成 Knowledge 条目;6) 所有原有 API 完全不变，195+254 测试全绿。

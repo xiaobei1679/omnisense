@@ -10,7 +10,13 @@ function fakeOmni() {
     eyes: { seeWebsite: async (u) => ({ url: u }) },
     ears: { listenFeedback: async (t) => ({ heard: t }) },
     mouth: { speak: async (t) => ({ said: t }) },
-    brain: { think: async () => ({ insight: 'x' }), act: async () => ({ completed: true, result: 'did' }) },
+    brain: {
+      think: async () => ({ insight: 'x' }),
+      act: async () => ({ completed: true, result: 'did' }),
+      remember: async (k) => ({ remembered: k }),
+      plan: async () => ({ actions: [] }),
+      recall: async (k) => ({ recalled: k }),
+    },
     perception: { sense: () => ({ topics: ['a', 'b'], topicCount: 2 }) },
   };
 }
@@ -105,4 +111,33 @@ test('生命循环 live 跑 2 轮不抛错，trace 完整', async () => {
     assert.ok(t.perceive && t.think && t.act, '每轮应有 perceive/think/act');
     assert.equal(t.act.completed, true);
   }
+});
+
+test('自主循环 autopilot 跑 3 轮离线自驱：每轮用能力卡决策并委派非 hand 器官', async () => {
+  const body = new Body(fakeOmni());
+  const res = await body.autopilot({ ticks: 3 });
+  assert.equal(res.mode, 'autopilot', '应标记 autopilot 模式');
+  assert.equal(res.ticks, 3);
+  assert.equal(res.trace.length, 3);
+  for (const t of res.trace) {
+    assert.ok(t.perceive, '每轮应感知');
+    assert.ok(t.intent, '每轮应有自生成意图');
+    assert.ok(Array.isArray(t.candidates) && t.candidates.length > 0, '应基于能力卡产出候选技能');
+    assert.ok(t.executed && !t.executed.startsWith('perceive.sense'), '应委派到能力卡选中的行动器官(非退化感知)');
+    const isAction = t.executed.startsWith('brain.') || t.executed.startsWith('mouth.') || t.executed.startsWith('ear.');
+    assert.ok(isAction, '默认议程应委派到会做事的器官(脑/嘴/耳，离线、零网络)');
+    assert.ok('result' in t, '应有执行结果');
+  }
+});
+
+test('自主循环 autopilot 自定义议程可用且离线耐受（hand 技能自动跳过降级）', async () => {
+  const body = new Body(fakeOmni());
+  // 议程里放一个只会命中 hand 的意图，验证命中 hand 时降级而非报错
+  const res = await body.autopilot({ ticks: 2, agenda: ['用计算器算一下 2+2', '思考一下当前环境'] });
+  assert.equal(res.ticks, 2);
+  // 第一轮意图命中 hand.calc → 降级到 perceive.sense；第二轮命中动作器官 → 正常委派
+  assert.equal(res.trace[0].executed, 'perceive.sense');
+  assert.equal(res.trace[0].fallback, 'matched-hand-needs-args');
+  const ok2 = res.trace[1].executed.startsWith('brain.') || res.trace[1].executed.startsWith('mouth.') || res.trace[1].executed.startsWith('ear.');
+  assert.ok(ok2, '第二轮应委派到会做事的器官(脑/嘴/耳)，而非退化感知');
 });

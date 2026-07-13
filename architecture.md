@@ -67,6 +67,8 @@
 
 核心是一套 **`live()` 生命循环**：自驱地持续「感知 → 思考 → 动手 → 说话 → 移动」，而非被动等命令——这正是「和真人一样」的本质。默认离线、有限轮次、所有步骤带 `catch` 兜底，绝不因无模型而挂起。
 
+其上层的 **`autopilot()` 自主循环**更进一步：身体用自身能力卡 `skillResolve` **自己决定每轮做什么**，再 `skillDispatch` 离线执行——感知→自生成意图→选最佳器官→执行→记录委派结果（借鉴 BabyAGI 自生成任务队列思想，离线零网络、零挂起）。
+
 ## 数据流（一次「看热点 + 思考」）
 
 1. 驱动方调用 `omni.seeHotAll()`（CLI `all` / serve `POST /all`）。
@@ -91,6 +93,15 @@
 3. 变化且已过 `agentCooldownMs` 冷却 → 按 `--agent-mode` 合成目标并派发 `omni.act(goal, {useLLM:false})`（Agent 内核离线确定性执行，零成本、诚实不伪造）：`remember`(默认，目标含当前/新增/消失) / `alert`(**仅当存在新增话题**时触发，目标为突变告警记忆) / `digest`(目标为写 markdown 摘要文件)。目标可用 `{date}{top3}{topics}{added}{removed}{count}` 模板自定。
 4. 结果记入该 tick 快照 `agentAction:{fired,reason,goal,completed,...}`；`runWatch` 跨 tick 透传 `prevSig`/`prevAgentAt`，使变化检测与冷却在循环内持续生效，`res.agentFired` 累计自主行动次数。
 5. 无变化或不合冷却 → `agentAction.fired=false`（reason: `热点无变化`/`冷却中`），绝不空转刷记忆。agent 调用异常被 `try/catch` 捕获，诚实降级，不中断 watch 循环。
+
+## 数据流（autopilot 自主循环：身体自己决定做什么）
+
+1. 每轮 `autopilot` 先 `perceive()` 聚合近期眼耳输入 + 热搜，合成环境理解（离线）。
+2. 从议程自生成意图（默认议程离线安全：思考/记忆/规划/回顾；执行后据结果重排，此处离线确定性轮转）。
+3. `skillResolve(intent)` 把意图映射到能力卡 `skills[]` 中最佳器官/方法（top-3 排名，纯关键词匹配）。
+4. 在排名里挑第一个"会做事"的器官（脑/嘴/耳；跳过需结构化参数的 `hand.*` 与本轮已做过的 `perceive.sense`），`skillDispatch(intent)` 真正执行，结果记入该轮 `trace.executed/result`。
+5. 全部候选都不可执行 → 诚实降级到 `perceive.sense` 并标注 `fallback` 原因（如 `matched-hand-needs-args` / `no-exec-organ`），绝不因缺参数报错或联网。
+6. 借鉴 BabyAGI「任务创建→排序→执行→重排→再生成」自生成任务队列思想（https://github.com/yoheinakajima/babyagi），但离线即可自驱，无需 LLM 即可让身体在世界里自主行动。
 
 ## 目录结构
 
