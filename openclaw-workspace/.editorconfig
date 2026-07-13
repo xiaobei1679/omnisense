@@ -1,0 +1,26 @@
+# https://editorconfig.org
+# — openclaw-workspace coding style contract.
+# Every editor that supports EditorConfig (VS Code, IntelliJ, Vim, etc.)
+# will automatically apply these rules.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{ps1,cmd,bat}]
+end_of_line = crlf
+
+[*.sh]
+end_of_line = lf
+
+[Makefile]
+indent_style = tab

@@ -1,0 +1,17 @@
+# dependabot.yml — automatic security & version updates.
+# https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # GitHub Actions workflows — check weekly for security patches.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    open-pull-requests-limit: 3

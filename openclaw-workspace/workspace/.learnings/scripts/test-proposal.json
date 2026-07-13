@@ -1,0 +1,1 @@
+{"title":"测试提案","summary":"这是一个足够长的摘要测试内容","expected_outcome":"希望改善系统性能","risk_assessment":"低风险","rollback_plan":"可回滚","evidence":[{"source":"文档","level":"B"}],"affected_agents":["agent1"],"cost_estimate":{"token":100,"time":"5分钟"},"vote_type":"tech"}

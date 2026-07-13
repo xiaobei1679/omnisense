@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "created": "2026-07-03T06:57:00+08:00",
+  "rules": [
+    {
+      "id": "pol-001",
+      "title": "规则10: 创作优先于基建",
+      "text": "每日流程先锁定L0产出时段（≥30分钟），产出L0方案/正文草稿后才能启动基建任务",
+      "category": "workflow",
+      "priority": "fatal",
+      "source": "MEMORY.md 规则10"
+    },
+    {
+      "id": "pol-002",
+      "title": "规则9: 心跳禁止产出小说正文",
+      "text": "心跳/自动化任务禁止spawn子Agent产出小说章节正文。心跳没有完整世界观上下文。打破创作真空只能用提示/建议，不能自动写",
+      "category": "safety",
+      "priority": "fatal",
+      "source": "MEMORY.md 规则9"
+    },
+    {
+      "id": "pol-003",
+      "title": "规则11: 子Agent model禁硬编码",
+      "text": "所有cron/子Agent任务模板中model字段统一用default或省略，禁止硬编码具体模型名",
+      "category": "config",
+      "priority": "critical",
+      "source": "MEMORY.md 规则11"
+    },
+    {
+      "id": "pol-004",
+      "title": "规则12: 调研子Agent强制deadline",
+      "text": "调研/分析类子Agent必须带deadline_minutes（默认30）+ deliverable_format + on_timeout策略",
+      "category": "workflow",
+      "priority": "critical",
+      "source": "MEMORY.md 规则12"
+    },
+    {
+      "id": "pol-005",
+      "title": "AI合规标注",
+      "text": "所有对外发布内容必须标注【AI辅助创作】。小说每章末尾标注，视频开头3秒+片尾标注，视觉素材末尾注明",
+      "category": "compliance",
+      "priority": "critical",
+      "source": "MEMORY.md 规则5"
+    },
+    {
+      "id": "pol-006",
+      "title": "基建冻结令",
+      "text": "创作真空第2天触发：禁止新建.js/.json/.health/决策账本。解锁条件：产出≥300字创作内容",
+      "category": "workflow",
+      "priority": "high",
+      "source": "MEMORY.md 基建冻结令"
+    },
+    {
+      "id": "pol-007",
+      "title": "告警传播上限",
+      "text": "同一告警连续传播≤2次，第3次若无新证据则降级为静默记录。告警需携带first_seen_at时间戳，now-first_seen>180min自动过期",
+      "category": "operations",
+      "priority": "high",
+      "source": "MEMORY.md 规则0"
+    },
+    {
+      "id": "pol-008",
+      "title": "记忆过期机制",
+      "text": "所有写入经验池/长期记忆的内容必须带confidence+source_ref+ttl_days。TTL过期自动标记，30天回收期后硬删除。遗忘为软删除（30天回收）",
+      "category": "data",
+      "priority": "high",
+      "source": "2026-07-03记忆管理升级"
+    }
+  ]
+}

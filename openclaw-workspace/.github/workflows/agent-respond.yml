@@ -1,0 +1,47 @@
+name: Agent Responder
+
+# 自动响应 Issue 的智能体管线：
+# - 新建带 `agent-task` 标签的 issue，或
+# - 在 issue 下评论包含 `/agent`
+# 即触发。智能体读 AGENTS.md → 改代码 → 跑 node --check → 开 PR（绝不自动合并）。
+# 真正的"写代码"需要 LLM：在 Settings → Secrets 里加 LLM_API_KEY（可选 LLM_BASE_URL / LLM_MODEL）。
+# 未配置密钥时，工作流只会发一条"如何启用"的引导评论。
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+# 同一 issue 不并发跑多份
+concurrency:
+  group: agent-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    # PR 评论不触发（issue_comment 在 PR 上也触发，这里用 pull_request 字段排除）
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run agent responder
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_PATH: ${{ github.event_path }}
+          REPO: ${{ github.repository }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+        run: node scripts/agent/respond.mjs

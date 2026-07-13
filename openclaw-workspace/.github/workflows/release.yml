@@ -1,0 +1,48 @@
+name: Release
+
+# 仅当「人类」手动推送语义化 tag（如 v1.0.0）或手动触发时运行。
+# 本仓库的每小时自动化工位「只改本地、绝不推送」，从不打 tag，
+# 因此永远不会触发本流程；本文件也不会触碰任何远端凭证。
+# 使用 GitHub 自动注入的 GITHUB_TOKEN（无需任何用户密钥）。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 同一个 tag 的重复运行不会并发。
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: build notes + GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Healthcheck (syntax + config + tests + eval)
+        run: |
+          node scripts/ci/check-syntax.mjs
+          node scripts/ci/validate-config.mjs
+          node --test tests/*.test.mjs
+          node scripts/eval/eval.mjs
+
+      - name: Generate release notes from CHANGELOG.md
+        run: node scripts/release/notes.mjs --changelog docs/CHANGELOG.md --version "${{ github.ref_name }}" --out release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          generate_release_notes: false

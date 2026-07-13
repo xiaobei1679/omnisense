@@ -1,0 +1,193 @@
+{
+  "version": "1.0",
+  "created": "2026-07-02T22:42:42.181Z",
+  "patterns": [
+    {
+      "id": "sp-mr43b9fs-7eey",
+      "pattern_key": "开篇:chapter-writing",
+      "category": "开篇",
+      "task_type": "chapter-writing",
+      "example_count": 4,
+      "sample_learnings": [
+        "第1章开篇前500字必须有异常/悬念/冲突，不能先交代设定和背景——番茄读者前3秒决定是否弃书"
+      ],
+      "detected_at": "2026-07-02T22:42:42.184Z",
+      "risk": "medium",
+      "affected_skills": [
+        "tomato-novelist",
+        "novel-creator"
+      ],
+      "status": "applied"
+    },
+    {
+      "id": "sp-mr43b9fs-1d8h",
+      "pattern_key": "审核:chapter-review",
+      "category": "审核",
+      "task_type": "chapter-review",
+      "example_count": 3,
+      "sample_learnings": [
+        "AI套路高频词已固化到de-ai-prompt-templates.md，审核时直接用词汇黑名单+5维度审查清单并行扫"
+      ],
+      "detected_at": "2026-07-02T22:42:42.184Z",
+      "risk": "medium",
+      "affected_skills": [
+        "content-reviewer"
+      ],
+      "status": "applied"
+    },
+    {
+      "id": "sp-mr43b9fs-5w52",
+      "pattern_key": "节奏:chapter-writing",
+      "category": "节奏",
+      "task_type": "chapter-writing",
+      "example_count": 4,
+      "sample_learnings": [
+        "每章结尾必须有悬念钩子——不解释、不总结、不'本章完'，直接切到下一个冲突。章节内每800字须有一个情绪波动点"
+      ],
+      "detected_at": "2026-07-02T22:42:42.184Z",
+      "risk": "medium",
+      "affected_skills": [
+        "tomato-novelist",
+        "outline-designer"
+      ],
+      "status": "applied"
+    },
+    {
+      "id": "sp-mr43b9fs-y2ol",
+      "pattern_key": "去AI味:chapter-writing",
+      "category": "去AI味",
+      "task_type": "chapter-writing",
+      "example_count": 5,
+      "sample_learnings": [],
+      "detected_at": "2026-07-02T22:42:42.184Z",
+      "risk": "low",
+      "affected_skills": [
+        "tomato-novelist",
+        "content-reviewer"
+      ],
+      "status": "applied"
+    }
+  ],
+  "proposals": [
+    {
+      "id": "prop-mr43bfmu",
+      "pattern_id": "sp-mr43b9fs-7eey",
+      "pattern_key": "开篇:chapter-writing",
+      "category": "开篇",
+      "target_skills": [
+        "tomato-novelist",
+        "novel-creator"
+      ],
+      "risk": "medium",
+      "auto_apply": false,
+      "sample_learnings": [
+        "第1章开篇前500字必须有异常/悬念/冲突，不能先交代设定和背景——番茄读者前3秒决定是否弃书"
+      ],
+      "proposed_at": "2026-07-02T22:42:50.215Z",
+      "status": "applied",
+      "spec_content": "# Spec升级: 开篇 — 开篇:chapter-writing\n\n## 来源\n基于 4 次成功执行的Spec模式。\n\n## 核心经验\n1. 第1章开篇前500字必须有异常/悬念/冲突，不能先交代设定和背景——番茄读者前3秒决定是否弃书\n\n## 建议操作\n将此经验嵌入 tomato-novelist, novel-creator Skill的提示词/任务模板中。\n\n## 风险等级\nmedium\n\n## 自动检测时间\n2026-07-02T22:42:42.184Z",
+      "applied_at": "2026-07-02T23:51:38.642Z"
+    },
+    {
+      "id": "prop-mr43bfqw",
+      "pattern_id": "sp-mr43b9fs-1d8h",
+      "pattern_key": "审核:chapter-review",
+      "category": "审核",
+      "target_skills": [
+        "content-reviewer"
+      ],
+      "risk": "medium",
+      "auto_apply": false,
+      "sample_learnings": [
+        "AI套路高频词已固化到de-ai-prompt-templates.md，审核时直接用词汇黑名单+5维度审查清单并行扫"
+      ],
+      "proposed_at": "2026-07-02T22:42:50.360Z",
+      "status": "applied",
+      "spec_content": "# Spec升级: 审核 — 审核:chapter-review\n\n## 来源\n基于 3 次成功执行的Spec模式。\n\n## 核心经验\n1. AI套路高频词已固化到de-ai-prompt-templates.md，审核时直接用词汇黑名单+5维度审查清单并行扫\n\n## 建议操作\n将此经验嵌入 content-reviewer Skill的提示词/任务模板中。\n\n## 风险等级\nmedium\n\n## 自动检测时间\n2026-07-02T22:42:42.184Z",
+      "applied_at": "2026-07-02T23:51:38.643Z"
+    },
+    {
+      "id": "prop-mr43bful",
+      "pattern_id": "sp-mr43b9fs-5w52",
+      "pattern_key": "节奏:chapter-writing",
+      "category": "节奏",
+      "target_skills": [
+        "tomato-novelist",
+        "outline-designer"
+      ],
+      "risk": "medium",
+      "auto_apply": false,
+      "sample_learnings": [
+        "每章结尾必须有悬念钩子——不解释、不总结、不'本章完'，直接切到下一个冲突。章节内每800字须有一个情绪波动点"
+      ],
+      "proposed_at": "2026-07-02T22:42:50.493Z",
+      "status": "applied",
+      "spec_content": "# Spec升级: 节奏 — 节奏:chapter-writing\n\n## 来源\n基于 4 次成功执行的Spec模式。\n\n## 核心经验\n1. 每章结尾必须有悬念钩子——不解释、不总结、不'本章完'，直接切到下一个冲突。章节内每800字须有一个情绪波动点\n\n## 建议操作\n将此经验嵌入 tomato-novelist, outline-designer Skill的提示词/任务模板中。\n\n## 风险等级\nmedium\n\n## 自动检测时间\n2026-07-02T22:42:42.184Z",
+      "applied_at": "2026-07-02T23:51:38.643Z"
+    },
+    {
+      "id": "prop-mr43bfyc",
+      "pattern_id": "sp-mr43b9fs-y2ol",
+      "pattern_key": "去AI味:chapter-writing",
+      "category": "去AI味",
+      "target_skills": [
+        "tomato-novelist",
+        "content-reviewer"
+      ],
+      "risk": "low",
+      "auto_apply": true,
+      "sample_learnings": [],
+      "proposed_at": "2026-07-02T22:42:50.628Z",
+      "status": "applied",
+      "spec_content": "# Spec升级: 去AI味 — 去AI味:chapter-writing\n\n## 来源\n基于 5 次成功执行的Spec模式。\n\n## 核心经验\n\n\n## 建议操作\n将此经验嵌入 tomato-novelist, content-reviewer Skill的提示词/任务模板中。\n\n## 风险等级\nlow\n\n## 自动检测时间\n2026-07-02T22:42:42.184Z",
+      "applied_at": "2026-07-02T22:42:57.753Z"
+    }
+  ],
+  "applied": [
+    {
+      "proposal_id": "prop-mr43bfyc",
+      "pattern_key": "去AI味:chapter-writing",
+      "target_skills": [
+        "tomato-novelist",
+        "content-reviewer"
+      ],
+      "applied_at": "2026-07-02T22:42:57.753Z",
+      "risk": "low"
+    },
+    {
+      "proposal_id": "prop-mr43bfmu",
+      "pattern_key": "开篇:chapter-writing",
+      "target_skills": [
+        "tomato-novelist",
+        "novel-creator"
+      ],
+      "applied_at": "2026-07-02T23:51:38.642Z",
+      "risk": "medium"
+    },
+    {
+      "proposal_id": "prop-mr43bfqw",
+      "pattern_key": "审核:chapter-review",
+      "target_skills": [
+        "content-reviewer"
+      ],
+      "applied_at": "2026-07-02T23:51:38.643Z",
+      "risk": "medium"
+    },
+    {
+      "proposal_id": "prop-mr43bful",
+      "pattern_key": "节奏:chapter-writing",
+      "target_skills": [
+        "tomato-novelist",
+        "outline-designer"
+      ],
+      "applied_at": "2026-07-02T23:51:38.643Z",
+      "risk": "medium"
+    }
+  ],
+  "stats": {
+    "total_detected": 4,
+    "total_proposed": 4,
+    "total_applied": 4,
+    "total_rejected": 0
+  }
+}

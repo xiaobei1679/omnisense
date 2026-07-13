@@ -1,0 +1,68 @@
+{
+  "decision_id": "dec-YYYYMMDD-XXX",
+  "status": "pending",
+  "created_at": "",
+  "trigger": {
+    "type": "proposal | vote | emergency",
+    "initiator": "Agent ID or User",
+    "context": "What event/situation triggered this decision"
+  },
+  "proposals": [
+    {
+      "proposer": "Agent ID",
+      "title": "",
+      "summary": "",
+      "evidence": [
+        {"source": "", "level": "A|B|C|待验证", "note": ""}
+      ],
+      "expected_outcome": "",
+      "risk_assessment": "",
+      "rollback_plan": "",
+      "confidence": 85,
+      "affected_agents": [],
+      "cost_estimate": {"token": 0, "time": ""}
+    }
+  ],
+  "quality_gates": {
+    "g1_complete": true,
+    "g2_evidence": true,
+    "g3_scope_declared": true
+  },
+  "discussion": {
+    "key_arguments_for": [],
+    "key_arguments_against": [],
+    "dissent_memo": null
+  },
+  "votes": [
+    {
+      "agent": "",
+      "stance": "",
+      "vote": "approve|reject|abstain",
+      "weight": 1.0,
+      "reasoning": "",
+      "confidence": 0,
+      "self_rebuttal": ""
+    }
+  ],
+  "result": {
+    "approved": true,
+    "tally": {"approve": 0, "reject": 0, "abstain": 0},
+    "action_items": []
+  },
+  "execution": {
+    "executed_at": "",
+    "executed_by": "",
+    "success": null,
+    "notes": ""
+  },
+  "retrospectives": [
+    {
+      "scheduled_at": "",
+      "reviewed_at": null,
+      "expected": "",
+      "actual": "",
+      "verdict": "on_track|off_track|overturned|superseded",
+      "learnings": ""
+    }
+  ]
+}

@@ -1,6 +1,7 @@
-# OmniSense · 通用 AI 感知系统
+# OmniSense · 通用 AI 身体框架
 
-> 让 AI 像真人一样拥有 **眼 · 耳 · 嘴 · 脑 · 手 · 感知 · 脚** 七种器官，并相互协同，自驱地在世界里活着。
+> 一套**像真人一样的 AI 身体**：拥有 **眼 · 耳 · 嘴 · 脑 · 手 · 感知 · 脚** 七种器官，并相互协同，自驱地在世界里活着。
+> 本仓库已将 **多智能体工作区（openclaw-workspace）** 合并进来——OmniSense 既是一个通用身体引擎，也内置了可直接驱动它的多智能体协作环境。
 
 [![Node.js CI](https://github.com/xiaobei1679/omnisense/actions/workflows/test.yml/badge.svg)](https://github.com/xiaobei1679/omnisense/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -42,10 +43,31 @@ await omni.live({ ticks: 3, speak: true });
 
 ---
 
+## 🧩 多智能体工作区集成（openclaw-workspace）
+
+OmniSense 不只是单打独斗的引擎——仓库内已合并 **`openclaw-workspace/`**（原独立仓库 `xiaobei1679/openclaw-workspace`，MIT），一套开箱即用的多智能体工作环境。
+两者通过 **`integrations/openclaw/`** 桥接层打通：工作区里的智能体可以 `omnisense-engine` 角色，把 OmniSense 当作「身体」来用。
+
+- `integrations/openclaw/omni-body.mjs`：七器官桥接（`eye/ear/mouth/brain/hand/perceive/foot`），直接驱动 `src/body.mjs` 的真实实现。
+- `integrations/openclaw/omnisense-bridge.mjs`：把「一句话目标」交给身体去执行（感知 → 思考 → 动手）。
+- `openclaw-workspace/config/openclaw.json.example`：已内置 `omnisense-engine` 角色（含 `skills` 与 `defaults.subagents.allowAgents` 注册）。
+
+```bash
+# 让身体算一道题（离线，确定性）
+node integrations/openclaw/omni-body.mjs hand calc '{"expression":"2+2"}' --json
+# 把一句话目标交给身体去执行
+node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --json
+```
+
+详见 [integrations/openclaw/README.md](./integrations/openclaw/README.md) 与 [openclaw-workspace/README.md](./openclaw-workspace/README.md)。
+
+---
+
 ## 目录
 
 - [核心特性](#核心特性)
 - [🧍 像真人一样的身体：七种器官](#🧍-像真人一样的身体七种器官)
+- [🧩 多智能体工作区集成（openclaw-workspace）](#🧩-多智能体工作区集成openclaw-workspace)
 - [它能做什么（真实 vs 模型）](#它能做什么真实-vs-模型)
 - [快速开始](#快速开始)
 - [Agent 行动闭环](#agent-行动闭环)
@@ -309,17 +331,27 @@ TTS_MODEL=tts-1
 
 ```
 omnisense/
-├── README.md               # 本文件（通用主文档）
+├── README.md               # 本文件（统一主文档：身体引擎 + 多智能体工作区）
 ├── SKILL.md                # 技能/插件使用说明
 ├── LICENSE                 # MIT
 ├── package.json            # npm 元数据 + CLI bin
 ├── .gitignore
 ├── examples/
 │   └── standalone.mjs      # 独立使用最小示例
+├── integrations/           # 桥接层：把多智能体工作区接入 OmniSense 身体
+│   └── openclaw/
+│       ├── omni-body.mjs        # 七器官桥接（直接驱动 src/body.mjs 真实实现）
+│       ├── omnisense-bridge.mjs # 一句话目标 → 身体执行（感知→思考→动手）
+│       └── README.md            # 集成使用说明
+├── openclaw-workspace/      # 合并进来的多智能体工作区（原独立仓库 xiaobei1679/openclaw-workspace，MIT）
+│   ├── README.md
+│   ├── config/openclaw.json.example  # 已内置 omnisense-engine 角色
+│   ├── workspace/          # 工作区脚本 / 技能 / 知识
+│   └── ...                 # 原 openclaw-workspace 全部内容
 ├── .github/
 │   └── workflows/
 │       └── test.yml        # CI：Node 18/20/22 跑 lint + node --test
-├── test/                   # node:test 单元测试（离线 fixture）
+├── test/                   # node:test 单元测试（离线 fixture，含集成冒烟）
 └── src/
     ├── index.mjs           # 门面 OmniSense
     ├── body.mjs            # 身体：把七器官整合成像真人一样的智能体 + live() 生命循环

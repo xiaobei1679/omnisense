@@ -39,6 +39,15 @@ license: MIT
 | 感知 Perception | 聚合近期感知为情境模型、给出注意力建议 | 无 |
 | 脚 Foot | 常驻感知循环(差异检测+多模式自主编排+新增热点联网摘要)、在世界里移动与监视 | 离线确定性与在线思考两路，互不阻塞 |
 
+## 多智能体工作区集成（openclaw-workspace）
+
+本仓库已把多智能体工作区 `openclaw-workspace/`（原独立仓库 `xiaobei1679/openclaw-workspace`，MIT）合并进来，并通过 `integrations/openclaw/` 桥接层打通：
+
+- 工作区可注册 `omnisense-engine` 角色（`openclaw-workspace/config/openclaw.json.example` 已内置），把 OmniSense 当作「身体」。
+- `integrations/openclaw/omni-body.mjs`：七器官桥接，直接驱动 `src/body.mjs` 真实实现。
+- `integrations/openclaw/omnisense-bridge.mjs`：一句话目标 → 身体执行。
+- 详见 [integrations/openclaw/README.md](./integrations/openclaw/README.md)。
+
 ## 快速使用
 
 ### A. 作为库（在另一段脚本中 import）

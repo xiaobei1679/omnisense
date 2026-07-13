@@ -1,0 +1,362 @@
+{
+  "_comment": "=== AI Multi-Agent Workspace 配置模板 ===",
+  "_comment2": "复制本文件为 config/openclaw.json，替换 ${} 占位符为实际值或环境变量。所有含 token/密码 的字段均已用环境变量引用，不会泄露明文密钥。",
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "your-model-name"
+      },
+      "workspace": "${USER_DATA_DIR}\\workspace",
+      "maxConcurrent": 3,
+      "timeoutSeconds": 72000,
+      "heartbeat": {
+        "isolatedSession": true,
+        "lightContext": true,
+        "model": "your-heartbeat-model",
+        "every": "2h"
+      },
+      "memorySearch": {
+        "enabled": false,
+        "provider": "auto"
+      },
+      "compaction": {
+        "reserveTokensFloor": 80000,
+        "memoryFlush": {
+          "enabled": true,
+          "softThresholdTokens": 45000
+        }
+      },
+      "subagents": {
+        "allowAgents": [
+          "main",
+          "reviewer",
+          "writer",
+          "memory-keeper",
+          "tech-producer",
+          "worldview-architect",
+          "media-producer",
+          "strategist",
+          "omnisense-engine"
+        ]
+      },
+      "contextPruning": {
+        "mode": "cache-ttl",
+        "ttl": "5m",
+        "softTrimRatio": 0.3,
+        "hardClearRatio": 0.5
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "reasoningDefault": "stream",
+        "name": "主控 Agent",
+        "identity": {
+          "name": "主控 Agent"
+        },
+        "skills": [
+          "find-skills",
+          "cron-skill",
+          "env-rules",
+          "skill-creator",
+          "browser",
+          "docx",
+          "pdf",
+          "xlsx",
+          "pptx",
+          "tencent-docs",
+          "self-improvement",
+          "image-gen",
+          "video-frames",
+          "skill-vetter"
+        ]
+      },
+      {
+        "id": "reviewer",
+        "name": "审核专员",
+        "workspace": "${USER_DATA_DIR}\\workspace-reviewer",
+        "identity": {
+          "name": "审核专员",
+          "avatar": ""
+        },
+        "skills": [
+          "env-rules",
+          "find-skills",
+          "skill-creator",
+          "tencent-docs",
+          "pptx"
+        ],
+        "reasoningDefault": "stream"
+      },
+      {
+        "id": "writer",
+        "name": "内容创作",
+        "workspace": "${USER_DATA_DIR}\\workspace-writer",
+        "identity": {
+          "name": "内容创作",
+          "avatar": ""
+        },
+        "skills": [
+          "env-rules",
+          "find-skills",
+          "skill-creator",
+          "tencent-docs",
+          "image-gen",
+          "pptx"
+        ],
+        "reasoningDefault": "stream"
+      },
+      {
+        "id": "memory-keeper",
+        "name": "记忆管理",
+        "workspace": "${USER_DATA_DIR}\\workspace-memory",
+        "identity": {
+          "name": "记忆管理",
+          "avatar": ""
+        },
+        "skills": [
+          "env-rules",
+          "find-skills",
+          "skill-creator",
+          "cron-skill",
+          "tencent-docs",
+          "pptx"
+        ],
+        "reasoningDefault": "stream"
+      },
+      {
+        "id": "tech-producer",
+        "name": "技术制作",
+        "workspace": "${USER_DATA_DIR}\\workspace-tech",
+        "identity": {
+          "name": "技术制作",
+          "avatar": ""
+        },
+        "skills": [
+          "env-rules",
+          "find-skills",
+          "skill-creator",
+          "browser",
+          "image-gen",
+          "tencent-docs",
+          "pptx",
+          "video-frames"
+        ],
+        "reasoningDefault": "stream"
+      },
+      {
+        "id": "media-producer",
+        "name": "多媒体制作",
+        "workspace": "${USER_DATA_DIR}\\workspace-media",
+        "identity": {
+          "name": "多媒体制作"
+        },
+        "skills": [
+          "env-rules",
+          "find-skills",
+          "skill-creator",
+          "image-gen",
+          "video-frames",
+          "tencent-docs",
+          "pptx"
+        ],
+        "reasoningDefault": "stream"
+      },
+      {
+        "id": "strategist",
+        "name": "策略规划",
+        "workspace": "${USER_DATA_DIR}\\workspace-strategy",
+        "identity": {
+          "name": "策略规划"
+        },
+        "skills": [
+          "env-rules",
+          "find-skills",
+          "skill-creator",
+          "tencent-docs",
+          "pptx"
+        ],
+        "reasoningDefault": "stream"
+      },
+      {
+        "id": "omnisense-engine",
+        "name": "OmniSense 身体引擎",
+        "identity": {
+          "name": "OmniSense 身体引擎"
+        },
+        "skills": [
+          "env-rules",
+          "find-skills"
+        ],
+        "reasoningDefault": "stream",
+        "note": "通过仓库内 integrations/openclaw/omni-body.mjs 与 omnisense-bridge.mjs 调用 OmniSense 七器官（眼/耳/嘴/脑/手/感知/脚）"
+      }
+    ]
+  },
+  "skills": {
+    "limits": {
+      "maxSkillsPromptChars": 20000
+    },
+    "load": {
+      "extraDirs": [
+        "${BUNDLED_CONFIG_DIR}\\skills",
+        "~/.agents/skills",
+        "${USER_DATA_DIR}\\skills",
+        "${USER_DATA_DIR}\\skillhub-skills"
+      ]
+    },
+    "entries": {
+      "skill-creator": {
+        "enabled": false
+      },
+      "aippt": {
+        "enabled": true
+      },
+      "tencent-docs": {
+        "enabled": true
+      },
+      "skill-vetter": {
+        "enabled": true
+      },
+      "self-improvement": {
+        "enabled": true
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "pricing": {
+      "enabled": false
+    },
+    "providers": {}
+  },
+  "tools": {
+    "web": {
+      "search": {
+        "enabled": true,
+        "provider": "yuanbao"
+      }
+    },
+    "alsoAllow": [
+      "sessions_spawn",
+      "skillhub_install"
+    ],
+    "exec": {
+      "pathPrepend": [
+        "${BUNDLED_CONFIG_DIR}/bin",
+        "${BUNDLED_CONFIG_DIR}/bin/node",
+        "${BUNDLED_CONFIG_DIR}/bin/python",
+        "${BUNDLED_CONFIG_DIR}/bin/git"
+      ]
+    }
+  },
+  "browser": {
+    "enabled": true,
+    "defaultProfile": "agent-workspace",
+    "ssrfPolicy": {
+      "dangerouslyAllowPrivateNetwork": false
+    }
+  },
+  "gateway": {
+    "port": 61659,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "${GATEWAY_TOKEN}"
+    },
+    "controlUi": {
+      "allowedOrigins": [
+        "null",
+        "file://"
+      ]
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "wechat-access": {
+      "enabled": true,
+      "token": "${WECHAT_ACCESS_TOKEN}",
+      "wsUrl": "${WECHAT_WS_URL}",
+      "guid": "${WECHAT_GUID}",
+      "userId": "${WECHAT_USER_ID}"
+    }
+  },
+  "plugins": {
+    "enabled": true,
+    "allow": [
+      "wechat-access",
+      "embedding",
+      "memory-core",
+      "ollama",
+      "context-engine",
+      "llm-provider"
+    ],
+    "slots": {
+      "contextEngine": "context-engine"
+    },
+    "load": {
+      "paths": [
+        "${BUNDLED_CONFIG_DIR}\\extensions"
+      ]
+    },
+    "entries": {
+      "wechat-access": {
+        "enabled": true
+      },
+      "ollama": {
+        "enabled": true
+      },
+      "context-engine": {
+        "enabled": true,
+        "config": {
+          "dbPath": "${USER_DATA_DIR}\\memory\\context-engine.db",
+          "contextThreshold": 0.6,
+          "freshTailCount": 64,
+          "freshTailMaxTokens": 40000,
+          "incrementalMaxDepth": 5,
+          "ignoreSessionPatterns": [
+            "agent:*:cron:**",
+            "**:heartbeat"
+          ],
+          "statelessSessionPatterns": [
+            "agent:*:subagent:**"
+          ],
+          "skipStatelessSessions": true
+        }
+      },
+      "llm-provider": {
+        "enabled": true,
+        "config": {}
+      }
+    }
+  },
+  "messages": {
+    "queue": {
+      "mode": "followup"
+    }
+  },
+  "session": {
+    "reset": {
+      "mode": "idle",
+      "idleMinutes": 525600
+    },
+    "maintenance": {
+      "pruneAfter": "365d",
+      "maxEntries": 1000000,
+      "resetArchiveRetention": false
+    },
+    "dmScope": "per-channel-peer"
+  }
+}

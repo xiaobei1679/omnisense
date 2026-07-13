@@ -1,0 +1,27 @@
+name: Observer Agent Review
+
+# Automated PR reviewer: flags rule violations before a human reviews.
+# Local-only logic in scripts/ci/observer.mjs (no LLM needed).
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Review changed files for rule violations
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          FILES=$(git diff --name-only "${BASE}" HEAD | tr '\n' ' ')
+          if [ -z "$FILES" ]; then
+            echo "No changed files to review."
+            exit 0
+          fi
+          node scripts/ci/observer.mjs --files $FILES

@@ -1,0 +1,66 @@
+# OmniSense × 多智能体工作区 集成
+
+本目录把 **OmniSense（通用 AI 身体框架）** 落地进 **`openclaw-workspace/` 多智能体工作区**，
+让工作区里的智能体能以"真人身体"的方式调用 OmniSense 的七种器官。
+
+> 仓库根目录的 `openclaw-workspace/` 是完整的工作区模板（原 `xiaobei1679/openclaw-workspace`，MIT）。
+> 本目录是两者之间的**桥接层**，属于 OmniSense 框架自身的一部分。
+
+## 七器官对照
+
+| 器官 | 桥接入口 | 底层模块 | 真实能力 |
+|------|----------|----------|----------|
+| 眼 eye | `omni-body.mjs eye` | `eyes` | 抓网站 / 热搜 / 图像 / 视频 |
+| 耳 ear | `omni-body.mjs ear` | `ears` | 听音频转写 / 小说 / 用户反馈 |
+| 嘴 mouth | `omni-body.mjs mouth` | `mouth` | 表达观点 / 回复 / 朗读 |
+| 脑 brain | `omni-body.mjs brain` | `brain` | 思考 / 决策 / 规划 / 指挥 |
+| 手 hand | `omni-body.mjs hand` | `tools` | 联网抓 / 读写文件 / 计算 / 记忆 / 摘要 |
+| 感知 perceive | `omni-body.mjs perceive` | `perception` | 把眼耳输入汇成环境理解 |
+| 脚 foot | `omni-body.mjs foot` | `watch` | 常驻感知、在世界里移动与监视 |
+
+## 快速使用
+
+在**仓库根目录**执行（脚本基于相对路径定位 `src/index.mjs`）：
+
+```bash
+# 动手算一道题（离线，确定性）
+node integrations/openclaw/omni-body.mjs hand calc '{"expression":"sqrt(16)+pi"}' --json
+
+# 感知当前环境（离线）
+node integrations/openclaw/omni-body.mjs perceive --json
+
+# 列出七器官及其方法
+node integrations/openclaw/omni-body.mjs describe --json
+
+# 启动生命循环（像真人一样 感知→思考→动手→说话→移动）
+node integrations/openclaw/omni-body.mjs live '{"ticks":2}' --json
+
+# 把一句话目标交给身体去执行
+node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --json
+```
+
+## 在工作区里注册 OmniSense 为引擎
+
+仓库内的 `openclaw-workspace/config/openclaw.json.example` 已内置一个 `omnisense-engine`
+智能体角色（含 `skills` 与 `defaults.subagents.allowAgents` 注册）。把该文件复制为
+`config/openclaw.json` 后，`omnisense-engine` 即可作为工作区的一员，通过本目录的桥接脚本
+把 OmniSense 的七器官当作"身体"来使用。
+
+工作区里调用示例（CommonJS 工具脚本中）：
+
+```js
+const { execFileSync } = require('node:child_process');
+const { execPath } = require('node:process');
+const path = require('node:path');
+const repoRoot = path.resolve(__dirname, '../../../'); // 视调用位置调整
+const bridge = path.join(repoRoot, 'integrations/openclaw/omni-body.mjs');
+const out = execFileSync(execPath, [bridge, 'hand', 'calc', JSON.stringify({ expression: '2+2' }), '--json'], { encoding: 'utf8' });
+console.log(JSON.parse(out));
+```
+
+## 设计要点（诚实说明）
+
+- 桥接脚本直接 `import` 同仓库的 `OmniSense`，**不是**伪造接口，所有能力都复用 `src/` 真实实现。
+- 联网类器官（眼/耳抓站、脑在线思考）在无网关/无模型时**诚实降级**，绝不假装成功。
+- 内建 120s 超时守卫，单个器官调用不会无限挂起。
+- 无需任何外部密钥即可离线运行（计算 / 记忆 / 感知 / 生命循环骨架全部本地真实执行）。

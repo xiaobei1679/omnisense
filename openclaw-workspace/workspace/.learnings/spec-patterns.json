@@ -1,0 +1,42 @@
+[
+  {
+    "id": "sp-001",
+    "category": "去AI味",
+    "task_type": "chapter-writing",
+    "description": "去AI味黑名单+番茄开篇黄金三行",
+    "success_count": 5,
+    "score": 5,
+    "example": "审核诊断：v1/v2前800字零冲突零悬念。template5明确了三种正确开篇方式（悬念/冲突/异常切入）",
+    "source": "de-ai-prompt-templates.md + 第1章审核"
+  },
+  {
+    "id": "sp-002",
+    "category": "节奏",
+    "task_type": "chapter-writing",
+    "description": "每章结尾悬念钩子+800字情绪波动点",
+    "success_count": 4,
+    "score": 4,
+    "example": "20章经验：缺少钩子的章节（第7/12/18章）完读率明显下降",
+    "source": "异兽学院1-20章创作经验"
+  },
+  {
+    "id": "sp-003",
+    "category": "开篇",
+    "task_type": "chapter-writing",
+    "description": "审核前置+退回分级机制（项目简报协议）",
+    "success_count": 4,
+    "score": 4,
+    "example": "protocol落地后，第1章重写方向明确（审核→诊断→重构方案），比之前盲目迭代效率提升",
+    "source": "project-briefing-protocol.md"
+  },
+  {
+    "id": "sp-004",
+    "category": "审核",
+    "task_type": "chapter-review",
+    "description": "五维度审查清单+AI腔独立检测",
+    "success_count": 3,
+    "score": 3,
+    "example": "第1章审核报告输出结构化（硬伤+软肋+建议方案），可直接作为创作Agent输入",
+    "source": "审核专员_独立评审_20260701.md"
+  }
+]

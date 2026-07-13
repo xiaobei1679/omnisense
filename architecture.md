@@ -3,6 +3,14 @@
 > 通用 AI 感知系统：赋予 AI「眼睛 / 耳朵 / 嘴巴 / 大脑 / 手 / 感知 / 脚」七类真实能力，并整合为像真人一样的身体。
 > 设计原则：**零运行时依赖、复制即跑、能力诚实降级、模块经事件契约解耦**。
 
+## 多智能体工作区集成（openclaw-workspace）
+
+本仓库同时合并了多智能体工作区 `openclaw-workspace/`（原独立仓库 `xiaobei1679/openclaw-workspace`，MIT）。
+两者经 `integrations/openclaw/` 桥接层打通：工作区可注册 `omnisense-engine` 角色，把 OmniSense 的七器官当作「身体」来驱动。
+- `integrations/openclaw/omni-body.mjs`：七器官桥接（直接 import `src/body.mjs`，无 shell 中转）。
+- `integrations/openclaw/omnisense-bridge.mjs`：一句话目标 → 身体执行（感知→思考→动手）。
+- 详见 [integrations/openclaw/README.md](./integrations/openclaw/README.md)。
+
 ## 模块关系
 
 ```

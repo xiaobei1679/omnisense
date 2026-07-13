@@ -1,7 +1,7 @@
 {
   "name": "omnisense",
   "version": "1.0.0",
-  "description": "通用 AI 感知系统：赋予 AI 眼睛/耳朵/嘴巴/大脑/感知五类真实能力（联网真抓取，模型免 key 双模式自适应）。零依赖、可移植——可作为独立 CLI / npm 包 / 库，或作为技能接入任意 Agent 框架。",
+  "description": "通用 AI 身体框架：赋予 AI 眼/耳/嘴/脑/手/感知/脚七种真实能力（联网真抓取，模型免 key 双模式自适应），并整合多智能体工作区（openclaw-workspace）。零依赖、可移植——可作为独立 CLI / npm 包 / 库，或作为技能接入任意 Agent 框架。",
   "type": "module",
   "main": "src/index.mjs",
   "exports": {
@@ -23,7 +23,7 @@
     "hot": "node src/cli.mjs hot",
     "see": "node src/cli.mjs see",
     "serve": "node src/cli.mjs serve",
-    "test": "node --test",
+    "test": "node --test \"test/**/*.test.mjs\"",
     "lint": "node -e \"const cp=require('child_process');const fs=require('fs');const {execFileSync}=cp;const g=(d)=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?g(d+'/'+e.name):(e.name.endsWith('.mjs')?[d+'/'+e.name]:[]));const files=[...g('src'),...g('test')];for(const f of files){execFileSync(process.execPath,['--check',f],{stdio:'inherit'});}console.log('lint OK: '+files.length+' files');\""
   },
   "keywords": [

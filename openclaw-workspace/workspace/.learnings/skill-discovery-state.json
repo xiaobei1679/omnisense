@@ -1,0 +1,575 @@
+{
+  "discovered": [
+    {
+      "name": "AI工具更新",
+      "source": "联网学习补充_2026-07-04.md",
+      "line": "## 🎯 AI工具更新",
+      "discovered": "2026-07-06T15:40:58.488Z",
+      "status": "pending_verification",
+      "verification": {
+        "name": "AI工具更新",
+        "checks": [
+          {
+            "check": "npm_global",
+            "status": "check_failed"
+          },
+          {
+            "check": "path",
+            "status": "not_in_path"
+          },
+          {
+            "check": "github_search",
+            "status": "manual_verification_needed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Agent设计模式",
+      "source": "qclaw20260704/GitHub雷达_20260704.md",
+      "line": "| The Agency (msitarzewski/agency-agents) | 多领域AI专家智能体集合，一键安装到Claude Code/Cursor，内置工程/营销/电商Agent，日+4",
+      "discovered": "2026-07-06T15:40:58.489Z",
+      "status": "pending_verification",
+      "verification": {
+        "name": "Agent设计模式",
+        "checks": [
+          {
+            "check": "npm_global",
+            "status": "check_failed"
+          },
+          {
+            "check": "path",
+            "status": "not_in_path"
+          },
+          {
+            "check": "github_search",
+            "status": "manual_verification_needed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TOOLS.md已有记录",
+      "source": "qclaw20260704/GitHub雷达_20260704.md",
+      "line": "| Headroom (chopratejas/headroom) | AI Agent上下文压缩层，6种算法减少60-95%Token，MCP服务器，周+13K★ | 39K+ | Python |",
+      "discovered": "2026-07-06T15:40:58.489Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "具",
+      "source": "qclaw20260704/GitHub雷达_20260704.md",
+      "line": "| 阿里 ManClaw | 书旗+千问内测，一站式AI漫剧创作工具（邀请码制） | 🎯直接用：异兽学院漫剧化候选工具 |",
+      "discovered": "2026-07-06T15:40:58.489Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "BGM",
+      "source": "qclaw20260704/GitHub雷达_20260704.md",
+      "line": "| Muse AI | 国内首个AI音乐+MV全流程平台，5000万用户，10秒哼唱→3分钟歌曲 | 🎯直接用：山海巨兽录BGM+MV首选 |",
+      "discovered": "2026-07-06T15:40:58.489Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI音乐首选",
+      "source": "qclaw20260704/GitHub雷达_20260704.md",
+      "line": "| MELO音乐 | 国产AI音乐天花板，万物成歌(文案/照片/哼唱)，12轨分轨，粤语/闽南语/藏语 | 🎯直接用：中文AI音乐首选 |",
+      "discovered": "2026-07-06T15:40:58.489Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "码",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 起点月票榜 | 玄鉴仙族(170906票)、夜无疆(130348)、没钱修什么仙(104191)、捞尸人(100778)、青山(91705) — 仙侠玄幻持续统治 | 🎯直接可用：仙侠+家族种田",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "道",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 番茄完结黑马 | 《恐怖大航海》260万字航海克苏鲁，完结爆火出圈 | 🎯直接可用：克苏鲁+生存+航海=差异化赛道 |",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Catimind专业交付流",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| AI漫剧工具格局 | 四流派：模板快餐(漫小芽/白日梦)、极客拼装(OpenClaw/Coze)、单点神笔(MJ/Runway)、专业交付(Catimind/万兴剧厂) | 🎯直接可用：异兽学院",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "定",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 即梦AI | Seedance 2.0模型，二次元漫剧画质天花板，角色一致性90%+ | 🎯直接可用：山海巨兽录可用即梦做角色三视图锁定 |",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "成",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 蘑兔AI | 中文创作者首选，民谣/Cpop咬字自然，编曲层次清晰 | 🎯直接可用：山海巨兽录主题曲可用蘑兔生成 |",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI音乐首选",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 海绵音乐(字节) | 极致中文优化，灵感/图片/歌词成曲+AI MV，完全免费 | 🎯直接可用：免费中文AI音乐首选 |",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "IP改编",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 微信小游戏6月TOP10 | 西游降妖记🏆、永远的蔚蓝星球、城主别慌张、疯狂水世界、占城大师、跃动小子、灵画师、神器传说、向僵尸开炮、奔奔王国 | 🎯直接可用：西游/IP改编+轻量RPG=爆款",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "IP",
+      "source": "qclaw20260704/四赛道雷达_20260704.md",
+      "line": "| 汉字塔防 | 《赵云与阿斗》登顶双榜，创意玩法+IP=破圈 | 🎯直接可用：玩法创新+知名IP=蓝海 |",
+      "discovered": "2026-07-06T15:40:58.490Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "1-2条",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| 5招去AI味 | 删套路连接词(首先/其次/综上)、标点混搭(30%英文半角)、长短句交错(短句≤15字)、注入\"我觉得/其实吧\"个人化语气 | CSDN | 🎯直接用：异兽学院每天可执行1-2",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "OpenClaw",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| Humanizer Skill | WorkBuddy开源去AI味skill，检测+修复AI写作特征(夸张宣传语/破折号滥用/三段式) | WorkBuddy+GitHub | 🎯直接用：可安装",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "1",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| Seedance 2.0提示词框架 | 框架1：电影级单镜头(主体+场景+动作+镜头+风格)；框架2：多镜头叙事序列(15秒内自然切换) | CSDN实测 | 🎯直接用：山海巨兽录用框架1 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| Gemni+Seedance管线 | NanoBananaPro出25宫格分镜→Gemni生成分镜提示词→Seedance动起来 | CSDN | 🎯直接用：分镜管线可用 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "选",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| 剪映国际版CapCut | AI字幕/卡点/文案/配音/抠像一站式 | 工具评测 | 🎯直接用：后制剪辑首选 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "BGM首选",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| MELO音乐 | 国产六边形战士，万物皆可成歌(文案/照片/哼唱/歌词)，中文咬字第一梯队，12轨分轨导出 | 多篇实测 | 🎯直接用：山海巨兽录BGM首选 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "简",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| Muse AI | 10秒哼唱→3分钟完整歌曲，5000万用户，国内首个AI音乐+MV全流程APP | 多篇实测 | 🎯直接用：灵感→成品极简 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI音乐",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| 蘑兔AI | 灵感模式零门槛，12轨伴奏分离，版权归创作者 | 多篇排行 | 🎯直接用：免费中文AI音乐 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "12力量体系数值可用DS校准",
+      "source": "qclaw20260704/方法论雷达_20260704.md",
+      "line": "| DeepSeek R1 | 细纲推演+数值设计，战力体系不崩坏，逻辑怪 | 多篇排行 | 🎯直接用：异兽学院12力量体系数值可用DS校准 |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "码",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| 起点月票榜 | 玄鉴仙族17万票霸榜，仙侠玄幻统治级 | 🎯仙侠+家族种田=流量密码 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "化",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| 番茄完结黑马 | 《恐怖大航海》260万字航海克苏鲁爆火 | 🎯克苏鲁+生存=差异化 | ★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "IP改编",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| 微信小游戏TOP10 | 西游降妖记🏆，8款新入TOP50 | 🎯IP改编+轻量RPG | ★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Catimind专业交付流",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| AI漫剧工具格局 | 四流派：快餐/拼装/神笔/专业交付 | 🎯Catimind专业交付流 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "选",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| 阿里ManClaw | 书旗+千问一站式漫剧工具(内测) | 🎯异兽学院漫剧化候选 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "具",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| Headroom | Token压缩60-95%，39K★，周+13K | 🎯已验证省钱工具 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| Seedance 2.0框架 | 电影级单镜头+多镜头叙事序列 | 🎯山海巨兽录可直接用 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "行",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| 5招去AI味 | 删套路词/标点混搭/长短句/个人化语气 | 🎯异兽学院日执行 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "BGM首选",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| MELO音乐 | 国产AI音乐天花板，12轨分轨 | 🎯山海巨兽录BGM首选 | ★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI音乐",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| Muse AI | 5000万用户，10秒哼唱→3分钟歌曲 | 🎯AI音乐+MV全流程 | ★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "12力量体系数值校准",
+      "source": "qclaw20260704/每日热点_20260704.md",
+      "line": "| DeepSeek R1 | 细纲推演+战力数值校准 | 🎯12力量体系数值校准 | ★★★★ |",
+      "discovered": "2026-07-06T15:40:58.491Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Headroom",
+      "source": "qclaw20260705/GitHub雷达_20260705.md",
+      "line": "1. 【GitHub】【🎯直接可用】Headroom(chopratejas/headroom)-AI Agent上下文压缩层，省60-95% token→已验证可集成到OpenClaw",
+      "discovered": "2026-07-06T15:40:58.492Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Claude",
+      "source": "qclaw20260705/GitHub雷达_20260705.md",
+      "line": "6. 【工具】【🎯直接可用】Claude Science(Anthropic 7/1发布)：深度整合60+科学数据库+跨Agent工作流→AI进入科研流水线",
+      "discovered": "2026-07-06T15:40:58.492Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "ChatGPT全球市场份额首跌破50",
+      "source": "qclaw20260705/GitHub雷达_20260705.md",
+      "line": "11. 【AI雷达】【🎯直接可用】ChatGPT全球市场份额首跌破50%(6/16报告)→大模型从垄断走向多方竞争",
+      "discovered": "2026-07-06T15:40:58.492Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI味三步法",
+      "source": "qclaw20260705/任务记录_20260705.md",
+      "line": "1. 🎯 去AI味三步法→直接应用异兽学院下一章",
+      "discovered": "2026-07-06T15:40:58.493Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Seedance",
+      "source": "qclaw20260705/任务记录_20260705.md",
+      "line": "2. 🎯 Seedance 2.0电影级提示词框架→山海巨兽录S03分镜",
+      "discovered": "2026-07-06T15:40:58.493Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "线",
+      "source": "qclaw20260705/任务记录_20260705.md",
+      "line": "3. 🎯 炼字工坊/唐库→评估整合入创作管线",
+      "discovered": "2026-07-06T15:40:58.493Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "TOP",
+      "source": "qclaw20260705/四赛道雷达_20260705.md",
+      "line": "1. 【小说】【🎯直接可用】番茄巅峰榜TOP：《癫都癫癫点好啊》小盐子-384万在读，完结后仍百万在读，抖音话题2.5亿→「女频发疯文学」是流量密码",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "98.5分",
+      "source": "qclaw20260705/四赛道雷达_20260705.md",
+      "line": "1. 【漫剧】【🎯直接可用】漫聚星球98.5分(行业标杆)：知识驱动提示词+多人协同+全链路闭环，支持私有化部署→可作为专业AI漫剧生产线参考",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "v8.6.3",
+      "source": "qclaw20260705/四赛道雷达_20260705.md",
+      "line": "1. 【歌曲】【🎯直接可用】海绵音乐v8.6.3(字节)：灵感成曲+图片成曲+AI MV+免费→中文AI音乐创作首选，国风/戏腔全覆盖",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "6月畅销TOP10",
+      "source": "qclaw20260705/四赛道雷达_20260705.md",
+      "line": "1. 【游戏】【🎯直接可用】微信小游戏6月畅销TOP10：《西游降妖记》(RPG登顶)、《永远的蔚蓝星球》、《城主别慌张》→RPG取代SLG登顶",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "2026实测增删改三步法",
+      "source": "qclaw20260705/方法论雷达_20260705.md",
+      "line": "1. 【CSDN】【🎯直接可用】2026实测增删改三步法：①删「综上所述/此外/基于」等套话连接词 ②空话→具体数据(年份+人名+数字) ③长句切断改短句，制造人类节奏感",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "DeepSeek去AI味Pro指令",
+      "source": "qclaw20260705/方法论雷达_20260705.md",
+      "line": "2. 【CSDN】【🎯直接可用】DeepSeek去AI味Pro指令：断句重组+去连接词+去排比+替换万能动词→强制打破AI思维模式",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Tanglib",
+      "source": "qclaw20260705/方法论雷达_20260705.md",
+      "line": "6. 【博客园】【🎯直接可用】唐库Tanglib：一键生成1-500万字长篇，260个深度配角卡+人机深度协同调校+降AI改写→IP孵化全链路",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "Seedance",
+      "source": "qclaw20260705/方法论雷达_20260705.md",
+      "line": "10. 【CSDN】【🎯直接可用】Seedance 2.0三大提示词框架：①电影级单镜头(主体+场景+动作+镜头+风格)②多镜头叙事序列(15秒内自动切换)③短剧叙事长镜头→提示词工程结构化",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI",
+      "source": "qclaw20260705/方法论雷达_20260705.md",
+      "line": "15. 【CSDN】【🎯直接可用】蘑兔AI(国产中文N0.1)：零门槛灵感模式+50+曲风+12轨伴奏分离+48kHz WAV→中文创作首选",
+      "discovered": "2026-07-06T15:40:58.494Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260705/每日热点_20260705.md",
+      "line": "| 番茄巅峰榜 | 《癫都癫》384万在读→女频发疯文学流量密码 | 🎯直接可用 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260705/每日热点_20260705.md",
+      "line": "| CSDN实测 | 增删改三步法去AI味：删套话→填数据→切短句 | 🎯直接可用 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260705/每日热点_20260705.md",
+      "line": "| GitHub | Headroom：AI Agent上下文压缩省60-95% token | 🎯直接可用 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260705/每日热点_20260705.md",
+      "line": "| CSDN Seedance 2.0 | 电影级提示词框架：主体+场景+动作+镜头+风格 | 🎯直接可用 | ★★★★★ |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260705/每日热点_20260705.md",
+      "line": "| CSDN AI音乐 | 蘑兔AI国产中文No.1，MELO综合9.2分登顶 | 🎯直接可用 | ★★★★☆ |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "TypeScript",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 1 | OpenClaw (+212K stars/月) — 开源个人AI助手框架，跨平台本地优先 | 【GitHub】【🎯直接可用】 | TypeScript/全栈Agent框架 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "MCP工具链",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 3 | MemPalace (54K+ stars) — 本地AI记忆系统，wing/room/drawer三层结构，96.6% R@5召回 | 【GitHub】【🎯直接可用】 | MCP工具链",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "60集整剧本并行",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 4 | Catimind Ani (AI漫剧) | 【工具】【🎯直接可用】 | 按量付费 | 60集整剧本并行，角色一致性98.5% |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "15秒出旋律",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 5 | 音潮V3.0 (AI音乐) | 【工具】【🎯直接可用】 | 免费+付费 | 15秒出旋律，文本/图片/哼唱多模态 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "AI行业周报",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 4 | OpenAI GPT-5.6系列三梯度发布(Sol/Terra/Luna) | 【AI雷达】【🎯直接可用】 | — | AI行业周报 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "GitHub趋势周报",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 7 | Skills生态取代MCP成为Agent开发新标准 | 【AI雷达】【🎯直接可用】 | — | GitHub趋势周报 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/GitHub雷达_20260706.md",
+      "line": "| 3 | OpenAI推出\"Lockdown Mode\"抵御提示注入——安全与限制平衡褒贬不一(86分/35评论) | 【HN】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "12条",
+      "source": "qclaw20260706/信号摘要_20260706.md",
+      "line": "*共27条信号 | 🎯直接可用12条 | 💡启发借鉴11条 | 📋存档4条*",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 1 | 番茄巅峰榜TOP3：《我不是戏神》《游戏入侵》《十日终焉》——都市高武+悬疑脑洞持续霸榜 | 【小说】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 3 | 番茄黑马《恐怖大航海》260万字完结——航海克苏鲁题材，全程高压悬念，差异化爆款 | 【小说】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 2 | AI漫剧工具Catimind Ani：60集整剧本上传、100集真并行、角色一致性98.5%，专业承制首选 | 【漫剧】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 4 | Seedance 2.5预计7月初上线：更长视频+更强参考素材控制+精细制作流程 | 【漫剧】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 2 | 抖音热歌《沉溺》持续发酵——情绪向歌曲在抖音传播力强 | 【歌曲】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 4 | 海绵音乐v8.6.3：图片成曲+AI MV+一键发抖音，完全免费中文友好 | 【歌曲】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "usable",
+      "source": "qclaw20260706/四赛道雷达_20260706.md",
+      "line": "| 2 | 微信小游戏《摇钱客栈》——模拟经营+打猎系统，碎片化佛系玩法爆火 | 【游戏】【🎯直接 usable】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 1 | Towards AI联合创始人Louis\"反AI味\"指南：删填充词→补具体细节→打断排比病，三步法可复制 | 【全网】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 2 | 去AI味核心：删\"随着…的发展\"\"值得一提的是\"等填充词（占20-30%），补场景动作细节 | 【写作】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 4 | 提示词模板：\"改成更自然的中文口语表达，去掉模板腔和空泛总结，改成自然、具体、能落地的表达\" | 【AI写作】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 1 | 2026完整工具链：豆包(分镜)→即梦(图生)→可灵(动态)→剪映(后期)，新手首选链路 | 【AI视频】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 2 | AI短视频6步法：故事生成→分镜表→人物图→图转视频→配音→剪辑出片 | 【AI视频】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "用",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 1 | 音潮V3.0：全栈自研，15秒出旋律/1分钟成歌，中文天花板，文本/图片/哼唱多模态输入 | 【AI音乐】【🎯直接可用】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    },
+    {
+      "name": "usable",
+      "source": "qclaw20260706/方法论雷达_20260706.md",
+      "line": "| 3 | MELO音乐：国产六边形战士，中文咬字第一梯队，会员可商用，WAV无损+分轨导出 | 【AI音乐】【🎯直接 usable】 |",
+      "discovered": "2026-07-06T15:40:58.495Z",
+      "status": "pending_verification"
+    }
+  ],
+  "verified": [],
+  "integrated": [],
+  "rejected": [],
+  "lastScan": "2026-07-06T15:40:58.466Z",
+  "note": "2026-07-06 reset: previous 115 entries were GBK-garbled, all invalid. Script needs encoding fix before re-scan."
+}

@@ -1,0 +1,66 @@
+{
+  "_desc": "KBI应用状态追踪 — 心跳自动检查未应用的ROI≥80条目",
+  "lastScan": "2026-07-07T00:24:42.493Z",
+  "entries": {
+    "KI-20260628-008": {
+      "roi": 72,
+      "status": "below_threshold",
+      "note": "漫剧工具全景图，参考价值，不强制应用"
+    },
+    "KI-20260628-009": {
+      "roi": 81,
+      "status": "applied",
+      "appliedAt": "2026-06-29",
+      "target": "TOOLS.md + 视频剪辑专家 Skill",
+      "note": "即梦/可灵提示词公式已固化"
+    },
+    "KI-20260628-010": {
+      "roi": 36,
+      "status": "reference_only",
+      "note": "学院流竞品确认，纯验证数据"
+    },
+    "KI-20260629-011": {
+      "roi": 135,
+      "status": "applied",
+      "appliedAt": "2026-07-03T07:50:00",
+      "appliedItems": [
+        "经验池闭环(5条push-all)",
+        "Skill自进化(4/4提案applied)",
+        "知识环闭合(热点→gbrain)",
+        "去AI味(5模板+词汇黑名单)"
+      ],
+      "pendingItems": []
+    },
+    "KI-20260629-012": {
+      "roi": 90,
+      "status": "applying",
+      "appliedAt": "2026-06-29",
+      "appliedItems": [
+        "记忆分类管理规则→MEMORY.md",
+        "Token优化清单→TOOLS.md"
+      ],
+      "note": "Token优化与记忆系统最佳实践"
+    },
+    "KI-20260629-013": {
+      "roi": 108,
+      "status": "applying",
+      "appliedAt": "2026-06-29",
+      "appliedItems": [
+        "成本结构分析→MEMORY.md",
+        "7条省钱铁律→TOOLS.md"
+      ],
+      "note": "积分与成本管理"
+    },
+    "KI-20260703-014": {
+      "roi": 95,
+      "status": "applied",
+      "appliedAt": "2026-07-03T07:50:00",
+      "appliedItems": [
+        "热点cron第四步gbrain入库",
+        "knowledge-loop.js 6命令",
+        "站会cron第五步gbrain search"
+      ],
+      "note": "Codex+Obsidian灵感：知识环闭合"
+    }
+  }
+}

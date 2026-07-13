@@ -1,0 +1,20 @@
+{
+  "alerts": [
+    {
+      "agent": "ds4ygtfdv3z7mmxn",
+      "type": "token_spike",
+      "level": "warning",
+      "message": "Token消耗飙升至均值2.7x",
+      "created_at": "2026-06-29T22:35:27.797Z",
+      "resolved_at": "2026-06-30T07:10:00+08:00"
+    }
+  ],
+  "resolved": [
+    {
+      "agent": "ds4ygtfdv3z7mmxn",
+      "type": "token_spike",
+      "resolved_at": "2026-06-30T07:10:00+08:00",
+      "reason": "heartbeat auto-resolve: spike was on 2026-06-29, now past 8h, no repeat"
+    }
+  ]
+}

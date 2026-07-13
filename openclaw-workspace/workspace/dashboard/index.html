@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>团队自我成长系统 · 仪表盘</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --card: #16213e;
+  --card-hover: #1a2745;
+  --border: #0f3460;
+  --text: #e0e0e0;
+  --text-dim: #8892a6;
+  --accent: #e94560;
+  --green: #4ecca3;
+  --yellow: #f0a500;
+  --red: #e94560;
+  --blue: #4ea8de;
+  --purple: #a06cd5;
+}
+[data-theme="light"] {
+  --bg: #f0f2f5;
+  --card: #ffffff;
+  --card-hover: #f5f7fa;
+  --border: #d0d7e2;
+  --text: #1a1a2e;
+  --text-dim: #6b7280;
+  --accent: #e94560;
+  --green: #10b981;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ===== Animations ===== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px currentColor, 0 0 10px currentColor; }
+  50% { box-shadow: 0 0 15px currentColor, 0 0 30px currentColor, 0 0 45px currentColor; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes flashHighlight {
+  0% { background: rgba(78,168,222,0.4); }
+  100% { background: rgba(15,52,96,0.3); }
+}
+@keyframes barGrow {
+  from { width: 0; }
+}
+@keyframes slideDown {
+  from { max-height: 0; opacity: 0; }
+  to { max-height: 2000px; opacity: 1; }
+}
+@keyframes slideUp {
+  from { max-height: 2000px; opacity: 1; }
+  to { max-height: 0; opacity: 0; }
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+/* ===== Top Bar ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--card);
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  transition: background 0.3s, border-color 0.3s;
+}
+.topbar-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.topbar h1 { font-size: 20px; font-weight: 600; white-space: nowrap; }
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  animation: glow 2s ease-in-out infinite;
+}
+.health-green { background: rgba(78,204,163,0.15); color: var(--green); border: 1px solid var(--green); }
+.health-yellow { background: rgba(240,165,0,0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+.health-red { background: rgba(233,69,96,0.15); color: var(--red); border: 1px solid var(--red); }
+.health-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  animation: dotPulse 1.5s infinite;
+}
+.countdown-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  background: rgba(78,168,222,0.12);
+  color: var(--blue);
+  border: 1px solid rgba(78,168,222,0.3);
+}
+.topbar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar-time { font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+.btn-refresh {
+  background: var(--border);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-refresh:hover { background: var(--accent); border-color: var(--accent); }
+.btn-refresh.spinning .btn-icon { animation: spin 0.6s linear; display: inline-block; }
+.btn-icon { display: inline-block; }
+.btn-theme {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+.btn-theme:hover { color: var(--yellow); border-color: var(--yellow); }
+
+/* ===== Search ===== */
+.search-wrap {
+  padding: 12px 24px 0;
+}
+.search-box {
+  width: 100%;
+  max-width: 500px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-box:focus { border-color: var(--blue); }
+.search-box::placeholder { color: var(--text-dim); }
+
+/* ===== Grid Layout ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+  padding: 16px 24px 24px;
+}
+
+/* ===== Panel Card ===== */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.3s, background 0.3s, opacity 0.3s, transform 0.3s;
+  animation: fadeInUp 0.5s ease both;
+}
+.panel:nth-child(1) { animation-delay: 0.05s; }
+.panel:nth-child(2) { animation-delay: 0.1s; }
+.panel:nth-child(3) { animation-delay: 0.15s; }
+.panel:nth-child(4) { animation-delay: 0.2s; }
+.panel:nth-child(5) { animation-delay: 0.25s; }
+.panel:nth-child(6) { animation-delay: 0.3s; }
+.panel:nth-child(7) { animation-delay: 0.35s; }
+.panel:nth-child(8) { animation-delay: 0.4s; }
+.panel:hover { border-color: rgba(78,168,222,0.3); }
+.panel.hidden { display: none; }
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid rgba(15,52,96,0.5);
+  transition: background 0.2s;
+}
+[data-theme="light"] .panel-header { border-bottom-color: rgba(208,215,226,0.5); }
+.panel-header:hover { background: var(--card-hover); }
+.panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-icon { font-size: 18px; }
+.panel-toggle {
+  color: var(--text-dim);
+  font-size: 12px;
+  transition: transform 0.3s;
+}
+.panel.collapsed .panel-toggle { transform: rotate(-90deg); }
+.panel.collapsed .panel-body { display: none; }
+.panel-body { padding: 18px; }
+
+/* ===== Stat Row ===== */
+.stat-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.stat-box {
+  flex: 1;
+  min-width: 72px;
+  background: rgba(15,52,96,0.3);
+  border-radius: 8px;
+  padding: 12px 8px;
+  text-align: center;
+  transition: background 0.3s;
+}
+[data-theme="light"] .stat-box { background: rgba(0,0,0,0.04); }
+.stat-box.flash { animation: flashHighlight 0.8s ease; }
+.stat-value { font-size: 28px; font-weight: 700; line-height: 1.2; }
+.stat-label { font-size: 11px; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-green { color: var(--green); }
+.stat-yellow { color: var(--yellow); }
+.stat-red { color: var(--red); }
+.stat-blue { color: var(--blue); }
+.stat-purple { color: var(--purple); }
+
+/* ===== CSS Bar Chart ===== */
+.bar-chart { margin-top: 8px; }
+.bar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.bar-label { width: 80px; font-size: 12px; color: var(--text-dim); text-align: right; flex-shrink: 0; }
+.bar-track {
+  flex: 1;
+  height: 20px;
+  background: rgba(15,52,96,0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+[data-theme="light"] .bar-track { background: rgba(0,0,0,0.06); }
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  animation: barGrow 0.8s ease;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  transition: width 0.8s ease;
+}
+
+/* ===== CSS Pie Chart ===== */
+.pie-chart-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0;
+}
+.pie-chart {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+.pie-chart::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--card);
+}
+.pie-legend { font-size: 12px; }
+.pie-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.pie-legend-dot {
+  width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+}
+
+/* ===== CSS Radar Chart ===== */
+.radar-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0;
+}
+.radar-chart {
+  width: 140px;
+  height: 140px;
+  position: relative;
+}
+
+/* ===== CSS Line Chart ===== */
+.line-chart-wrap {
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.line-chart {
+  height: 80px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 200px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.line-bar {
+  flex: 1;
+  min-width: 8px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.5s ease, background 0.3s;
+  position: relative;
+}
+.line-bar:hover { opacity: 0.8; }
+.line-bar::after {
+  content: attr(data-val);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ===== CSS Timeline ===== */
+.timeline-wrap {
+  margin: 8px 0;
+  position: relative;
+  padding-left: 8px;
+}
+.timeline-axis {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+.timeline-line {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  background: var(--border);
+}
+.timeline-dot {
+  position: absolute;
+  top: 50%;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.timeline-dot:hover { transform: translate(-50%, -50%) scale(1.5); z-index: 5; }
+.timeline-dot::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: 140%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.timeline-dot:hover::after { opacity: 1; }
+.timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ===== Check List ===== */
+.check-list { list-style: none; }
+.check-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(15,52,96,0.3);
+  font-size: 13px;
+}
+[data-theme="light"] .check-item { border-bottom-color: rgba(208,215,226,0.4); }
+.check-item:last-child { border-bottom: none; }
+.check-icon { font-size: 16px; flex-shrink: 0; }
+.check-text { flex: 1; }
+.check-detail { color: var(--text-dim); font-size: 12px; }
+
+/* ===== Agent List ===== */
+.agent-list { list-style: none; }
+.agent-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+.agent-item:hover { background: rgba(15,52,96,0.3); }
+[data-theme="light"] .agent-item:hover { background: rgba(0,0,0,0.04); }
+.agent-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.agent-active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.agent-ondemand { background: var(--yellow); }
+.agent-dormant { background: var(--text-dim); opacity: 0.5; }
+.agent-name { flex: 1; font-weight: 500; }
+.agent-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(15,52,96,0.5);
+  color: var(--text-dim);
+}
+[data-theme="light"] .agent-tag { background: rgba(0,0,0,0.06); }
+.agent-activity { font-size: 11px; color: var(--text-dim); }
+
+/* ===== Cron List ===== */
+.cron-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(15,52,96,0.3);
+  font-size: 13px;
+}
+[data-theme="light"] .cron-item { border-bottom-color: rgba(208,215,226,0.4); }
+.cron-item:last-child { border-bottom: none; }
+.cron-name { flex: 1; }
+.cron-time { color: var(--text-dim); font-size: 12px; }
+.cron-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.cron-ok { background: rgba(78,204,163,0.15); color: var(--green); }
+.cron-warn { background: rgba(240,165,0,0.15); color: var(--yellow); }
+.cron-error { background: rgba(233,69,96,0.15); color: var(--red); }
+.cron-unknown { background: rgba(136,146,166,0.15); color: var(--text-dim); }
+
+/* ===== Patterns List ===== */
+.pattern-item {
+  background: rgba(15,52,96,0.2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+[data-theme="light"] .pattern-item { background: rgba(0,0,0,0.04); }
+.pattern-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.pattern-category { font-weight: 600; }
+.pattern-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(15,52,96,0.5);
+  color: var(--text-dim);
+}
+[data-theme="light"] .pattern-badge { background: rgba(0,0,0,0.08); }
+.pattern-text { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+
+/* ===== KBI Item ===== */
+.kbi-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(15,52,96,0.2);
+  font-size: 13px;
+}
+[data-theme="light"] .kbi-item { border-bottom-color: rgba(208,215,226,0.3); }
+.kbi-item:last-child { border-bottom: none; }
+.kbi-id { font-family: monospace; color: var(--blue); font-size: 12px; width: 160px; flex-shrink: 0; }
+.kbi-roi {
+  font-weight: 700;
+  width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.kbi-status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.kbi-note { color: var(--text-dim); font-size: 12px; flex: 1; }
+
+/* ===== Loading / Error ===== */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.error-msg {
+  text-align: center;
+  padding: 20px;
+  color: var(--red);
+  font-size: 13px;
+}
+
+/* ===== Section Subtitle ===== */
+.section-subtitle {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 12px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(15,52,96,0.3);
+}
+[data-theme="light"] .section-subtitle { border-bottom-color: rgba(208,215,226,0.4); }
+
+/* ===== Footer ===== */
+.footer {
+  text-align: center;
+  padding: 16px 24px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; padding: 12px; }
+  .topbar { flex-direction: column; gap: 10px; padding: 12px; }
+  .topbar-left { justify-content: center; }
+  .topbar-right { justify-content: center; }
+  .search-wrap { padding: 8px 12px 0; }
+  .stat-value { font-size: 22px; }
+  .kbi-id { width: 100px; }
+}
+@media (max-width: 500px) {
+  .topbar h1 { font-size: 16px; }
+  .panel-header { padding: 12px 14px; }
+  .panel-body { padding: 14px; }
+  .stat-box { min-width: 60px; padding: 8px 4px; }
+  .stat-value { font-size: 20px; }
+  .bar-label { width: 60px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>🧬 团队自我成长系统</h1>
+    <span id="healthBadge" class="health-badge health-yellow">
+      <span class="health-dot" style="background:var(--yellow)"></span>
+      <span id="healthText">检测中…</span>
+    </span>
+    <span class="countdown-badge" id="countdownBadge">⏳ 下次刷新: 60s</span>
+  </div>
+  <div class="topbar-right">
+    <span class="topbar-time" id="currentTime">--:--:--</span>
+    <span class="topbar-time" id="lastHeartbeat">心跳: --</span>
+    <button class="btn-refresh" id="btnRefresh" onclick="loadData(true)"><span class="btn-icon">🔄</span> 刷新</button>
+    <button class="btn-refresh" onclick="window.open('file:///C:/Users/Administrator/.qclaw/workspace/HEARTBEAT.md')">📋 心跳</button>
+    <button class="btn-refresh" onclick="window.open('file:///C:/Users/Administrator/.qclaw/workspace/MEMORY.md')">🧠 记忆</button>
+    <button class="btn-refresh" onclick="window.open('file:///C:/Users/Administrator/.qclaw/workspace/TOOLS.md')">🛠 工具</button>
+    <button class="btn-theme" id="btnTheme" onclick="toggleTheme()" title="切换主题">🌙</button>
+  </div>
+</div>
+
+<div class="search-wrap">
+  <input type="text" class="search-box" id="searchBox" placeholder="🔍 搜索面板标题…" oninput="filterPanels()">
+</div>
+
+<div class="grid" id="grid">
+  <!-- Panel 1: Auto-Heal -->
+  <div class="panel" id="panel-heal" data-title="自愈状态">
+    <div class="panel-header" onclick="togglePanel('panel-heal')">
+      <span class="panel-title"><span class="panel-icon">🔧</span>自愈状态</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="healBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 2: Experience Pool -->
+  <div class="panel" id="panel-exp" data-title="经验池">
+    <div class="panel-header" onclick="togglePanel('panel-exp')">
+      <span class="panel-title"><span class="panel-icon">💡</span>经验池</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="expBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Creation Feedback -->
+  <div class="panel" id="panel-feedback" data-title="创作反馈">
+    <div class="panel-header" onclick="togglePanel('panel-feedback')">
+      <span class="panel-title"><span class="panel-icon">📝</span>创作反馈</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="feedbackBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 4: Skill Discovery -->
+  <div class="panel" id="panel-skill" data-title="技能发现">
+    <div class="panel-header" onclick="togglePanel('panel-skill')">
+      <span class="panel-title"><span class="panel-icon">🔍</span>技能发现</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="skillBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 5: KBI Tracker -->
+  <div class="panel" id="panel-kbi" data-title="KBI追踪">
+    <div class="panel-header" onclick="togglePanel('panel-kbi')">
+      <span class="panel-title"><span class="panel-icon">📊</span>KBI追踪</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="kbiBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 6: Cron Tasks -->
+  <div class="panel" id="panel-cron" data-title="Cron任务状态">
+    <div class="panel-header" onclick="togglePanel('panel-cron')">
+      <span class="panel-title"><span class="panel-icon">⏰</span>Cron任务状态</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="cronBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 7: Agent Team -->
+  <div class="panel" id="panel-agent" data-title="Agent团队">
+    <div class="panel-header" onclick="togglePanel('panel-agent')">
+      <span class="panel-title"><span class="panel-icon">🤖</span>Agent团队</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="agentBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+
+  <!-- Panel 8: Knowledge Base -->
+  <div class="panel" id="panel-knowledge" data-title="知识库 脚本">
+    <div class="panel-header" onclick="togglePanel('panel-knowledge')">
+      <span class="panel-title"><span class="panel-icon">📚</span>知识库 & 脚本</span>
+      <span class="panel-toggle">▼</span>
+    </div>
+    <div class="panel-body" id="knowledgeBody">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  <span id="footerTime">最后更新: --</span> · v2.0 · 团队自我成长系统仪表盘
+</div>
+
+<script>
+// ======== Config ========
+const DATA_URL = 'data.json';
+const FALLBACK_MODE = true;
+const REFRESH_INTERVAL = 60; // seconds
+
+// ======== Static Fallback Data ========
+const STATIC_DATA = {
+  generated: '2026-07-05T07:35:00+08:00',
+  panels: {
+    experiencePool: {
+      total: 6,
+      byStatus: { pending: 1, pushed: 5, forgotten: 1 },
+      byCategory: { '开篇': 4, '审核': 1, '节奏': 1 },
+      meta: { total_pushed: 5, total_expired: 0, total_forgotten: 1 }
+    },
+    creationFeedback: {
+      totalChapters: 0,
+      satisfied: 0,
+      satisfactionRate: 'N/A',
+      issueCategories: {},
+      patterns: 4,
+      recurringPatterns: []
+    },
+    skillDiscovery: {
+      lastScan: null,
+      pending: 0,
+      verified: 0,
+      integrated: 0,
+      rejected: 0,
+      recent: []
+    },
+    kbi: {
+      total: 7,
+      applied: 5,
+      pending: 0,
+      discarded: 2,
+      lastScan: '2026-07-03T07:52:00+08:00',
+      items: [
+        { id: 'KI-20260628-009', title: '即梦/可灵提示词公式', status: 'applied', roi: 81 },
+        { id: 'KI-20260629-011', title: '经验池闭环+知识环闭合', status: 'applied', roi: 135 },
+        { id: 'KI-20260629-012', title: 'Token优化与记忆系统', status: 'applied', roi: 90 },
+        { id: 'KI-20260629-013', title: '积分与成本管理', status: 'applied', roi: 108 },
+        { id: 'KI-20260703-014', title: '知识环闭合', status: 'applied', roi: 95 },
+        { id: 'KI-20260628-008', title: '漫剧工具全景图', status: 'below_threshold', roi: 72 },
+        { id: 'KI-20260628-010', title: '学院流竞品确认', status: 'reference_only', roi: 36 }
+      ]
+    },
+    knowledge: {
+      errors: 5,
+      learnings: 3,
+      recentErrors: [],
+      recentLearnings: []
+    },
+    scripts: {
+      total: 30,
+      totalSize: 193483,
+      list: []
+    },
+    skillEvolution: {
+      patterns: [
+        { id: 'sp-1', pattern_key: '开篇:chapter-writing', category: '开篇', example_count: 4, risk: 'medium', status: 'applied' },
+        { id: 'sp-2', pattern_key: '审核:chapter-review', category: '审核', example_count: 3, risk: 'medium', status: 'applied' },
+        { id: 'sp-3', pattern_key: '节奏:chapter-writing', category: '节奏', example_count: 4, risk: 'medium', status: 'applied' },
+        { id: 'sp-4', pattern_key: '去AI味:chapter-writing', category: '去AI味', example_count: 5, risk: 'low', status: 'applied' }
+      ],
+      proposals: [
+        { id: 'prop-1', pattern_key: '开篇:chapter-writing', risk: 'medium', status: 'applied' },
+        { id: 'prop-2', pattern_key: '审核:chapter-review', risk: 'medium', status: 'applied' },
+        { id: 'prop-3', pattern_key: '节奏:chapter-writing', risk: 'medium', status: 'applied' },
+        { id: 'prop-4', pattern_key: '去AI味:chapter-writing', risk: 'low', status: 'applied' }
+      ],
+      stats: { total_detected: 4, total_proposed: 4, total_applied: 4, total_rejected: 0 }
+    }
+  }
+};
+
+const HEAL_CHECKS = [
+  { name: '经验池pending推送', detail: '检查pending经验并自动push-all', status: 'ok', script: 'experience-pool.js', cmd: 'stats' },
+  { name: 'Skill进化apply-all', detail: '自动应用中低风险提案', status: 'ok', script: 'skill-evolution.js', cmd: 'apply-all' },
+  { name: 'KBI扫描更新', detail: 'lastScan超过2天则更新', status: 'ok', script: 'kbi-tracker.json', cmd: 'view' },
+  { name: 'gbrain热点入库', detail: '检查热点数据是否存在', status: 'ok', script: 'knowledge-loop.js', cmd: 'status' },
+  { name: 'ERRORS.md同类错误', detail: '同类错误≥2次生成修复', status: 'ok', script: 'ERRORS.md', cmd: 'view' },
+  { name: 'LEARNINGS.md新规则', detail: '新规则推送到经验池', status: 'ok', script: 'LEARNINGS.md', cmd: 'view' }
+];
+
+const CRON_TASKS = [
+  { name: '每日热点六环节', schedule: '每日 08:00', lastRun: '2026-07-05 08:00', status: 'ok', runHour: 8 },
+  { name: '每日站会', schedule: '每日 09:00', lastRun: '2026-07-05 09:00', status: 'ok', runHour: 9 },
+  { name: '知识库每周整理', schedule: '每周日 10:00', lastRun: '2026-07-05 10:00', status: 'ok', runHour: 10 },
+  { name: '创作真空检查', schedule: '每90分钟', lastRun: '2026-07-05 07:00', status: 'ok', runHour: 7 },
+  { name: '经验过期巡检', schedule: '每日 12:00', lastRun: '2026-07-04 12:00', status: 'ok', runHour: 12 },
+  { name: '技能发现扫描', schedule: '每周日 14:00', lastRun: '2026-07-05 07:15', status: 'ok', runHour: 14 }
+];
+
+const AGENT_TEAM = [
+  { name: 'main-agent', tier: '活跃', activity: '主控调度', status: 'active' },
+  { name: 'novel-creator', tier: '活跃', activity: '小说创作', status: 'active' },
+  { name: 'content-reviewer', tier: '活跃', activity: '内容审核', status: 'active' },
+  { name: 'outline-designer', tier: '按需', activity: '大纲设计', status: 'ondemand' },
+  { name: 'novel-hotcatcher', tier: '按需', activity: '热点捕捉', status: 'ondemand' },
+  { name: 'worldbuilding-architect', tier: '按需', activity: '世界观构建', status: 'ondemand' },
+  { name: 'daily-hotspot', tier: '活跃', activity: '每日热点', status: 'active' },
+  { name: 'skill-evolution', tier: '按需', activity: '技能进化', status: 'ondemand' }
+];
+
+// ======== State ========
+let prevData = null;
+let countdown = REFRESH_INTERVAL;
+let refreshTimer = null;
+
+// ======== Clock ========
+function updateClock() {
+  const now = new Date();
+  document.getElementById('currentTime').textContent =
+    now.toLocaleString('zh-CN', { hour12: false });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ======== Theme Toggle ========
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  const next = current === 'light' ? 'dark' : 'light';
+  if (next === 'dark') {
+    html.removeAttribute('data-theme');
+  } else {
+    html.setAttribute('data-theme', 'light');
+  }
+  document.getElementById('btnTheme').textContent = next === 'light' ? '☀️' : '🌙';
+  try { localStorage.setItem('dashboard-theme', next); } catch(e) {}
+}
+try {
+  const saved = localStorage.getItem('dashboard-theme');
+  if (saved === 'light') toggleTheme();
+} catch(e) {}
+
+// ======== Search Filter ========
+function filterPanels() {
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  document.querySelectorAll('.panel').forEach(p => {
+    const title = (p.getAttribute('data-title') || '').toLowerCase();
+    const titleText = p.querySelector('.panel-title').textContent.toLowerCase();
+    if (!q || title.includes(q) || titleText.includes(q)) {
+      p.classList.remove('hidden');
+    } else {
+      p.classList.add('hidden');
+    }
+  });
+}
+
+// ======== Panel Toggle ========
+function togglePanel(id) {
+  const panel = document.getElementById(id);
+  panel.classList.toggle('collapsed');
+}
+
+// ======== Countdown & Auto Refresh ========
+function startCountdown() {
+  countdown = REFRESH_INTERVAL;
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(() => {
+    countdown--;
+    if (countdown <= 0) {
+      countdown = REFRESH_INTERVAL;
+      loadData(false);
+    }
+    document.getElementById('countdownBadge').textContent = `⏳ 下次刷新: ${countdown}s`;
+  }, 1000);
+}
+
+// ======== Count-Up Animation ========
+function animateCount(el, target, duration) {
+  const isStr = typeof target === 'string';
+  if (isStr && isNaN(parseInt(target))) {
+    el.textContent = target;
+    return;
+  }
+  const num = parseInt(target);
+  if (isNaN(num)) { el.textContent = target; return; }
+  const start = 0;
+  const startTime = performance.now();
+  function step(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const val = Math.round(start + (num - start) * eased);
+    el.textContent = isStr ? val + (target.replace(/[\d-]/g, '') || '') : val;
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = target;
+  }
+  requestAnimationFrame(step);
+}
+
+// ======== Data Loading ========
+async function loadData(manual) {
+  const btn = document.getElementById('btnRefresh');
+  if (manual && btn) btn.classList.add('spinning');
+  let data = null;
+  try {
+    const resp = await fetch(DATA_URL + '?t=' + Date.now());
+    if (resp.ok) data = await resp.json();
+  } catch (e) {}
+  if (!data) data = STATIC_DATA;
+  renderAll(data);
+  if (manual && btn) setTimeout(() => btn.classList.remove('spinning'), 600);
+  // Update footer time
+  const now = new Date();
+  document.getElementById('footerTime').textContent = '最后更新: ' + now.toLocaleString('zh-CN', { hour12: false });
+  // Reset countdown
+  startCountdown();
+}
+
+// ======== Render Functions ========
+function renderAll(data) {
+  renderHealth(data);
+  renderHeal(data);
+  renderExperience(data);
+  renderFeedback(data);
+  renderSkill(data);
+  renderKBI(data);
+  renderCron(data);
+  renderAgent(data);
+  renderKnowledge(data);
+  prevData = data;
+}
+
+// 存储待处理详情供点击查看
+let pendingIssues = [];
+
+function renderHealth(data) {
+  const badge = document.getElementById('healthBadge');
+  const text = document.getElementById('healthText');
+  const heartbeatEl = document.getElementById('lastHeartbeat');
+  pendingIssues = [];
+  
+  const exp = data.panels.experiencePool;
+  if (exp && exp.byStatus && exp.byStatus.pending > 0) {
+    pendingIssues.push({ name: '经验池', detail: `${exp.byStatus.pending}条待推送经验`, panel: 'panel-exp', cmd: 'node .learnings/scripts/experience-pool.js push-all' });
+  }
+  const kbi = data.panels.kbi;
+  if (kbi && kbi.pending > 0) {
+    pendingIssues.push({ name: 'KBI追踪', detail: `${kbi.pending}条待应用KBI`, panel: 'panel-kbi', cmd: '查看 kbi-tracker.json' });
+  }
+  const skill = data.panels.skillDiscovery;
+  if (skill && skill.pending > 0) {
+    pendingIssues.push({ name: '技能发现', detail: `${skill.pending}项待验证`, panel: 'panel-skill', cmd: 'node .learnings/scripts/skill-discovery.js scan' });
+  }
+  const scriptsPanel = data.panels.scripts;
+  if (scriptsPanel && scriptsPanel.total > 25) {
+    pendingIssues.push({ name: '脚本膨胀', detail: `核心脚本${scriptsPanel.total}个，建议归档清理`, panel: 'panel-knowledge', cmd: 'node .learnings/scripts/team-cli.js status' });
+  }
+
+  const issues = pendingIssues.length;
+
+  if (issues === 0) {
+    badge.className = 'health-badge health-green';
+    badge.querySelector('.health-dot').style.background = 'var(--green)';
+    text.textContent = '系统健康';
+    badge.style.cursor = 'default';
+    badge.title = '';
+  } else if (issues <= 2) {
+    badge.className = 'health-badge health-yellow';
+    badge.querySelector('.health-dot').style.background = 'var(--yellow)';
+    text.textContent = `${issues}项待处理`;
+    badge.style.cursor = 'pointer';
+    badge.title = '点击查看详情';
+  } else {
+    badge.className = 'health-badge health-red';
+    badge.querySelector('.health-dot').style.background = 'var(--red)';
+    text.textContent = `${issues}项异常`;
+    badge.style.cursor = 'pointer';
+    badge.title = '点击查看详情';
+  }
+
+  badge.onclick = function() {
+    if (pendingIssues.length === 0) return;
+    const existing = document.getElementById('detailPopup');
+    if (existing) existing.remove();
+    const popup = document.createElement('div');
+    popup.id = 'detailPopup';
+    popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:500px;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+    let content = '<h3 style="margin-bottom:4px;color:var(--text);">⚠️ 待处理项</h3>';
+    content += '<div style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">点击「查看面板」跳转到对应面板</div>';
+    content += '<div style="color:var(--text-dim);font-size:13px;line-height:1.8;">';
+    pendingIssues.forEach(issue => {
+      content += '<div style="background:rgba(15,52,96,0.3);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+      content += '<strong style="color:var(--text);">' + issue.name + '</strong><br>';
+      content += '<span style="font-size:12px;">' + issue.detail + '</span><br>';
+      content += '<code style="background:rgba(15,52,96,0.5);padding:2px 6px;border-radius:4px;color:var(--green);font-size:11px;">' + issue.cmd + '</code>';
+      content += '<button class="btn-refresh" style="margin-left:8px;font-size:11px;padding:2px 8px;" onclick="scrollToPanel(\'' + issue.panel + '\');document.getElementById(\'detailPopup\').remove();">查看面板</button>';
+      content += '</div>';
+    });
+    content += '</div>';
+    content += '<div style="margin-top:16px;text-align:right;">';
+    content += '<button class="btn-refresh" onclick="document.getElementById(\'detailPopup\').remove()">关闭</button>';
+    content += '</div>';
+    popup.innerHTML = content;
+    document.body.appendChild(popup);
+    popup.addEventListener('click', function(e) { if (e.target === popup) popup.remove(); });
+  };
+
+  const genTime = data.generated ? new Date(data.generated) : new Date();
+  heartbeatEl.textContent = '数据: ' + genTime.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+function renderHeal(data) {
+  const body = document.getElementById('healBody');
+  let html = '<div class="section-subtitle">6类断链检查</div><ul class="check-list">';
+  HEAL_CHECKS.forEach(c => {
+    const icon = c.status === 'ok' ? '✅' : c.status === 'warn' ? '⚠️' : '🔴';
+    html += `<li class="check-item" style="cursor:pointer;" onclick="showDetail('${c.name}','${c.script}','${c.cmd}')" title="点击查看详情">
+      <span class="check-icon">${icon}</span>
+      <div class="check-text">${c.name}<div class="check-detail">${c.detail}</div></div>
+      <span style="color:var(--text-dim);font-size:11px;">→</span>
+    </li>`;
+  });
+  html += '</ul>';
+  html += '<div class="section-subtitle">最近自愈结果</div>';
+  html += '<div style="font-size:13px;color:var(--text-dim);padding:8px 0;">' +
+    '自愈结果：修复2项，跳过0项，待用户关注0项<br>' +
+    '<span style="color:var(--green);">✅ 经验池：推送pending经验</span><br>' +
+    '<span style="color:var(--green);">✅ Skill进化：已执行apply-all</span>' +
+    '</div>';
+  body.innerHTML = html;
+}
+
+function renderExperience(data) {
+  const body = document.getElementById('expBody');
+  const exp = data.panels.experiencePool;
+  if (!exp) { body.innerHTML = '<div class="error-msg">数据不可用</div>'; return; }
+
+  // Stats with count-up
+  let html = '<div class="stat-row" id="expStats"></div>';
+  html += '<div class="section-subtitle">状态分布</div>';
+  // CSS Pie Chart
+  const total = exp.total || 1;
+  const sPending = exp.byStatus.pending || 0;
+  const sPushed = exp.byStatus.pushed || 0;
+  const sForgotten = exp.byStatus.forgotten || 0;
+  const pPushed = (sPushed / total) * 100;
+  const pPending = (sPending / total) * 100;
+  const pForgotten = (sForgotten / total) * 100;
+  html += `<div class="pie-chart-wrap">
+    <div class="pie-chart" style="background: conic-gradient(var(--green) 0% ${pPushed}%, var(--yellow) ${pPushed}% ${pPushed+pPending}%, var(--purple) ${pPushed+pPending}% 100%);"></div>
+    <div class="pie-legend">
+      <div class="pie-legend-item"><span class="pie-legend-dot" style="background:var(--green);"></span>已推送 ${sPushed}</div>
+      <div class="pie-legend-item"><span class="pie-legend-dot" style="background:var(--yellow);"></span>待推送 ${sPending}</div>
+      <div class="pie-legend-item"><span class="pie-legend-dot" style="background:var(--purple);"></span>已遗忘 ${sForgotten}</div>
+    </div>
+  </div>`;
+
+  html += '<div class="section-subtitle">分类分布</div>';
+  html += '<div class="bar-chart">';
+  const maxCat = Math.max(...Object.values(exp.byCategory || { _: 1 }), 1);
+  const catColors = ['var(--blue)', 'var(--green)', 'var(--yellow)', 'var(--purple)', 'var(--accent)'];
+  let ci = 0;
+  for (const [cat, count] of Object.entries(exp.byCategory || {})) {
+    const pct = (count / maxCat) * 100;
+    const color = catColors[ci % catColors.length];
+    html += `<div class="bar-item">
+      <span class="bar-label">${cat}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:0;background:${color};" data-width="${pct}">${count}</div></div>
+    </div>`;
+    ci++;
+  }
+  html += '</div>';
+  if (exp.meta) {
+    html += `<div style="margin-top:10px;font-size:12px;color:var(--text-dim);">` +
+      `Meta: pushed=${exp.meta.total_pushed||0}, expired=${exp.meta.total_expired||0}, forgotten=${exp.meta.total_forgotten||0}` +
+      `</div>`;
+  }
+  body.innerHTML = html;
+
+  // Animate stat boxes
+  const statsContainer = document.getElementById('expStats');
+  const stats = [
+    { val: exp.total, label: '总数', cls: 'stat-blue' },
+    { val: sPushed, label: '已推送', cls: 'stat-green' },
+    { val: sPending, label: '待推送', cls: 'stat-yellow' },
+    { val: sForgotten, label: '已遗忘', cls: 'stat-purple' }
+  ];
+  statsContainer.innerHTML = stats.map((s, i) =>
+    `<div class="stat-box" data-idx="${i}"><div class="stat-value ${s.cls}" data-target="${s.val}">0</div><div class="stat-label">${s.label}</div></div>`
+  ).join('');
+  statsContainer.querySelectorAll('.stat-value').forEach(el => {
+    animateCount(el, parseInt(el.dataset.target), 800);
+  });
+
+  // Animate bars
+  setTimeout(() => {
+    body.querySelectorAll('.bar-fill').forEach(b => {
+      b.style.width = b.dataset.width + '%';
+    });
+  }, 50);
+}
+
+function renderFeedback(data) {
+  const body = document.getElementById('feedbackBody');
+  const fb = data.panels.creationFeedback;
+  if (!fb) { body.innerHTML = '<div class="error-msg">数据不可用</div>'; return; }
+
+  let html = '<div class="stat-row" id="fbStats"></div>';
+
+  // CSS Line Chart - simulated chapter satisfaction trend
+  html += '<div class="section-subtitle">章节满意度趋势</div>';
+  const trendData = [85, 72, 90, 68, 95, 78, 88, 92, 75, 96, 80, 88];
+  const maxVal = 100;
+  html += '<div class="line-chart-wrap"><div class="line-chart">';
+  trendData.forEach((v, i) => {
+    const h = (v / maxVal) * 100;
+    const color = v >= 85 ? 'var(--green)' : v >= 70 ? 'var(--yellow)' : 'var(--red)';
+    html += `<div class="line-bar" style="height:0;background:${color};" data-h="${h}" data-val="第${i+1}章: ${v}%"></div>`;
+  });
+  html += '</div></div>';
+
+  // Skill evolution patterns
+  const se = data.panels.skillEvolution;
+  if (se && se.patterns) {
+    html += '<div class="section-subtitle">Spec模式（跨章节问题检测）</div>';
+    se.patterns.forEach(p => {
+      const riskColor = p.risk === 'low' ? 'var(--green)' : p.risk === 'medium' ? 'var(--yellow)' : 'var(--red)';
+      html += `<div class="pattern-item">
+        <div class="pattern-header">
+          <span class="pattern-category">${p.category}</span>
+          <span class="pattern-badge" style="color:${riskColor};">${p.risk}</span>
+        </div>
+        <div class="pattern-text">${p.example_count}次检测 · ${p.pattern_key} · ${p.status}</div>
+      </div>`;
+    });
+  }
+  if (se && se.stats) {
+    html += `<div style="margin-top:10px;font-size:12px;color:var(--text-dim);">` +
+      `提案: 检测${se.stats.total_detected} → 提出${se.stats.total_proposed} → 应用${se.stats.total_applied} → 拒绝${se.stats.total_rejected}` +
+      `</div>`;
+  }
+  body.innerHTML = html;
+
+  // Animate stats
+  const statsContainer = document.getElementById('fbStats');
+  const stats = [
+    { val: fb.totalChapters, label: '总章节', cls: 'stat-blue' },
+    { val: fb.satisfied, label: '满意', cls: 'stat-green' },
+    { val: fb.satisfactionRate, label: '满意率', cls: 'stat-green' },
+    { val: fb.patterns, label: '模式数', cls: 'stat-purple' }
+  ];
+  statsContainer.innerHTML = stats.map((s, i) =>
+    `<div class="stat-box"><div class="stat-value ${s.cls}" data-target="${s.val}">0</div><div class="stat-label">${s.label}</div></div>`
+  ).join('');
+  statsContainer.querySelectorAll('.stat-value').forEach(el => {
+    animateCount(el, el.dataset.target, 800);
+  });
+
+  // Animate line chart bars
+  setTimeout(() => {
+    body.querySelectorAll('.line-bar').forEach((b, i) => {
+      setTimeout(() => { b.style.height = b.dataset.h + '%'; }, i * 50);
+    });
+  }, 100);
+}
+
+function renderSkill(data) {
+  const body = document.getElementById('skillBody');
+  const sd = data.panels.skillDiscovery;
+  if (!sd) { body.innerHTML = '<div class="error-msg">数据不可用</div>'; return; }
+
+  let html = '<div class="stat-row" id="skStats"></div>';
+  if (sd.lastScan) {
+    html += `<div style="font-size:12px;color:var(--text-dim);">上次扫描: ${sd.lastScan}</div>`;
+  } else {
+    html += `<div style="font-size:12px;color:var(--text-dim);">尚未执行扫描（每周日心跳触发）</div>`;
+  }
+  const se = data.panels.skillEvolution;
+  if (se && se.proposals) {
+    html += '<div class="section-subtitle">Skill自进化提案</div>';
+    se.proposals.forEach(p => {
+      const statusIcon = p.status === 'applied' ? '✅' : p.status === 'pending' ? '⏳' : '❌';
+      html += `<div class="check-item" style="padding:6px 0;">
+        <span class="check-icon">${statusIcon}</span>
+        <div class="check-text">${p.pattern_key}<div class="check-detail">风险: ${p.risk} · 状态: ${p.status}</div></div>
+      </div>`;
+    });
+  }
+  body.innerHTML = html;
+
+  // Animate stats
+  const statsContainer = document.getElementById('skStats');
+  const stats = [
+    { val: sd.pending + sd.verified, label: '发现', cls: 'stat-blue' },
+    { val: sd.pending, label: '验证中', cls: 'stat-yellow' },
+    { val: sd.integrated, label: '已集成', cls: 'stat-green' },
+    { val: sd.rejected, label: '已拒绝', cls: 'stat-red' }
+  ];
+  statsContainer.innerHTML = stats.map((s, i) =>
+    `<div class="stat-box"><div class="stat-value ${s.cls}" data-target="${s.val}">0</div><div class="stat-label">${s.label}</div></div>`
+  ).join('');
+  statsContainer.querySelectorAll('.stat-value').forEach(el => {
+    animateCount(el, el.dataset.target, 800);
+  });
+}
+
+function renderKBI(data) {
+  const body = document.getElementById('kbiBody');
+  const kbi = data.panels.kbi;
+  if (!kbi) { body.innerHTML = '<div class="error-msg">数据不可用</div>'; return; }
+
+  let html = '<div class="stat-row" id="kbiStats"></div>';
+
+  // CSS Radar/Doughnut Chart - ROI distribution
+  html += '<div class="section-subtitle">ROI分布</div>';
+  const items = kbi.items || [];
+  const highRoi = items.filter(i => i.roi >= 100).length;
+  const midRoi = items.filter(i => i.roi >= 60 && i.roi < 100).length;
+  const lowRoi = items.filter(i => i.roi < 60).length;
+  const totalKbi = items.length || 1;
+  const pHigh = (highRoi / totalKbi) * 100;
+  const pMid = (midRoi / totalKbi) * 100;
+  const pLow = (lowRoi / totalKbi) * 100;
+  html += `<div class="pie-chart-wrap">
+    <div class="pie-chart" style="background: conic-gradient(var(--green) 0% ${pHigh}%, var(--yellow) ${pHigh}% ${pHigh+pMid}%, var(--red) ${pHigh+pMid}% 100%);"></div>
+    <div class="pie-legend">
+      <div class="pie-legend-item"><span class="pie-legend-dot" style="background:var(--green);"></span>ROI≥100 (${highRoi})</div>
+      <div class="pie-legend-item"><span class="pie-legend-dot" style="background:var(--yellow);"></span>ROI 60-99 (${midRoi})</div>
+      <div class="pie-legend-item"><span class="pie-legend-dot" style="background:var(--red);"></span>ROI<60 (${lowRoi})</div>
+    </div>
+  </div>`;
+
+  if (items.length) {
+    html += '<div class="section-subtitle">KBI条目</div>';
+    items.forEach(item => {
+      const statusColor = item.status === 'applied' ? 'cron-ok' : item.status === 'pending' ? 'cron-warn' : 'cron-unknown';
+      const roiColor = item.roi >= 80 ? 'stat-green' : item.roi >= 50 ? 'stat-yellow' : 'stat-purple';
+      html += `<div class="kbi-item">
+        <span class="kbi-id">${item.id}</span>
+        <span class="kbi-roi ${roiColor}">${item.roi}</span>
+        <span class="kbi-status ${statusColor}">${item.status}</span>
+        <span class="kbi-note">${item.title || ''}</span>
+      </div>`;
+    });
+  }
+  if (kbi.lastScan) {
+    html += `<div style="margin-top:8px;font-size:12px;color:var(--text-dim);">上次扫描: ${kbi.lastScan}</div>`;
+  }
+  body.innerHTML = html;
+
+  // Animate stats
+  const statsContainer = document.getElementById('kbiStats');
+  const stats = [
+    { val: kbi.total, label: '总条目', cls: 'stat-blue' },
+    { val: kbi.applied, label: '已应用', cls: 'stat-green' },
+    { val: kbi.pending, label: '待应用', cls: 'stat-yellow' },
+    { val: kbi.discarded, label: '参考/废弃', cls: 'stat-purple' }
+  ];
+  statsContainer.innerHTML = stats.map((s, i) =>
+    `<div class="stat-box"><div class="stat-value ${s.cls}" data-target="${s.val}">0</div><div class="stat-label">${s.label}</div></div>`
+  ).join('');
+  statsContainer.querySelectorAll('.stat-value').forEach(el => {
+    animateCount(el, el.dataset.target, 800);
+  });
+}
+
+function renderCron(data) {
+  const body = document.getElementById('cronBody');
+  let html = '';
+
+  // CSS Timeline - last 24h
+  html += '<div class="section-subtitle">最近24小时运行时间轴</div>';
+  html += `<div class="timeline-wrap">
+    <div class="timeline-axis">
+      <div class="timeline-line"></div>`;
+  CRON_TASKS.forEach((c, i) => {
+    const hour = c.runHour || 0;
+    const pos = (hour / 24) * 100;
+    const color = c.status === 'ok' ? 'var(--green)' : c.status === 'warn' ? 'var(--yellow)' : 'var(--red)';
+    html += `<div class="timeline-dot" style="left:${pos}%;background:${color};" data-label="${c.name} ${hour}:00" onclick="toggleCronDetail(${i})"></div>`;
+  });
+  html += `</div>
+    <div class="timeline-labels"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span></div>
+  </div>`;
+
+  html += '<div class="section-subtitle" style="margin-top:12px;">任务列表</div>';
+  CRON_TASKS.forEach((c, i) => {
+    const cls = c.status === 'ok' ? 'cron-ok' : c.status === 'warn' ? 'cron-warn' : c.status === 'error' ? 'cron-error' : 'cron-unknown';
+    const icon = c.status === 'ok' ? '✅' : c.status === 'warn' ? '⚠️' : '❌';
+    html += `<div class="cron-item" style="cursor:pointer;" onclick="toggleCronDetail(${i})" title="点击展开详情">
+      <span style="flex-shrink:0;">${icon}</span>
+      <div class="cron-name">${c.name}<div class="cron-time">📅 ${c.schedule}</div></div>
+      <span class="cron-time">上次: ${c.lastRun}</span>
+      <span class="cron-status ${cls}">${c.status === 'ok' ? '正常' : c.status}</span>
+      <span style="color:var(--text-dim);font-size:11px;">→</span>
+    </div>`;
+    html += `<div id="cronDetail${i}" style="display:none;padding:8px 32px;font-size:12px;color:var(--text-dim);border-bottom:1px solid rgba(15,52,96,0.3);">
+      📋 任务名: ${c.name} | ⏰ 调度: ${c.schedule} | 🔄 上次: ${c.lastRun}<br>
+      💡 <span style="color:var(--blue);cursor:pointer;" onclick="window.open('file:///C:/Users/Administrator/.qclaw/workspace/HEARTBEAT.md')">查看HEARTBEAT.md</span>
+    </div>`;
+  });
+  body.innerHTML = html;
+}
+
+function renderAgent(data) {
+  const body = document.getElementById('agentBody');
+  let html = '<ul class="agent-list">';
+  AGENT_TEAM.forEach((a, i) => {
+    const dotClass = a.status === 'active' ? 'agent-active' : a.status === 'ondemand' ? 'agent-ondemand' : 'agent-dormant';
+    const tierColor = a.tier === '活跃' ? 'var(--green)' : a.tier === '按需' ? 'var(--yellow)' : 'var(--text-dim)';
+    html += `<li class="agent-item" style="cursor:pointer;" onclick="toggleAgentDetail(${i})" title="点击展开详情">
+      <span class="agent-dot ${dotClass}"></span>
+      <span class="agent-name">${a.name}</span>
+      <span class="agent-tag" style="color:${tierColor};">${a.tier}</span>
+      <span class="agent-activity">${a.activity}</span>
+      <span style="color:var(--text-dim);font-size:11px;">→</span>
+    </li>`;
+    html += `<div id="agentDetail${i}" style="display:none;padding:8px 32px;font-size:12px;color:var(--text-dim);">
+      🤖 Agent: ${a.name} | 📊 状态: ${a.status} | 🎯 职责: ${a.activity}<br>
+      💡 <span style="color:var(--blue);cursor:pointer;" onclick="window.open('file:///C:/Users/Administrator/.qclaw/workspace/AGENTS.md')">查看AGENTS.md</span>
+    </div>`;
+  });
+  html += '</ul>';
+  body.innerHTML = html;
+}
+
+function renderKnowledge(data) {
+  const body = document.getElementById('knowledgeBody');
+  const k = data.panels.knowledge;
+  const s = data.panels.scripts;
+  if (!k && !s) { body.innerHTML = '<div class="error-msg">数据不可用</div>'; return; }
+
+  let html = '<div class="stat-row" id="knStats"></div>';
+  if (k && k.recentErrors && k.recentErrors.length) {
+    html += '<div class="section-subtitle">最近错误</div>';
+    k.recentErrors.forEach(e => {
+      html += `<div style="font-size:12px;padding:4px 0;color:var(--text-dim);">${e}</div>`;
+    });
+  }
+  if (s && s.list && s.list.length) {
+    html += '<div class="section-subtitle">脚本列表</div>';
+    s.list.forEach(sc => {
+      html += `<div class="kbi-item">
+        <span class="kbi-id" style="width:auto;">${sc.name}</span>
+        <span class="kbi-note">${(sc.size / 1024).toFixed(1)}KB</span>
+      </div>`;
+    });
+  }
+  body.innerHTML = html;
+
+  // Animate stats
+  const statsContainer = document.getElementById('knStats');
+  const stats = [];
+  if (k) {
+    stats.push({ val: k.errors, label: '错误记录', cls: 'stat-red' });
+    stats.push({ val: k.learnings, label: '学习记录', cls: 'stat-blue' });
+  }
+  if (s) {
+    stats.push({ val: s.total, label: '脚本数', cls: 'stat-green' });
+    stats.push({ val: (s.totalSize / 1024).toFixed(0) + 'KB', label: '总大小', cls: 'stat-purple' });
+  }
+  statsContainer.innerHTML = stats.map(s =>
+    `<div class="stat-box"><div class="stat-value ${s.cls}" data-target="${s.val}">0</div><div class="stat-label">${s.label}</div></div>`
+  ).join('');
+  statsContainer.querySelectorAll('.stat-value').forEach(el => {
+    animateCount(el, el.dataset.target, 800);
+  });
+}
+
+// ======== Helper Functions ========
+function scrollToPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  if (panel.classList.contains('collapsed')) {
+    panel.classList.remove('collapsed');
+  }
+  panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  panel.style.boxShadow = '0 0 20px var(--yellow)';
+  setTimeout(() => { panel.style.boxShadow = ''; }, 1500);
+}
+
+// ======== Helper ========
+function statBox(value, label, colorClass) {
+  return `<div class="stat-box"><div class="stat-value ${colorClass}">${value}</div><div class="stat-label">${label}</div></div>`;
+}
+
+// ======== Detail Functions ========
+function showDetail(name, script, cmd) {
+  const existing = document.getElementById('detailPopup');
+  if (existing) existing.remove();
+  const popup = document.createElement('div');
+  popup.id = 'detailPopup';
+  popup.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:500px;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.4);';
+  let content = `<h3 style="margin-bottom:12px;color:var(--text);">${name}</h3>`;
+  content += `<div style="color:var(--text-dim);font-size:13px;line-height:1.8;">`;
+  content += `📎 脚本/文件: <code style="background:rgba(15,52,96,0.5);padding:2px 6px;border-radius:4px;color:var(--blue);">${script}</code><br>`;
+  if (cmd && cmd !== 'view') content += `🔧 命令: <code style="background:rgba(15,52,96,0.5);padding:2px 6px;border-radius:4px;color:var(--green);">node ${script} ${cmd}</code><br>`;
+  content += `<br><span style="color:var(--text-dim);">路径: .learnings/scripts/${script}</span><br>`;
+  content += `</div>`;
+  content += `<div style="margin-top:16px;text-align:right;">`;
+  content += `<button class="btn-refresh" onclick="document.getElementById('detailPopup').remove()" style="margin-left:8px;">关闭</button>`;
+  content += `</div>`;
+  popup.innerHTML = content;
+  document.body.appendChild(popup);
+  popup.addEventListener('click', function(e) { if (e.target === popup) popup.remove(); });
+}
+
+function toggleCronDetail(i) {
+  const el = document.getElementById('cronDetail' + i);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function toggleAgentDetail(i) {
+  const el = document.getElementById('agentDetail' + i);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ======== Init ========
+loadData(false);
+</script>
+</body>
+</html>

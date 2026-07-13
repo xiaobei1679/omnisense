@@ -1,0 +1,42 @@
+name: Node Syntax Check
+
+# 有人提交 PR 时自动校验仓库：语法 + 配置 + 测试，全部通过才允许合并。
+# 也顺带守护 main 分支。复用仓库自带规范脚本，保证 CI 与本地 `make healthcheck` 完全一致。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# 同一分支的新推送会取消旧的运行，省 GitHub 额度。
+concurrency:
+  group: node-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  healthcheck:
+    name: syntax + config + tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax-check every script
+        run: node scripts/ci/check-syntax.mjs
+
+      - name: Validate published config templates
+        run: node scripts/ci/validate-config.mjs
+
+      - name: Run functional tests
+        run: node --test tests/*.test.mjs
+
+      - name: Run eval harness (deterministic regression + drift)
+        run: node scripts/eval/eval.mjs

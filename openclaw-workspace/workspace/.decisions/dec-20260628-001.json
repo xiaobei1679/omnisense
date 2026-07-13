@@ -1,0 +1,13 @@
+{
+  "id": "dec-20260628-001",
+  "title": "AI合规规则：所有对外发布内容必须标注【AI辅助创作】",
+  "status": "executed",
+  "category": "process",
+  "created_at": "2026-06-28T10:00:00.000Z",
+  "summary": "响应6月全国AI标识办法，确立规则5：小说每章末尾标注AI辅助创作、视频开头3秒+片尾标注、视觉素材注AI参与、人工改写率≥30%。20章已合规标注，子Agent模板已嵌入。",
+  "retro": {
+    "verdict": "on_track",
+    "actual": "20章全部合规，子Agent模板已嵌入",
+    "reviewed_at": "2026-06-30T07:37:00.000Z"
+  }
+}

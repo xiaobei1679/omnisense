@@ -1,0 +1,28 @@
+name: Agent task
+description: A self-contained task an AI agent can pick up and execute
+labels: ["agent-task"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be done, and why? State it so an agent can act without further context.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How do we know it's done? (e.g. node --check passes, no hardcoded paths, no secrets committed)
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints / things NOT to do
+      description: Files to avoid, patterns to preserve, hard rules to respect.
+  - type: textarea
+    id: context
+    attributes:
+      label: Useful context
+      description: Relevant files, functions, or AGENTS.md sections to read first.

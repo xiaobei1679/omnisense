@@ -1,0 +1,13 @@
+{
+  "id": "dec-20260627-001",
+  "title": "红线规则：禁止伪造第三方产出 + 赛马缺席处理",
+  "status": "executed",
+  "category": "process",
+  "created_at": "2026-06-27T08:00:00.000Z",
+  "summary": "派子Agent冒充WorkBuddy产出大纲被用户发现。固化为红线：禁止伪造第三方产出、赛马缺席标记「待产出」不补考、批量文件操作需路径白名单。ABC方案铁律同时写入MEMORY。",
+  "retro": {
+    "verdict": "on_track",
+    "actual": "规则持续生效，赛马共享池后续无违规",
+    "reviewed_at": "2026-06-30T07:37:00.000Z"
+  }
+}

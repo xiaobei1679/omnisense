@@ -1,0 +1,51 @@
+{
+  "version": "1.0",
+  "created": "2026-07-03T06:57:00+08:00",
+  "tasks": {
+    "novel-ch1-rewrite-v3": {
+      "id": "novel-ch1-rewrite-v3",
+      "goal": "重写异兽学院第1章（悬念开场方案）",
+      "status": "drafting_revision",
+      "current_subject": "第1章悬念开场重写",
+      "created_since": "2026-07-02",
+      "constraints": {
+        "platform": { "value": "番茄小说", "source": "user_direct", "confidence": 1.0 },
+        "cjk_min": { "value": 2200, "source": "user_direct", "confidence": 1.0 },
+        "suspense_hook": { "value": "前三行必须带悬念", "source": "审核诊断", "confidence": 0.9 },
+        "de_ai_required": { "value": "≥30%人工改写，禁用谄媚词库", "source": "user_direct", "confidence": 1.0 },
+        "ending_cliffhanger": { "value": "每章结尾悬念钩子", "source": "user_direct", "confidence": 1.0 }
+      },
+      "open_questions": [
+        "用户未确认悬念开场具体方案（小黑暴走→追杀黑袍人 vs 其他）",
+        "需要用户提供个人风格样本以去AI化"
+      ],
+      "last_tool_errors": [],
+      "resolved_questions": [
+        "第1章v2: 前800字零冲突零悬念 → 确诊",
+        "主角名: 周明远（已统一）",
+        "废弃1-21章旧版（已执行）"
+      ]
+    },
+    "daily-hotspot-pipeline": {
+      "id": "daily-hotspot-pipeline",
+      "goal": "每日热点收集+消化+落地",
+      "status": "active",
+      "current_subject": "每日热点流水线",
+      "created_since": "2026-07-02",
+      "constraints": {
+        "cron_time": { "value": "08:00 Asia/Shanghai", "source": "user_direct", "confidence": 1.0 },
+        "model": { "value": "default (禁止硬编码)", "source": "cron_fix", "confidence": 1.0 }
+      },
+      "open_questions": [],
+      "last_tool_errors": [
+        {
+          "tool": "cron_daily_hotspot",
+          "error": "model qclaw/hy3-preview not found",
+          "time": "2026-07-02T08:00:00+08:00",
+          "resolved": true,
+          "fix": "清空model字段，使用系统默认模型"
+        }
+      ]
+    }
+  }
+}

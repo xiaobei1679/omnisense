@@ -3,6 +3,8 @@
 *.omni-memory.json
 /.omni-watch.json
 *.omni-watch.json
+# 自治自动化运行时日志（agent 本地跑遗留，不入库）
+.agent-runs/
 
 # ── 密钥 / 本地配置 ──
 .env

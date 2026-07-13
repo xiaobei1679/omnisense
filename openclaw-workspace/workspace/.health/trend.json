@@ -1,0 +1,28 @@
+{
+  "updated": "2026-07-05T00:24:09.124Z",
+  "report": {
+    "generated_at": "2026-07-05T00:24:09.123Z",
+    "agents_observed": 3,
+    "overall": "critical",
+    "agents": {
+      "ds4ygtfdv3z7mmxn": {
+        "status": "healthy",
+        "error_rate": "0.00",
+        "tasks_7d": 10,
+        "tokens_7d": 49644
+      },
+      "op-2df6424d-66de-474a-9b09-189826a7bdc9": {
+        "status": "critical",
+        "error_rate": "1.00",
+        "tasks_7d": 2,
+        "tokens_7d": 26000
+      },
+      "ua58rsb93veqtxl7": {
+        "status": "healthy",
+        "error_rate": "0.00",
+        "tasks_7d": 1,
+        "tokens_7d": 4200
+      }
+    }
+  }
+}

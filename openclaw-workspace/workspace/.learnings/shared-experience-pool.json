@@ -1,0 +1,215 @@
+{
+  "experiences": [
+    {
+      "id": "exp-mr438qjl-7m5n",
+      "source_agent": "novel-creator",
+      "task_type": "chapter-writing",
+      "category": "开篇",
+      "learning": "第1章开篇前500字必须有异常/悬念/冲突，不能先交代设定和背景——番茄读者前3秒决定是否弃书",
+      "tags": [
+        "开篇",
+        "番茄",
+        "悬念",
+        "黄金三行"
+      ],
+      "target_agents": [
+        "novel-creator",
+        "novel-hotcatcher"
+      ],
+      "created_at": "2026-07-02T22:40:44.385Z",
+      "push_status": "pushed",
+      "push_history": [
+        {
+          "pushed_to": [
+            "novel-creator",
+            "novel-hotcatcher"
+          ],
+          "pushed_at": "2026-07-02T23:50:26.871Z",
+          "auto": true,
+          "method": "push-all"
+        }
+      ],
+      "confidence": 0.7,
+      "source_ref": "(migrated)",
+      "ttl_days": 90
+    },
+    {
+      "id": "exp-mr438x9b-b63h",
+      "source_agent": "content-reviewer",
+      "task_type": "chapter-review",
+      "category": "审核",
+      "learning": "AI套路高频词已固化到de-ai-prompt-templates.md，审核时直接用词汇黑名单+5维度审查清单并行扫",
+      "tags": [
+        "去AI味",
+        "审核",
+        "黑名单"
+      ],
+      "target_agents": [
+        "content-reviewer"
+      ],
+      "created_at": "2026-07-02T22:40:53.087Z",
+      "push_status": "pushed",
+      "push_history": [
+        {
+          "pushed_to": [
+            "content-reviewer"
+          ],
+          "pushed_at": "2026-07-02T23:50:26.872Z",
+          "auto": true,
+          "method": "push-all"
+        }
+      ],
+      "confidence": 0.7,
+      "source_ref": "(migrated)",
+      "ttl_days": 90
+    },
+    {
+      "id": "exp-mr438xdk-o3ee",
+      "source_agent": "novel-creator",
+      "task_type": "chapter-writing",
+      "category": "节奏",
+      "learning": "每章结尾必须有悬念钩子——不解释、不总结、不'本章完'，直接切到下一个冲突。章节内每800字须有一个情绪波动点",
+      "tags": [
+        "节奏",
+        "悬念",
+        "钩子"
+      ],
+      "target_agents": [
+        "novel-creator",
+        "outline-designer"
+      ],
+      "created_at": "2026-07-02T22:40:53.240Z",
+      "push_status": "pushed",
+      "push_history": [
+        {
+          "pushed_to": [
+            "novel-creator",
+            "outline-designer"
+          ],
+          "pushed_at": "2026-07-02T23:50:26.872Z",
+          "auto": true,
+          "method": "push-all"
+        }
+      ],
+      "confidence": 0.7,
+      "source_ref": "(migrated)",
+      "ttl_days": 90
+    },
+    {
+      "id": "exp-mr43x7v7-5a7",
+      "source_agent": "novel-creator",
+      "task_type": "unknown",
+      "category": "开篇",
+      "learning": "测试经验: 番茄平台开篇前三行必须带悬念钩子",
+      "tags": [
+        "开篇",
+        "番茄"
+      ],
+      "target_agents": [
+        "novel-creator",
+        "novel-hotcatcher"
+      ],
+      "created_at": "2026-07-02T22:59:46.579Z",
+      "confidence": 0.9,
+      "source_ref": "user_direct",
+      "ttl_days": 90,
+      "push_status": "pushed",
+      "push_history": [
+        {
+          "pushed_to": [
+            "novel-creator",
+            "novel-hotcatcher"
+          ],
+          "pushed_at": "2026-07-02T23:50:26.872Z",
+          "auto": true,
+          "method": "push-all"
+        }
+      ],
+      "needs_human_review": false
+    },
+    {
+      "id": "exp-mr43xstu-38s",
+      "source_agent": "content-reviewer",
+      "task_type": "unknown",
+      "category": "开篇",
+      "learning": "番茄平台开篇前三行一定要有悬念",
+      "tags": [
+        "开篇"
+      ],
+      "target_agents": [
+        "novel-creator"
+      ],
+      "created_at": "2026-07-02T23:00:13.746Z",
+      "confidence": 0.8,
+      "source_ref": "model_inferred",
+      "ttl_days": 60,
+      "push_status": "pushed",
+      "push_history": [
+        {
+          "pushed_to": [
+            "novel-creator"
+          ],
+          "pushed_at": "2026-07-02T23:50:26.872Z",
+          "auto": true,
+          "method": "push-all"
+        }
+      ],
+      "needs_human_review": false
+    },
+    {
+      "id": "exp-mr43ybsu-1el",
+      "source_agent": "worldbuilding-architect",
+      "task_type": "unknown",
+      "category": "开篇",
+      "learning": "番茄平台开篇前三行必须要悬念",
+      "tags": [
+        "开篇"
+      ],
+      "target_agents": [
+        "novel-creator"
+      ],
+      "created_at": "2026-07-02T23:00:38.334Z",
+      "confidence": 0.6,
+      "source_ref": "agent_extracted",
+      "ttl_days": 30,
+      "push_status": "pending_review",
+      "push_history": [],
+      "needs_human_review": true,
+      "conflict_warning": {
+        "conflict": true,
+        "existing_id": "exp-mr438qjl-7m5n",
+        "existing_confidence": 0.7,
+        "existing_learning": "第1章开篇前500字必须有异常/悬念/冲突，不能先交代设定和背景——番茄读者前3秒决定是否弃书",
+        "overlap_ratio": 0.38
+      },
+      "forgotten_at": "2026-07-02T23:00:50.198Z",
+      "forgotten_reason": "低置信度重复",
+      "forgotten_grace_until": "2026-08-01T23:00:50.199Z"
+    },
+    {
+      "id": "exp-mrb62rjc-26e",
+      "source_agent": "worldview-architect",
+      "task_type": "unknown",
+      "category": "世界观一致性",
+      "learning": "多Agent并行产出时，世界观文档与衍生方案之间必须做交叉校准。常见冲突：年份/时间线/主题隐喻矛盾。修复时统一到主世界观文档为权威源，衍生文档跟随调整。",
+      "tags": [],
+      "target_agents": [
+        "all"
+      ],
+      "created_at": "2026-07-07T21:34:27.816Z",
+      "confidence": 0.9,
+      "source_ref": "(unspecified)",
+      "ttl_days": 90,
+      "push_status": "pending",
+      "push_history": [],
+      "needs_human_review": false
+    }
+  ],
+  "meta": {
+    "created": "2026-07-02T22:40:44.382Z",
+    "version": "2.0",
+    "total_pushed": 5,
+    "total_expired": 0,
+    "total_forgotten": 1
+  }
+}

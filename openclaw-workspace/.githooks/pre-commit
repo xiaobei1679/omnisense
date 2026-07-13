@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — local quality gate before every commit.
+# Runs the same checks as CI (syntax + config + tests) and aborts the commit
+# if anything fails. To enable: scripts/install-hooks.sh (sets core.hooksPath).
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "== pre-commit: syntax check =="
+node scripts/ci/check-syntax.mjs || { echo ":: syntax check failed, commit aborted"; exit 1; }
+
+echo "== pre-commit: config validation =="
+node scripts/ci/validate-config.mjs || { echo ":: config validation failed, commit aborted"; exit 1; }
+
+echo "== pre-commit: tests =="
+node --test tests/*.test.mjs || { echo ":: tests failed, commit aborted"; exit 1; }
+
+echo "== pre-commit: observer (rule review) =="
+node scripts/ci/observer.mjs --diff || { echo ":: observer found rule violations, commit aborted"; exit 1; }
+
+echo "== pre-commit: all green, proceeding =="
+exit 0
