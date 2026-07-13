@@ -95,14 +95,19 @@ const METHOD_META = {
     watchTick:       { desc: '单次移动快照', net: false },
   },
   // 监控器官：把散落子包的 health-observer/dashboard/observer 升格为内核一等公民，
-  // 统一观测 Agent 状态(tracer 轨迹) / 记忆(四层) / 多种状态检测(连续失败/48h无产出/失败率飙升) + 可视化仪表盘。
+  // 统一观测 Agent 状态(tracer 轨迹) / 记忆(四层) / 多种状态检测(连续失败/48h无产出/失败率飙升/延迟突增/吞吐骤降/记忆批量注入) + 可视化驾驶舱。
   monitor: {
-    snapshot:     { desc: '统一状态快照(Agent状态/记忆/活动/告警)', net: false },
-    health:       { desc: 'Agent 健康(成功率/无活动时长)', net: false },
-    alerts:       { desc: '多种状态检测告警(连续失败/48h无产出/失败率飙升)', net: false },
-    dashboard:    { desc: '生成零依赖可视化 HTML 仪表盘', net: false },
-    recordMetric: { desc: '记录一个 Agent 的指标(兼容 health-observer)', net: false },
-    checkAlerts:  { desc: '检查告警(可选指定 agentId)', net: false },
+    snapshot:      { desc: '统一状态快照(Agent状态/记忆/活动/告警/延迟/状态网格)', net: false },
+    health:        { desc: 'Agent 健康(成功率/无活动时长)', net: false },
+    alerts:        { desc: '统一告警(核心 4 信号 + 异常检测)', net: false },
+    dashboard:     { desc: '生成零依赖可视化 HTML 仪表盘(作战指挥中心风格)', net: false },
+    recordMetric:  { desc: '记录一个 Agent 的指标(兼容 health-observer, 可带 errors/latencyMs/tokens/cost)', net: false },
+    checkAlerts:   { desc: '核心 4 信号告警(可选指定 agentId)', net: false },
+    latency:       { desc: '延迟指标 P50/P95/P99(按引擎分布)', net: false },
+    statusGrid:    { desc: '引擎状态网格(舰队健康, 颜色化 healthy/degraded/down)', net: false },
+    memoryHealth:  { desc: '记忆健康(四层计数/技能利用率/信任分分布/陈旧记录/增长)', net: false },
+    anomalies:     { desc: '异常检测(延迟突增/吞吐骤降/记忆批量注入)', net: false },
+    recentRuns:    { desc: '最近运行时间线(每引擎状态/延迟/步数)', net: false },
   },
 };
 // 手（hand）工具中需要联网的子集（其余离线）

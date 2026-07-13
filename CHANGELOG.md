@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v4.4.0 — 2026-07-13 (minor)
+
+- 监控器官 monitor 全面升级(借鉴 LangSmith/Langfuse/CloudWatch GenAI 可观测三支柱 + ClawHub 舰队健康 + perfecxion 记忆专属指标 + 心跳存活判定)：①延迟指标 P50/P95/P99 按引擎分布+趋势 sparkline；②状态网格/舰队健康(颜色化 healthy/degraded/down)；③记忆健康(技能利用率/信任分分布/低信任/陈旧记录/增长批量注入检测)；④异常检测(延迟突增/吞吐骤降/记忆批量注入)；⑤运行时间线；⑥驾驶舱风格可视化仪表盘。总线方法 6→11，CLI 新增 --latency/--grid/--memory/--anomalies/--runs。测试核心 244/244。
+
 ## v4.3.0 — 2026-07-13 (minor)
 
 - 升格监控为第八器官 monitor：①可视化仪表盘(零依赖HTML,展示器官/四层记忆/活动/告警)；②AI Agent 状态检测(基于tracer runs健康度)；③四层记忆快照；④多种状态检测(连续失败/48h不活跃/错误率突增+兼容health-observer)；⑤CLI monitor/dashboard 命令 + HTTP /monitor /dashboard 路由 + 桥接层 route 透传
