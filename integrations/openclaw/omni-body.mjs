@@ -21,6 +21,8 @@
 //   perceive / describe / live 为身体级便捷入口
 // ─────────────────────────────────────────────────────────────
 import { OmniSense } from '../../src/index.mjs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const TIMEOUT_MS = 120000;
 
@@ -69,15 +71,16 @@ async function main() {
   try {
     const out = await withTimeout(runOrgan(organ, rest), TIMEOUT_MS);
     const text = asJson ? JSON.stringify(out, null, 2) : String(JSON.stringify(out)).slice(0, 2000);
-    process.stdout.write(text + '\n');
-    process.exit(0);
+    process.stdout.write(text + '\n', () => process.exit(0));
   } catch (e) {
     const err = { ok: false, error: e?.message || String(e) };
-    process.stdout.write((asJson ? JSON.stringify(err, null, 2) : JSON.stringify(err)) + '\n');
-    process.exit(1);
+    process.stdout.write((asJson ? JSON.stringify(err, null, 2) : JSON.stringify(err)) + '\n', () => process.exit(1));
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// 直接以 `node integrations/openclaw/omni-body.mjs ...` 调用时 process.argv[1] 是相对路径，
+// 必须 resolve 后再与 import.meta.url 比较，否则 main() 不会执行。
+const __invoked = process.argv[1] ? resolve(process.argv[1]) : '';
+if (__invoked && fileURLToPath(import.meta.url) === __invoked) {
   main();
 }

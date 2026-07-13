@@ -48,6 +48,10 @@ license: MIT
 - `integrations/openclaw/omnisense-bridge.mjs`：一句话目标 → 身体执行。
 - 详见 [integrations/openclaw/README.md](./integrations/openclaw/README.md)。
 
+## 工具插件自发现（借鉴 Nanobot / OpenSquilla）
+
+加 `hand` 工具无需改核心：在 `src/tools/`（或 `OMNI_PLUGINS_DIR`）放一个 `.mjs`，默认导出 `{ name, description, parameters, run }`，`buildDefaultTools` 自动注册。内置示范：`src/tools/hash.mjs`（离线 SHA-256）。详见 README「🔌 工具插件自发现」。
+
 ## 快速使用
 
 ### A. 作为库（在另一段脚本中 import）

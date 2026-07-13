@@ -138,4 +138,5 @@ test/                 node:test 离线单测（bus/breaker/config/logger/brain/s
 
 - **加热搜源**：在 `src/modules/eyes.mjs` 的 `_hotSources()` 增加一项（`url`/`as`/`parse`，可选 `sign:'wbi'`），`all` 聚合与缓存/熔断自动覆盖。
 - **加能力**：在对应模块实现方法 → 门面 `index.mjs` 暴露 → 可选登记到 Bus 供大脑 `command` 调度。
+- **加 hand 工具（插件自发现）**：往 `src/tools/`（或 `OMNI_PLUGINS_DIR`）丢一个 `.mjs`，默认导出 `{ name, description, parameters, run }`，`buildDefaultTools` 自动注册；借鉴 Nanobot / OpenSquilla 技能加载器模式（见 README）。失败插件被跳过不拖垮启动。
 - **驱动方式**：CLI、`serve` HTTP API、或直接 `import { OmniSense }` 作为库。

@@ -9,6 +9,8 @@
 //   node integrations/openclaw/omnisense-bridge.mjs "抓取 https://example.com 并摘要" [--json] [--llm]
 // ─────────────────────────────────────────────────────────────
 import { OmniSense } from '../../src/index.mjs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // 执行一个目标：先感知环境、再思考、最后用手把结果落盘（默认记到长期记忆）。
 // 离线可跑、确定性、不触网（除非目标本身要求联网，如 web_fetch）。
@@ -39,14 +41,15 @@ async function main() {
   }
   try {
     const out = await runGoal(goal, { useLLM });
-    process.stdout.write((asJson ? JSON.stringify(out, null, 2) : JSON.stringify(out)) + '\n');
-    process.exit(0);
+    process.stdout.write((asJson ? JSON.stringify(out, null, 2) : JSON.stringify(out)) + '\n', () => process.exit(0));
   } catch (e) {
-    process.stdout.write(JSON.stringify({ ok: false, error: e?.message || String(e) }) + '\n');
-    process.exit(1);
+    process.stdout.write(JSON.stringify({ ok: false, error: e?.message || String(e) }) + '\n', () => process.exit(1));
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// 直接以 `node integrations/openclaw/omnisense-bridge.mjs ...` 调用时 argv[1] 是相对路径，
+// 必须 resolve 后再比较，否则 main() 不执行。
+const __invokedBridge = process.argv[1] ? resolve(process.argv[1]) : '';
+if (__invokedBridge && fileURLToPath(import.meta.url) === __invokedBridge) {
   main();
 }

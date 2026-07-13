@@ -102,6 +102,33 @@ node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --jso
 | 🧩 **多 Agent 协作** | `multiagent "<目标>"` 把复杂目标交给协调器 + 角色子 agent，独立子任务并行执行、汇总综合，部分失败诚实报告 |
 | 🪵 分级日志 | 统一 `core/logger.mjs`（trace/debug/info/warn/error/silent），`OMNI_LOG_LEVEL` 可控，`--quiet` 静默 |
 | ⚡ 更快的 standalone | 无网关环境秒级进入 driver 模式（免联网探测）；统一 HTTP 客户端带超时/重试 |
+| 🔌 **工具插件自发现** | 往 `src/tools/`（或 `OMNI_PLUGINS_DIR`）丢一个 `.mjs` 模块即自动注册为 `hand` 工具，无需改核心（借鉴 Nanobot / OpenSquilla 的技能自动加载模式） |
+
+## 🔌 工具插件自发现（借鉴 Nanobot / OpenSquilla 技能加载器）
+
+传统框架把工具写死在核心里，加一个工具就要改核心、重测、重发版。OmniSense 借鉴
+[Nanobot](https://github.com/HKUDS/Nanobot) 与 [OpenSquilla](https://www.ai-all.info/ai-models/opensquilla-ai-agent-token)
+的「技能/工具自动加载」思想：**工具即插件**——
+
+- 在 `src/tools/` 下放一个 `.mjs`，默认导出一个工具对象 `{ name, description, parameters, run }`，
+  启动时被 `buildDefaultTools` 自动扫描并注册为 `hand` 工具。
+- 额外可用环境变量 `OMNI_PLUGINS_DIR=/path/to/your/tools` 指定你自己的插件目录（方便集成层扩展，不改核心）。
+- 加载失败或契约不合法的插件会被跳过并记录警告，**绝不拖垮启动**。
+- 内置示范插件：`src/tools/hash.mjs`（离线 SHA-256，用于内容指纹/去重）。
+
+```js
+// 你的插件 src/tools/greet.mjs
+export default {
+  name: 'greet',
+  description: '打招呼',
+  parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  run: async ({ name }) => ({ message: `你好, ${name}` }),
+};
+```
+```bash
+node integrations/openclaw/omni-body.mjs hand hash '{"text":"hello"}' --json
+# → { "ok": true, "output": { "algo": "sha256", "digest": "..." } }
+```
 
 ## 它能做什么（真实 vs 模型）
 

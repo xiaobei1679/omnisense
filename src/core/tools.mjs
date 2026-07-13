@@ -7,7 +7,8 @@
 //      executeTool 统一捕获异常，返回 { ok, output | error }，绝不因单工具失败打断整条流水线。
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { httpGet } from './http.mjs';
 import { log } from './logger.mjs';
 
@@ -123,6 +124,39 @@ function stripText(html, maxLen = 1500) {
   return { title: title.trim(), text: text.slice(0, maxLen) };
 }
 
+// ───────────────────────── 工具自发现（插件） ─────────────────────────
+// 借鉴 Nanobot / OpenSquilla 的「技能/工具自动加载」模式：往目录丢一个 .mjs
+// 模块（默认导出 { name, description, parameters, run }）即被自动注册为 hand 工具，
+// 无需改动核心。内置插件目录 src/tools/；额外可用 env OMNI_PLUGINS_DIR 指定用户目录。
+// 加载失败或契约不合法的工具会被跳过并记录警告，绝不拖垮启动。
+async function loadPluginsFrom(dir) {
+  const out = [];
+  let entries = [];
+  try { entries = readdirSync(dir); } catch { return out; }
+  for (const f of entries) {
+    if (!f.endsWith('.mjs')) continue;
+    try {
+      const mod = await import(pathToFileURL(join(dir, f)).href);
+      const tool = mod.default || mod.tool;
+      if (tool && typeof tool.name === 'string' && typeof tool.run === 'function') {
+        out.push(tool);
+      } else {
+        log.warn(`[plugins] 跳过 ${f}：未导出合法工具（default/tool 需含 name+run）`);
+      }
+    } catch (e) {
+      log.warn(`[plugins] 加载 ${f} 失败，已跳过：${e.message}`);
+    }
+  }
+  return out;
+}
+
+const BUILTIN_PLUGIN_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'tools');
+const DISCOVERED_TOOLS = await (async () => {
+  const builtin = await loadPluginsFrom(BUILTIN_PLUGIN_DIR);
+  const extra = process.env.OMNI_PLUGINS_DIR ? await loadPluginsFrom(process.env.OMNI_PLUGINS_DIR) : [];
+  return [...builtin, ...extra];
+})();
+
 // 构建默认工具集。omni 用于注入 memory / seeHotAll / summarizeWebsite。
 export function buildDefaultTools(omni, { allowShell = false } = {}) {
   const memory = omni?.memory;
@@ -231,6 +265,16 @@ export function buildDefaultTools(omni, { allowShell = false } = {}) {
         return { output: out.slice(0, 3000) };
       },
     });
+  }
+
+  // 合并自发现插件：不与内置重名；重名时内置优先并记录警告
+  const builtinNames = new Set(tools.map(t => t.name));
+  for (const d of DISCOVERED_TOOLS) {
+    if (builtinNames.has(d.name)) {
+      log.warn(`[plugins] 插件工具「${d.name}」与内置重名，已忽略插件版本`);
+      continue;
+    }
+    tools.push(d);
   }
 
   return tools;
