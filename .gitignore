@@ -10,7 +10,8 @@
 # WorkBuddy 本地记忆目录（跨会话记忆，不进仓库）
 .workbuddy/
 
-# ── 密钥 / 本地配置 ──
+# CodeGraph 本地代码知识图谱索引（大体积二进制，本地/CI 独立重建）
+.codegraph/
 .env
 .env.local
 *.local

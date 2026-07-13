@@ -106,8 +106,8 @@ it('runLink route 错误 skillId 格式报错（不伪造成功）', async () =>
   assert.match(r.error, /organ\.method/);
 });
 
-it('runLink dispatch "思考热点" 自动委派到大脑（跨层 dispatch）', async () => {
-  const r = await runLink(['dispatch', '思考一下当前热点']);
+it('runLink dispatch "思考" 自动委派到大脑（跨层 dispatch）', async () => {
+  const r = await runLink(['dispatch', '帮我深入推理一下这个问题']);
   assert.equal(r.resolved, true, '应自动委派到 brain.think');
   assert.match(r.resolvedSkill.id, /brain\./, '应委派到 brain');
   assert.ok(r.result, '应有执行结果');

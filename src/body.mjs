@@ -60,6 +60,8 @@ const METHOD_META = {
     speak:           { desc: '说话 / 朗读', net: false },
     giveOpinion:     { desc: '表达观点', net: false },
     reply:           { desc: '回复', net: false },
+    setStyle:        { desc: '设置输出压缩等级(normal/lite/full/ultra)，借鉴Caveman', net: false },
+    getStyle:        { desc: '查看当前输出压缩等级', net: false },
   },
   brain: {
     think:           { desc: '思考 / 推理', net: false },

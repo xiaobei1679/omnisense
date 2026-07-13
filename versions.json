@@ -54,5 +54,12 @@
     "date": "2026-07-13T13:22:49.535Z",
     "tag": "v2.0.0",
     "notes": "能力发现闭环：新增 skillResolve/skillDispatch 基于 Agent Card 关键词匹配自动委派到最佳器官/方法（CLI dispatch / 桥接 dispatchSkill / 工作区 omnisense-link dispatch）。借鉴 IETF AgentCard + ARD intent→tool 匹配 + AutoGen MCP Skill Registry + CrewAI 能力路由思想。两套测试全绿：核心 195/195、工作区 254/254。"
+  },
+  {
+    "version": "2.1.0",
+    "type": "minor",
+    "date": "2026-07-13T13:31:00.085Z",
+    "tag": "v2.1.0",
+    "notes": "CodeGraph MCP + Caveman 输出压缩集成：1) 安装 CodeGraph 知识图谱(colbymchenry/codegraph, MIT, 47K★)，索引 145 文件/1701 节点/5230 边，新建 src/tools/codegraph.mjs 注册为 hand 器官工具(支持 explore/query/node/callers/callees 五种模式);2) mouth 器官注入 Caveman 输出压缩(借鉴 88K★ 开源项目)，新增 setStyle/getStyle 方法，支持 normal/lite/full/ultra 四级风格，通过 omnisense-link route mouth.setStyle 调用;3) 创建两个实用 WorkBuddy Skills(codegraph-mcp-setup + agi-memory-architecture)供后续直接加载;4) 更新 .gitignore 排除 .codegraph/ 索引目录;5) 修复 skillResolve 测试因 getStyle 新增使匹配偏移;6) 两套测试全绿(核心 195 + 工作区 254)。"
   }
 ]

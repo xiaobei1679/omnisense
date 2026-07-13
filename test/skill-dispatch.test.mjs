@@ -18,7 +18,7 @@ test('skillResolve 匹配计算相关目标 → hand.calc 排第一', () => {
 
 test('skillResolve 匹配思考目标 → brain.think 排第一', () => {
   const omni = OmniSense.create();
-  const r = omni.skillResolve('思考一下当前热点');
+  const r = omni.skillResolve('帮我深入思考推理一下这个问题');
   assert.ok(r.length > 0);
   assert.equal(r[0].skill.id, 'brain.think', 'brain.think 应排第一');
 });
