@@ -1,4 +1,4 @@
-// 本地 HTTP 驱动服务：让外部门户（agent / QClaw / Marvis / 任意脚本）以 JSON API 驱动 OmniSense 能力。
+// 本地 HTTP 驱动服务：让外部门户（另一个进程 / 任意脚本 / 你的 agent）以 JSON API 驱动 OmniSense 能力。
 // 诚实边界（务必知悉）：仅监听 127.0.0.1，无 TLS——仅用于本机跨进程编排，切勿用 -h 0.0.0.0 或端口转发暴露到公网。
 // 鉴权：若设置了 token（OMNI_TOKEN 或 startServer 传入），所有路由要求 `Authorization: Bearer <token>`（或 ?token=），
 // 否则返回 401。未设置 token 时保持无鉴权（仅本机），但会在日志中警示。

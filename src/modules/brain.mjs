@@ -80,13 +80,13 @@ export class Brain {
       out = (raw && typeof raw === 'object') ? raw : JSON.parse(raw);
     } catch (e) {
       if (e?.code === 'AGENT_DRIVE') {
-        // agent 模式：脑/嘴由运行体(agent)自身驱动，把真实感知上下文交出去
-        log.info('   （agent 驱动模式 · 无 QClaw 网关）已汇聚真实感知，请运行体(agent)直接思考并给出 insight/nextLook/confidence：');
+        // 驱动模式：脑/嘴由调用方自身驱动，把真实感知上下文交出去
+        log.info('   （驱动模式 · 无本地模型网关）已汇聚真实感知，请调用方直接思考并给出 insight/nextLook/confidence：');
         log.info('   ── 感知上下文 ──\n' + (summary || '（暂无感知输入）'));
         log.info('   ── 思考提示词 ──\n' + prompt);
-        out = { insight: '(待 agent 驱动)', nextLook: '(待 agent 驱动)', confidence: 0.5 };
+        out = { insight: '(待调用方驱动)', nextLook: '(待调用方驱动)', confidence: 0.5 };
       } else {
-        out = { insight: `（在线模型暂不可用，使用本地符号推理）感知到 ${percepts.length} 条输入`, nextLook: '在 QClaw 运行时中加载本技能，即可由框架自带在线大模型深度思考', confidence: 0.3 };
+        out = { insight: `（在线模型暂不可用，使用本地符号推理）感知到 ${percepts.length} 条输入`, nextLook: '在网关模式下加载本框架，即可由本地模型网关深度思考', confidence: 0.3 };
       }
     }
     this.memory.note(out.insight || '', 'insight');

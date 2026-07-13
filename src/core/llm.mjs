@@ -1,12 +1,12 @@
-// 框架自带在线大模型网关代理层 —— 免 key
+// 本地模型网关代理层 —— 免 key
 // 两种运行模式自动识别：
-//   1) QClaw / OpenClaw 运行时：本地暴露「控制网关」(openclaw.json 的 gateway.port，默认 55695)，
-//      OpenAI 兼容端点 POST http://127.0.0.1:<port>/v1/chat/completions，模型固定 "openclaw"，必须 stream。
-//      鉴权用网关令牌(框架统一管，不需要任何供应商 key)。脚本直接免 key 真思考/真说。
-//   2) agent 模式(WorkBuddy 等无该网关的环境)：眼/耳的真抓取仍由本脚本本机真实执行；
-//      脑(思考)/嘴(说)由调用本脚本的运行体(agent)自身驱动——即"你(agent)就是大脑/嘴巴"，同样免 key。
-// 识别方式：环境变量 OMNI_RUNTIME 可强制 'qclaw'|'agent'；否则自动探测网关可达性。
-//   网关可达 → qclaw 模式；不可达 → agent 模式。
+//   1) 网关模式(gateway)：本机运行了兼容 OpenAI 的本地模型网关(默认 127.0.0.1:<port>/v1，
+//      端口可由配置文件或 OMNI_GATEWAY_BASE 指定)，POST /v1/chat/completions 即可真思考真说，
+//      鉴权用网关令牌(由网关统管，不需要任何供应商 key)。
+//   2) 驱动模式(driver)：无网关的环境(如普通 Node / 任意调用方)，眼/耳的真抓取仍本机真实执行；
+//      脑(思考)/嘴(说)由调用方(你的代码 / 你的 agent)自身驱动——同样免 key。
+// 识别方式：环境变量 OMNI_RUNTIME 可强制 'gateway'|'driver'；否则自动探测网关可达性。
+//   网关可达 → gateway 模式；不可达 → driver 模式。
 
 import { existsSync } from 'node:fs';
 import { readGatewayConfig, CONFIG_PATH } from './config.mjs';
@@ -22,7 +22,7 @@ function resolveBase() {
   return `http://127.0.0.1:${port}/v1`;
 }
 
-// 解析网关令牌：环境变量优先，否则读 openclaw.json 的 gateway.auth.token
+// 解析网关令牌：环境变量优先，否则读网关配置文件的 gateway.auth.token
 function resolveToken() {
   if (process.env.GATEWAY_TOKEN) return process.env.GATEWAY_TOKEN;
   try {
@@ -31,48 +31,54 @@ function resolveToken() {
   } catch { return ''; }
 }
 
-// 模型：网关只接受 openclaw / openclaw/<agentId>
+// 模型：优先 OMNI_MODEL 环境变量；网关可用时取网关返回的首个模型；否则回退 'openclaw'(兼容既有网关)。
+let _defaultModel = null;
 function resolveModel() {
   if (process.env.OMNI_MODEL) return process.env.OMNI_MODEL;
-  return 'openclaw';
+  return _defaultModel || 'openclaw';
 }
 
 let _baseCache = null;
 let _unavailable = false; // 最近一次连接失败/未鉴权则标记，避免每次重试超时
-let _runtime = null;      // 运行模式：'qclaw' | 'agent'（懒探测后缓存）
+let _runtime = null;      // 运行模式：'gateway' | 'driver'（懒探测后缓存）
 
 export function isConnError(e) {
   const c = e?.cause?.code || e?.code || (typeof e?.message === 'string' ? e.message : '');
   return /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|fetch failed|aborted|timeout/i.test(c);
 }
 
-// 探测网关是否可达且提供 openclaw 模型（连不上即判定为 agent 模式）。
-// 单次抖动可能误判，故失败重试一次（共 2 次），避免整进程被翻成 agent 模式。
-async function probeOnce() {
+// 探测网关是否可达且提供至少一个模型（连不上即判定为 driver 模式）。
+// 单次抖动可能误判，故失败重试一次（共 2 次），避免整进程被翻成 driver 模式。
+async function probeModels() {
   try {
     const r = await fetch(`${resolveBase()}/models`, {
       headers: { 'Content-Type': 'application/json', ...(resolveToken() ? { Authorization: `Bearer ${resolveToken()}` } : {}) },
       signal: AbortSignal.timeout(3000),
     });
-    if (!r.ok) return false;
+    if (!r.ok) return null;
     const j = await r.json().catch(() => ({}));
-    return (j?.data || []).some(m => String(m.id).startsWith('openclaw'));
-  } catch { return false; }
+    const arr = Array.isArray(j?.data) ? j.data : [];
+    return arr.map(m => String(m.id)).filter(Boolean);
+  } catch { return null; }
 }
 async function probeGateway() {
-  if (await probeOnce()) return true;
+  const ms = await probeModels();
+  if (ms && ms.length) return ms;
   await new Promise(r => setTimeout(r, 500));
-  return probeOnce();
+  const ms2 = await probeModels();
+  return (ms2 && ms2.length) ? ms2 : null;
 }
 
 // 懒识别运行模式（仅首次用到模型时触发一次探测）
 async function ensureRuntime() {
   if (_runtime) return _runtime;
-  if (process.env.OMNI_RUNTIME === 'qclaw' || process.env.OMNI_RUNTIME === 'agent') {
+  if (process.env.OMNI_RUNTIME === 'gateway' || process.env.OMNI_RUNTIME === 'driver') {
     _runtime = process.env.OMNI_RUNTIME;
     return _runtime;
   }
-  _runtime = (await probeGateway()) ? 'qclaw' : 'agent';
+  const ms = await probeGateway();
+  _runtime = ms ? 'gateway' : 'driver';
+  if (ms && !_defaultModel) _defaultModel = ms[0];
   return _runtime;
 }
 
@@ -132,14 +138,14 @@ export class BuiltinLLM {
   /** 只读探测：网关是否可达且已鉴权（不污染 _unavailable 缓存） */
   async available() {
     if (_unavailable) return false;
-    // 快速路径：未显式给网关地址，且框架配置(openclaw.json)不存在
-    // → 直接判定 agent 模式，避免无谓的联网探测等待（standalone 秒级进入）
+    // 快速路径：未显式给网关地址，且网关配置文件不存在
+    // → 直接判定 driver 模式，避免无谓的联网探测等待（standalone 秒级进入）
     if (!process.env.OMNI_GATEWAY_BASE && !existsSync(CONFIG_PATH)) {
-      _runtime = 'agent';
+      _runtime = 'driver';
       return false;
     }
     const rt = await ensureRuntime();
-    if (rt === 'agent') return false;
+    if (rt === 'driver') return false;
     return probeGateway();
   }
 
@@ -149,7 +155,7 @@ export class BuiltinLLM {
    */
   async chat(messages, { json = false, temperature = 0.7, image = null, timeoutMs = 90000, model = null } = {}) {
     const rt = await ensureRuntime();
-    if (rt === 'agent') {
+    if (rt === 'driver') {
       const e = new Error('AGENT_DRIVE');
       e.code = 'AGENT_DRIVE';
       e.messages = messages; e.opts = { json, temperature, image };
@@ -208,5 +214,5 @@ export const builtin = new BuiltinLLM();
 
 // 同步读取当前可用性（基于最近一次探测缓存）
 export function isBuiltinAvailable() { return !_unavailable; }
-// 重置缓存（如用户中途启动了 QClaw）
-export function resetBuiltin() { _baseCache = null; _unavailable = false; _runtime = null; }
+// 重置缓存（如用户中途启动了本地模型网关）
+export function resetBuiltin() { _baseCache = null; _unavailable = false; _runtime = null; _defaultModel = null; }

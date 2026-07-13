@@ -5,7 +5,7 @@ import { startServer } from '../src/server.mjs';
 // 用一个最小 stub omni 驱动路由，全程离线（不发真实网络请求）
 function stubOmni() {
   return {
-    status: async () => ({ runtime: 'agent', backend: 'stub' }),
+    status: async () => ({ runtime: 'driver', backend: 'stub' }),
     seeWebsite: async (url) => ({ modality: 'visual-web', url }),
     seeHotTopics: async (s) => ({ modality: 'visual-hot', source: s }),
     seeHotAll: async () => ({ modality: 'visual-hot-aggregate' }),
@@ -29,7 +29,7 @@ test('serve: /health 返回运行时', async () => {
     const j = await r.json();
     assert.equal(r.status, 200);
     assert.equal(j.ok, true);
-    assert.equal(j.result.runtime, 'agent');
+    assert.equal(j.result.runtime, 'driver');
   } finally {
     server.close();
   }

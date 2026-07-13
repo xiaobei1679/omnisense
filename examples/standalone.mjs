@@ -1,4 +1,4 @@
-// 独立使用 OmniSense 的最小示例（不依赖 QClaw 网关）
+// 独立使用 OmniSense 的最小示例（不依赖本地模型网关，驱动模式即可运行）
 //
 // 运行：node examples/standalone.mjs
 //

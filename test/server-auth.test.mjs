@@ -5,7 +5,7 @@ import { startServer } from '../src/server.mjs';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // 简单 fake omni：仅满足路由所需方法
-function fakeOmni(runtime = 'agent') {
+function fakeOmni(runtime = 'driver') {
   return {
     status: async () => ({ runtime }),
     sense: () => ({ topicCount: 1, topics: ['x'], modalities: ['visual-hot'] }),
@@ -36,7 +36,7 @@ test('serve: 设 token 后 Bearer 头通过', async () => {
     assert.equal(r.status, 200);
     const j = await r.json();
     assert.equal(j.ok, true);
-    assert.equal(j.result.runtime, 'agent');
+    assert.equal(j.result.runtime, 'driver');
   } finally {
     server.close();
   }

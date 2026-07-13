@@ -1,14 +1,14 @@
 {
-  "name": "omni-sense",
+  "name": "omnisense",
   "version": "1.0.0",
-  "description": "通用 AI 感知系统：赋予 AI 眼睛/耳朵/嘴巴/大脑/感知五类真实能力（联网真抓取，模型免 key 双模式自适应）。一次编写，到处运行——可作为 OpenClaw/QClaw 技能，也可作为独立 npm 包 / CLI 使用。",
+  "description": "通用 AI 感知系统：赋予 AI 眼睛/耳朵/嘴巴/大脑/感知五类真实能力（联网真抓取，模型免 key 双模式自适应）。零依赖、可移植——可作为独立 CLI / npm 包 / 库，或作为技能接入任意 Agent 框架。",
   "type": "module",
   "main": "src/index.mjs",
   "exports": {
     ".": "./src/index.mjs"
   },
   "bin": {
-    "omni-sense": "./src/cli.mjs"
+    "omnisense": "./src/cli.mjs"
   },
   "files": [
     "src",
@@ -34,8 +34,6 @@
     "eyes",
     "ears",
     "llm",
-    "openclaw",
-    "qclaw",
     "sense",
     "vision",
     "tool",
@@ -44,6 +42,14 @@
   "license": "MIT",
   "engines": {
     "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiaobei1679/omnisense.git"
+  },
+  "homepage": "https://github.com/xiaobei1679/omnisense#readme",
+  "bugs": {
+    "url": "https://github.com/xiaobei1679/omnisense/issues"
   },
   "dependencies": {},
   "optionalDependencies": {}

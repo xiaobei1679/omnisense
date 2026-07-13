@@ -1,9 +1,9 @@
 // 模型适配层 —— 统一 LLM / VLM / ASR / TTS
-// 核心原则：**默认使用框架「控制网关」自带在线大模型（127.0.0.1:<gateway.port>/v1，免 key）**。
-//   - 眼(看图) / 脑(思考) / 嘴(说话) 在 QClaw 运行时里自动免 key 真跑。
-//   - 音频"听"(ASR)与"出声"(TTS)：框架代理当前无此能力，需外部 key 或本地引擎；
+// 核心原则：**默认使用本机模型网关（OpenAI 兼容，127.0.0.1:<port>/v1，免 key）**。
+//   - 眼(看图) / 脑(思考) / 嘴(说话) 在网关可用时自动免 key 真跑。
+//   - 音频"听"(ASR)与"出声"(TTS)：网关当前无此能力，需外部 key 或本地引擎；
 //     未配置时诚实返回说明，不假装已听懂/出声。
-// 可选回退：若设置了外部 LLM_* / VLM_* / ASR_* / TTS_* 环境变量，builtin 不可用时使用。
+// 可选回退：若设置了外部 LLM_* / VLM_* / ASR_* / TTS_* 环境变量，网关不可用时使用。
 // 全部不可用时：诚实本地降级，绝不假装已接入模型。
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -45,7 +45,7 @@ export class Models {
   _auth(cfg) { return { Authorization: `Bearer ${cfg.key}` }; }
   _has(cfg) { return !!(cfg.key && cfg.key !== SK); }
 
-  /** 运行模式：'qclaw'(免key网关) | 'agent'(无网关，由运行体/agent 驱动大脑与嘴巴) | null(尚未探测) */
+  /** 运行模式：'gateway'(免key本地网关) | 'driver'(无网关，由调用方驱动大脑与嘴巴) | null(尚未探测) */
   get runtime() { return builtin.runtime; }
 
   // —— 文本/多模态对话：优先框架自带在线模型（免 key）——
@@ -75,15 +75,15 @@ export class Models {
   _fallbackChat(messages) {
     const last = messages[messages.length - 1]?.content || '';
     const q = typeof last === 'string' ? last : JSON.stringify(last);
-    log.warn('   ⚠ 未接入在线模型（框架代理未运行且无外部 key），使用本地规则降级');
-    return `〔未接入在线模型〕已收到: ${String(q).slice(0, 60)}…\n（在 QClaw/OpenClaw 运行时中，将由框架自带在线大模型真实回答——真看真思真说。）`;
+    log.warn('   ⚠ 未接入在线模型（本地网关未运行且无外部 key），使用本地规则降级');
+    return `〔未接入在线模型〕已收到: ${String(q).slice(0, 60)}…\n（在「网关模式」下将由本地模型网关真实回答——真看真思真说。）`;
   }
 
   // —— 视觉理解：优先框架自带多模态（免 key）——
   async describe(image, prompt = '请客观描述这张图里能看到的内容（不超过80字）。', opts = {}) {
     try { return await builtin.chat([{ role: 'user', content: prompt }], { ...opts, image }); }
     catch (e) {
-      // agent 模式：把 AGENT_DRIVE 向上抛出（携带图像信息），交给 eyes.seeImage 落本地后由运行体(agent)读图
+      // driver 模式：把 AGENT_DRIVE 向上抛出（携带图像信息），交给 eyes.seeImage 落本地后由调用方读图
       if (e?.code === 'AGENT_DRIVE') {
         const err = new Error('AGENT_DRIVE');
         err.code = 'AGENT_DRIVE';
@@ -156,21 +156,21 @@ export class Models {
   // 模型能力状态（异步，真实探测运行模式）
   async status() {
     const reachable = await builtin.available().catch(() => false);
-    const rt = builtin.runtime || (reachable ? 'qclaw' : 'agent');
-    const agent = rt === 'agent';
+    const rt = builtin.runtime || (reachable ? 'gateway' : 'driver');
+    const isDriver = rt === 'driver';
     return {
-      backend: agent ? 'agent(运行体驱动·免key)' : (reachable ? 'builtin(框架网关·免key)' : 'none'),
+      backend: isDriver ? 'driver(调用方驱动·免key)' : (reachable ? 'gateway(本地模型网关·免key)' : 'none'),
       runtime: rt,
-      think: agent ? true : reachable,
-      seeVision: false,         // 视觉(看图)网关暂不支持，需外部 VLM key 或本地引擎 / agent 直接读图
+      think: isDriver ? true : reachable,
+      seeVision: false,         // 视觉(看图)网关暂不支持，需外部 VLM key 或本地引擎 / 调用方直接读图
       webFetch: true,           // 网站/热搜抓取本机真实执行，无需任何 key
       hear: false,              // 语音转写需外部 key 或本地引擎
-      speak: false,             // 出声需外部 key 或本地引擎；文本"说"由 agent 承担
-      note: agent
-        ? '无 QClaw 网关的环境（如 WorkBuddy/普通 Node）：眼/耳真抓取由脚本本机真实执行，脑(思考)/嘴(说)由运行体(agent)自身驱动——即你我对话，完全免 key。'
+      speak: false,             // 出声需外部 key 或本地引擎；文本"说"由调用方承担
+      note: isDriver
+        ? '无本地网关的环境（如普通 Node / 任意调用方）：眼/耳真抓取由脚本本机真实执行，脑(思考)/嘴(说)由调用方自身驱动——即对话式交互，完全免 key。'
         : (reachable
-            ? '框架网关在线模型可用：真思(文本推理)/真说(文本交流)。网站与热搜抓取本机真实执行(免key)。看图(视觉)与听/说出声需外部 key 或本地引擎。'
-            : '框架网关不可达(未运行QClaw)。文本听(理解意见/小说/文案)/说由本机会话承担；深度推理需启动QClaw。'),
+            ? '本地模型网关可用：真思(文本推理)/真说(文本交流)。网站与热搜抓取本机真实执行(免key)。看图(视觉)与听/说出声需外部 key 或本地引擎。'
+            : '本地网关不可达。文本听(理解意见/小说/文案)/说由本机会话承担；深度推理需启动本地模型网关。'),
     };
   }
 

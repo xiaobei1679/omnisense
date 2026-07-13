@@ -32,9 +32,9 @@ test('summarize 空文本立即返回空串（离线）', async () => {
   assert.equal(await m.summarize(''), '');
 });
 
-test('summarize 在 agent 模式抛出 AGENT_DRIVE（离线，不触网）', async () => {
+test('summarize 在 driver 模式抛出 AGENT_DRIVE（离线，不触网）', async () => {
   const prev = process.env.OMNI_RUNTIME;
-  process.env.OMNI_RUNTIME = 'agent'; // 强制 agent 模式，确保走 AGENT_DRIVE 分支（不触网）
+  process.env.OMNI_RUNTIME = 'driver'; // 强制 driver 模式，确保走 AGENT_DRIVE 分支（不触网）
   const m = new Models();
   try {
     await assert.rejects(() => m.summarize('hello world'), /AGENT_DRIVE/);

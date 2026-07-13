@@ -1,5 +1,5 @@
 // OmniSense —— 通用 AI 感知系统门面
-// 所有 claw 只需：import { OmniSense } from 'omni-sense/src/index.mjs'，即可获得眼睛/耳朵/嘴巴/大脑/感知。
+// 任意宿主/调用方只需：import { OmniSense } from 'omnisense/src/index.mjs'，即可获得眼睛/耳朵/嘴巴/大脑/感知。
 import { Bus, EVENTS } from './core/bus.mjs';
 import { Memory } from './core/memory.mjs';
 import { Models, loadEnv } from './providers/index.mjs';
@@ -80,7 +80,7 @@ export class OmniSense {
     log.info('运行模式(后端):', st.backend);
     log.info('能力:', JSON.stringify({ think: st.think, seeVision: st.seeVision, webFetch: st.webFetch, hear: st.hear, speak: st.speak }));
     log.info('说明:', st.note);
-    log.info('（眼/耳联网抓取本机真实执行，全程免 key；脑/嘴在 QClaw 走网关、在 WorkBuddy 等由运行体 agent 自身驱动）\n');
+    log.info('（眼/耳联网抓取本机真实执行，全程免 key；脑/嘴在网关模式走本地模型网关、在驱动模式由调用方自身驱动）\n');
 
     // 真实看热点（联网，无需 key）—— 多平台并行聚合演示
     await this.seeHotAll();
@@ -88,19 +88,19 @@ export class OmniSense {
     await this.seeWebsite('https://example.com');
     // 感知聚合
     this.sense();
-    // 大脑思考（QClaw 运行时走框架自带在线模型，否则由运行体 agent 驱动）
+    // 大脑思考（网关模式走本地模型网关，否则由调用方驱动）
     await this.think('用户想了解当前热点与示例站点的关联');
     // 决策与规划
     await this.decide();
     this.plan('为创作者提炼今日可做的选题');
 
     log.info('\n──────── 演示结束 ────────');
-    if (st.runtime === 'agent') {
-      log.info('当前为 agent 模式：眼/耳已真抓取(本机联网，含抖音/红果/微博等热搜)；');
-      log.info('脑(思考)/嘴(说)由运行体(agent)自身驱动，完全免 key；');
-      log.info('看图：图像已落到本地，由运行体(agent)用读图能力真实描述（免 key 真看）。');
+    if (st.runtime === 'driver') {
+      log.info('当前为驱动模式：眼/耳已真抓取(本机联网，含抖音/红果/微博等热搜)；');
+      log.info('脑(思考)/嘴(说)由调用方自身驱动，完全免 key；');
+      log.info('看图：图像已落到本地，由调用方用读图能力真实描述（免 key 真看）。');
     } else {
-      log.info('本技能在 QClaw/OpenClaw 运行时中自动免 key 使用框架自带在线大模型，');
+      log.info('当前为网关模式：自动免 key 使用本地模型网关，');
       log.info('真正实现：眼真抓网站/热搜(本机联网)、脑真思考、嘴真交流。');
       log.info('看图：配 VLM key 后由在线视觉模型真实描述；未配则诚实降级。');
     }

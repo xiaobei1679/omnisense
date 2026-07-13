@@ -264,9 +264,9 @@ export class Eyes {
   }
 
   // 看一张图
-  //  - agent 模式（如 WorkBuddy 无网关）：describe 会抛出 AGENT_DRIVE，这里把图落到本地临时文件，
-  //    交运行体(agent)用读图能力真实描述 → 免 key 真看
-  //  - 网关/QClaw 模式：走在线 VLM（配了 VLM key 则真跑；无则诚实降级）
+  //  - 驱动模式（无本地网关）：describe 会抛出 AGENT_DRIVE，这里把图落到本地临时文件，
+  //    交调用方用读图能力真实描述 → 免 key 真看
+  //  - 网关模式：走在线 VLM（配了 VLM key 则真跑；无则诚实降级）
   async seeImage(image) {
     log.info(`\n[眼·视觉] 看图`);
     try {
