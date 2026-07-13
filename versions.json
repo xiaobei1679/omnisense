@@ -138,5 +138,12 @@
     "date": "2026-07-13T23:35:18.095Z",
     "tag": "v4.4.0",
     "notes": "监控器官 monitor 全面升级(借鉴 LangSmith/Langfuse/CloudWatch GenAI 可观测三支柱 + ClawHub 舰队健康 + perfecxion 记忆专属指标 + 心跳存活判定)：①延迟指标 P50/P95/P99 按引擎分布+趋势 sparkline；②状态网格/舰队健康(颜色化 healthy/degraded/down)；③记忆健康(技能利用率/信任分分布/低信任/陈旧记录/增长批量注入检测)；④异常检测(延迟突增/吞吐骤降/记忆批量注入)；⑤运行时间线；⑥驾驶舱风格可视化仪表盘。总线方法 6→11，CLI 新增 --latency/--grid/--memory/--anomalies/--runs。测试核心 244/244。"
+  },
+  {
+    "version": "4.5.0",
+    "type": "minor",
+    "date": "2026-07-13T23:41:37.331Z",
+    "tag": "v4.5.0",
+    "notes": "监控器官 monitor 修复两处真实缺陷(基于种子化演示验证)：①记忆批量注入检测失效——原 memoryHealth() 每次调用都覆盖共享基线，导致 snapshot() 内 detectAnomalies() 永远看到 baseline==current 而 memory_bulk_injection 永不触发；改为分离『稳定基线(供 growth 展示,仅首次建立)』与『滑动基线(供批量注入检测,每次检查后更新)』。②snapshot() 重复调用 detectAnomalies()(经 allAlerts + 直接调用)使首次调用吞掉批量注入告警；改为单次计算复用。模块测试 17/17,核心 244/244,lint 52 文件全过。另附种子化演示仪表盘(omni-dashboard-demo.html)展示舰队健康/延迟P95/记忆健康/异常检测全能力。"
   }
 ]

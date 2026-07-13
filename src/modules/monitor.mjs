@@ -51,7 +51,9 @@ export class Monitor {
     this.omni = omni;
     this.metricsFile = opts.metricsFile || DEFAULT_METRIC_FILE;
     // 记忆增长基线：内存缓存（检测更可靠、测试无文件污染），构造时若文件已有则载入以便跨进程延续。
-    this._baseline = this._loadMetrics()._memBaseline || null;
+    const seeded = this._loadMetrics();
+    this._baseline = seeded._memBaseline || null;        // 稳定基线：供 memoryHealth.growth（自首次观察起的累计增长，仅首次建立）
+    this._anomalyBase = seeded._anomalyBaseline || null; // 滑动基线：供 detectAnomalies 批量注入检测（每次检查后更新）
     this._wire();
   }
 
@@ -163,7 +165,7 @@ export class Monitor {
     const base = this._readBaseline();
     const growth = {};
     for (const k of ['memory', 'rule', 'skill', 'knowledge']) growth[k] = base ? (layers[k] - (base[k] || 0)) : 0;
-    this._saveBaseline(layers);
+    if (!this._baseline) this._saveBaseline(layers); // 仅首次建立稳定基线（不每次覆盖，否则 growth 恒为 0）
     return {
       layers, skillUtilization: Number(skillUtil.toFixed(2)), avgConfidence: avgConf,
       lowConfidence: lowConf, staleCount: stale, staleWindowDays: 7, growth, baseline: base,
@@ -192,8 +194,9 @@ export class Monitor {
         alerts.push({ level: 'warning', type: 'volume_drop', message: `近 1h 无新运行，但历史有 ${prior.length} 条（吞吐骤降）`, agent: 'throughput' });
       }
     }
-    // 记忆批量注入：自上次检查某层增长 ≥ 阈值
-    const base = this._readBaseline();
+    // 记忆批量注入：自上次异常检查某层增长 ≥ 阈值（滑动基线，每次检查后更新，
+    // 避免单次 snapshot 内 memoryHealth 覆盖基线导致批量注入检测永不触发）。
+    const base = this._anomalyBase;
     if (base) {
       const cur = this._currentLayers();
       for (const k of ['memory', 'rule', 'skill', 'knowledge']) {
@@ -203,6 +206,8 @@ export class Monitor {
         }
       }
     }
+    this._anomalyBase = this._currentLayers();
+    this._saveAnomalyBaseline(this._anomalyBase);
     return alerts;
   }
 
@@ -220,7 +225,8 @@ export class Monitor {
     const tracer = this.omni && this.omni.tracer;
     const autopilot = (tracer && tracer.findRunsByGoal) ? tracer.findRunsByGoal('autopilot', { limit: 5 }) : [];
     const la = lastActiveAt(runs);
-    const alerts = this.allAlerts();
+    const anoms = this.detectAnomalies(); // 单次计算（同时推进滑动基线，避免被重复调用吞掉批量注入告警）
+    const alerts = [...this.checkAlerts(), ...anoms];
     const organs = (this.omni && this.omni.body && this.omni.body.describe)
       ? this.omni.body.describe().map(o => ({ key: o.key, name: o.name, methods: o.methods.length }))
       : [];
@@ -247,7 +253,7 @@ export class Monitor {
       latency: lat,
       statusGrid: grid,
       memoryHealth: memHealth,
-      anomalies: this.detectAnomalies(),
+      anomalies: anoms,
       recentRuns: this.recentRuns(12),
       alerts,
     };
@@ -360,6 +366,15 @@ export class Monitor {
     try {
       const all = this._loadMetrics();
       all._memBaseline = layers;
+      this._saveJson(this.metricsFile, all);
+    } catch { /* 静默 */ }
+  }
+  _saveAnomalyBaseline(layers) {
+    this._anomalyBase = layers;
+    // 滑动基线持久化（供跨进程心跳的批量注入检测），失败静默。
+    try {
+      const all = this._loadMetrics();
+      all._anomalyBaseline = layers;
       this._saveJson(this.metricsFile, all);
     } catch { /* 静默 */ }
   }

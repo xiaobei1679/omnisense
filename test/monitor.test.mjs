@@ -199,7 +199,7 @@ test('detectAnomalies: 记忆批量注入 -> memory_bulk_injection', () => {
   const m = mkMon([], {
     layerSnapshot: () => ({ memory: { keys: 50, facts: 0, notes: 0 }, rule: 0, skill: 0, knowledge: 0 }),
   });
-  m._baseline = { memory: 0, rule: 0, skill: 0, knowledge: 0 };
+  m._anomalyBase = { memory: 0, rule: 0, skill: 0, knowledge: 0 };
   const a = m.detectAnomalies();
   assert.ok(a.some(x => x.type === 'memory_bulk_injection'), '应检出记忆批量注入');
 });
