@@ -41,6 +41,27 @@ function clip(v, n) {
   return v; // number / boolean 等原样
 }
 
+// 归一化目标文本（用于"同目标多次运行"检索/对比：忽略大小写与多余空白）
+function normGoal(g) {
+  return String(g || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+// 一步的稳定动作名（final_answer 归一化）
+function stepAction(s) {
+  return s.action != null ? s.action
+    : (s.final_answer != null ? '(final_answer)' : null);
+}
+// 一步是否成功
+function stepOk(s) {
+  const obs = s.observation || {};
+  return obs.ok !== false;
+}
+// 一步的"可比对输出指纹"（成功看 output、失败看 error；统一字符串便于 diff）
+function stepOut(s) {
+  const obs = s.observation || {};
+  if (obs.ok === false) return 'ERROR:' + (obs.error != null ? String(obs.error) : '');
+  return JSON.stringify(obs.output ?? null);
+}
+
 // 把一步规范化为对齐 OpenTelemetry GenAI 语义约定的 span-like 结构。
 // 参考: gen_ai.operation.name = execute_tool | invoke_agent(总链路)；gen_ai.tool.name / call.arguments / call.result / error.type。
 function normalizeStep(st) {
@@ -215,6 +236,159 @@ export class Tracer {
     this.runs = [];
     this._save();
     return { cleared: true, count: 0 };
+  }
+
+  /**
+   * 回放对比：对比两次运行（同目标或不同时刻），找出行为分歧点。
+   * 借鉴 Forkline「first point of divergence」思想：离线、无网络、确定性地定位"行为从第几步开始不一样"。
+   *  来源: https://github.com/sauravvenkat/forkline （replay-first tracing & diffing，仅借鉴思想/结构，非代码）
+   * @param {string} aId 基线 runId
+   * @param {string} bId 当前 runId
+   * @returns {object} { ok, a, b, divergenceCount, firstDivergence, divergences[], verdict }
+   *   verdict: 'identical' | 'similar' | 'improved' | 'regressed'
+   *   divergence type: 'action_changed' | 'success_to_fail' | 'fail_to_success' | 'output_changed' | 'missing_in_a' | 'missing_in_b'
+   */
+  compareRuns(aId, bId) {
+    const A = this.getRun(aId);
+    const B = this.getRun(bId);
+    if (!A || !B) {
+      return { ok: false, error: !A ? `找不到 run ${aId}` : `找不到 run ${bId}`, found: { a: !!A, b: !!B } };
+    }
+    const aSteps = A.steps || [];
+    const bSteps = B.steps || [];
+    const n = Math.max(aSteps.length, bSteps.length);
+    const divergences = [];
+    for (let i = 0; i < n; i++) {
+      const a = aSteps[i];
+      const b = bSteps[i];
+      if (!a && b) { divergences.push({ step: i + 1, type: 'missing_in_a', actionB: stepAction(b) }); continue; }
+      if (a && !b) { divergences.push({ step: i + 1, type: 'missing_in_b', actionA: stepAction(a) }); continue; }
+      const actA = stepAction(a);
+      const actB = stepAction(b);
+      if (actA !== actB) { divergences.push({ step: i + 1, type: 'action_changed', actionA: actA, actionB: actB }); continue; }
+      const okA = stepOk(a);
+      const okB = stepOk(b);
+      if (okA && !okB) { divergences.push({ step: i + 1, type: 'success_to_fail', action: actA }); continue; }
+      if (!okA && okB) { divergences.push({ step: i + 1, type: 'fail_to_success', action: actA }); continue; }
+      if (okA && okB && stepOut(a) !== stepOut(b)) {
+        divergences.push({ step: i + 1, type: 'output_changed', action: actA });
+      }
+    }
+    const verdict = divergences.length === 0 ? 'identical'
+      : (A.completed && !B.completed) ? 'regressed'
+      : (!A.completed && B.completed) ? 'improved'
+      : 'similar';
+    return {
+      ok: true,
+      a: { runId: A.runId, goal: A.goal, engine: A.engine, completed: A.completed, durationMs: A.durationMs, stepCount: aSteps.length },
+      b: { runId: B.runId, goal: B.goal, engine: B.engine, completed: B.completed, durationMs: B.durationMs, stepCount: bSteps.length },
+      divergenceCount: divergences.length,
+      firstDivergence: divergences.length ? divergences[0].step : null,
+      divergences,
+      verdict,
+    };
+  }
+
+  /**
+   * 按目标检索运行（"同目标多次运行"对比的前提）。
+   * @param {string} goal @param {object} [opts] { limit }
+   * @returns {Array} 精简运行概览（含 runId，供 compareRuns 取用）
+   */
+  findRunsByGoal(goal, opts = {}) {
+    const ng = normGoal(goal);
+    if (!ng) return [];
+    let arr = this.runs.filter(r => normGoal(r.goal) === ng);
+    arr.reverse(); // 最新在前
+    if (opts.limit) arr = arr.slice(0, opts.limit);
+    return arr.map(r => ({
+      runId: r.runId, goal: r.goal, engine: r.engine,
+      completed: r.completed, durationMs: r.durationMs, stepCount: (r.steps || []).length,
+    }));
+  }
+
+  /**
+   * 导出回归数据集（对齐 LangSmith「trace → dataset」：把历史/生产 trace 导出为回归基准，
+   * 供 CI 反复跑同一目标对比行为是否退化）。离线、本地优先；仅保留结构化结论，不落全量大内容。
+   *  来源: https://theneuralbase.com/langsmith/learn/intermediate/setting-up-a-regression-test-suite
+   *        https://blog.langchain.com/p/647419d5-fa7e-493f-a997-d81fd0009f7a/ （LangSmith Fetch：从 trace 建回归测试套件，仅借鉴思想）
+   * @param {object} [opts] { goal, engine, completed(bool), limit, path, format('json'|'jsonl') }
+   * @returns {object} { ok, count, format, path, dataset[] }
+   */
+  exportDataset(opts = {}) {
+    let arr = this.runs.slice();
+    if (opts.goal) {
+      const ng = normGoal(opts.goal);
+      arr = arr.filter(r => normGoal(r.goal) === ng);
+    }
+    if (opts.engine) arr = arr.filter(r => r.engine === opts.engine);
+    if (typeof opts.completed === 'boolean') arr = arr.filter(r => r.completed === opts.completed);
+    if (opts.limit) arr = arr.slice(-opts.limit); // 最近 N 条
+    const dataset = arr.map(r => ({
+      runId: r.runId,
+      goal: r.goal,
+      engine: r.engine,
+      completed: r.completed,
+      durationMs: r.durationMs,
+      finalAnswer: r.finalAnswer,
+      steps: (r.steps || []).map(s => ({ step: s.step, action: stepAction(s), ok: stepOk(s), durationMs: s.durationMs })),
+      tags: r.tags || [],
+    }));
+    if (opts.path) {
+      const text = opts.format === 'jsonl'
+        ? dataset.map(d => JSON.stringify(d)).join('\n') + (dataset.length ? '\n' : '')
+        : JSON.stringify(dataset, null, 2);
+      writeFileSync(opts.path, text);
+    }
+    return { ok: true, count: dataset.length, format: opts.format === 'jsonl' ? 'jsonl' : 'json', path: opts.path || null, dataset };
+  }
+
+  // ── 基线 / 回归门禁（CI 风：把某次 run 固定为基线，后续 run 与之对比，退化即判 FAIL） ──
+  // 借鉴 recut-ai / shadow「行为回归门禁」：对比最新 run 与基线，退化则非零退出。
+  //  来源: https://github.com/ksek87/recut-ai · https://pypi.org/project/shadow-diff/ （仅借鉴思想，非代码）
+  _baselinePath() { return this.path + '.baseline'; }
+
+  /** 把某次 run 设为基线（落盘 .omni-traces.json.baseline） */
+  setBaseline(runId) {
+    const run = this.getRun(runId);
+    if (!run) return { ok: false, error: `找不到 run ${runId}` };
+    const snap = { runId, goal: run.goal, setAt: Date.now() };
+    try {
+      const tmp = this._baselinePath() + '.tmp';
+      writeFileSync(tmp, JSON.stringify(snap, null, 2));
+      renameSync(tmp, this._baselinePath());
+    } catch { /* 静默：基线失败不应阻断主流程 */ }
+    return { ok: true, runId, goal: run.goal };
+  }
+
+  /** 读取当前基线（无则 null） */
+  getBaseline() {
+    try {
+      if (existsSync(this._baselinePath())) return JSON.parse(readFileSync(this._baselinePath(), 'utf8'));
+    } catch { /* 损坏则视为无基线 */ }
+    return null;
+  }
+
+  /**
+   * 回归门禁：用基线对比"当前最新 run"（或指定 runId）。
+   * @returns {object} { ok, passed, baseline, current, verdict, divergenceCount, firstDivergence }
+   *   passed = verdict !== 'regressed'
+   */
+  regressionCheck(opts = {}) {
+    const base = this.getBaseline();
+    if (!base) return { ok: false, error: '未设置基线（先 trace --baseline=<id> 设置）' };
+    const current = opts.runId ? this.getRun(opts.runId) : this.runs[this.runs.length - 1];
+    if (!current) return { ok: false, error: '当前无 run 可对比' };
+    const diff = this.compareRuns(base.runId, current.runId);
+    if (!diff.ok) return { ok: false, error: diff.error };
+    return {
+      ok: true,
+      passed: diff.verdict !== 'regressed',
+      baseline: base.runId,
+      current: current.runId,
+      verdict: diff.verdict,
+      divergenceCount: diff.divergenceCount,
+      firstDivergence: diff.firstDivergence,
+    };
   }
 }
 

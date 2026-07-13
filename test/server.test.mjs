@@ -21,6 +21,10 @@ function stubOmni() {
     traceSummary: () => ({ total: 1, completed: 1, successRate: 1, avgSteps: 0, avgDurationMs: 0, perTool: [], errorTools: {}, engineBreakdown: { local: 1 } }),
     getTrace: (id) => (id === 'run_x' ? { runId: 'run_x', goal: 'g' } : null),
     clearTraces: () => ({ cleared: true }),
+    compareTraces: (a, b) => ({ ok: true, a: { runId: a }, b: { runId: b }, verdict: 'identical', divergences: [], divergenceCount: 0, firstDivergence: null }),
+    findTracesByGoal: (g) => [{ runId: 'run_x', goal: g }],
+    traceRegression: () => ({ ok: true, passed: true, verdict: 'identical' }),
+    setTraceBaseline: (id) => ({ ok: true, runId: id }),
   };
 }
 
@@ -108,6 +112,79 @@ test('serve: GET /traces?engine=local 按引擎过滤', async () => {
     assert.equal(r.status, 200);
     assert.equal(j.result.length, 1);
     assert.equal(j.result[0].runId, 'run_x');
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: GET /trace-diff?a=&b= 回放对比', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/trace-diff?a=run_x&b=run_y`);
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.result.ok, true);
+    assert.equal(j.result.verdict, 'identical');
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: GET /trace-diff 缺参数返回错误负载（不伪造成功）', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/trace-diff`);
+    const j = await r.json();
+    assert.equal(j.result.error != null, true, '缺参数应返回错误负载（不伪造成功）');
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: GET /trace-find?goal=foo 按目标检索', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/trace-find?goal=foo`);
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.result[0].goal, 'foo');
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: GET /trace-regression 回归门禁', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/trace-regression`);
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.result.passed, true);
+  } finally {
+    server.close();
+  }
+});
+
+test('serve: POST /trace-baseline 设置基线', async () => {
+  const server = startServer(stubOmni(), { port: 0 });
+  await new Promise(r => server.once('listening', r));
+  const { port } = server.address();
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/trace-baseline`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runId: 'run_x' }),
+    });
+    const j = await r.json();
+    assert.equal(r.status, 200);
+    assert.equal(j.result.ok, true);
   } finally {
     server.close();
   }

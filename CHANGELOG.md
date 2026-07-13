@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v2.4.0 — 2026-07-13 (minor)
+
+- Agent 轨迹回放对比与回归门禁：tracer 新增 compareRuns(首次分歧检测+verdict)/findRunsByGoal/exportDataset/基线·回归门禁；CLI trace 增 --diff/--find/--export/--baseline/--regression(regressed 退出码1可接CI)；serve 增 /trace-diff//trace-find//trace-regression//trace-baseline；工作区 omnisense-link 增 trace 子命令跨层消费身体 tracer；借鉴 Forkline/LangSmith/recut-ai 思想
+
 ## v2.3.0 — 2026-07-13 (minor)
 
 - 自主循环 autopilot：身体用自身能力卡 skillResolve 自驱决策每轮动作并 skillDispatch 离线执行（借鉴 BabyAGI 自生成任务队列）；内核+桥接+工作区三层同迭代，197+255 测试全绿

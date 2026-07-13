@@ -37,13 +37,44 @@ export async function routeSkill(skillId, rest = []) {
   return { ok: true, result: raw };
 }
 
+// 工作区侧可观测性入口：直接复用 OmniSense 引擎的 tracer（与内核同一份实现，无壳、可单测）。
+// 让工作区智能体也能"回放对比 / 检索同目标运行 / 导出回归数据集 / 跑回归门禁"——合并后新项目里，
+// 工作区不只是被动委派，更能对身体的行为做可观测性分析（对齐 LangSmith trace→dataset / Forkline 分歧检测思想）。
+export async function runTrace(subArgs = []) {
+  const omni = (await import('../../src/index.mjs')).OmniSense.create();
+  const has = (f) => subArgs.some(a => a.startsWith(f));
+  const val = (f, d) => { const m = subArgs.find(a => a.startsWith(f)); return m ? m.split('=')[1] : d; };
+  if (has('--clear')) return omni.clearTraces();
+  const get = val('--get=', '');
+  if (has('--get=')) return omni.getTrace(get);
+  if (has('--diff=')) {
+    const [a, b] = val('--diff=', '').split(',').map(s => s.trim());
+    return omni.compareTraces(a, b);
+  }
+  const goal = val('--find=', '');
+  if (has('--find=')) return omni.findTracesByGoal(goal, { limit: Number(val('--limit=', '10')) || 10 });
+  const exp = val('--export=', '');
+  if (has('--export=')) {
+    return omni.exportTraceDataset({
+      path: exp === '-' ? undefined : exp,
+      format: val('--export-format=', 'json'),
+      goal: has('--find=') ? goal : undefined,
+      limit: Number(val('--limit=', '10')) || 10,
+    });
+  }
+  if (has('--baseline=')) return omni.setTraceBaseline(val('--baseline=', ''));
+  if (has('--regression')) return omni.traceRegression();
+  if (has('--list')) return { ok: true, runs: omni.traces({ limit: Number(val('--limit=', '10')) || 10 }) };
+  return omni.traceSummary();
+}
+
 // 纯逻辑入口（可单测，不直接碰 process）。args 为去掉 node 脚本名后的参数数组。
 export async function runLink(args) {
   const [cmd, ...rest] = args;
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -85,6 +116,11 @@ export async function runLink(args) {
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const r = await withTimeout(omni.autopilot({ ticks }), TIMEOUT_MS);
     return r;
+  }
+  if (cmd === 'trace') {
+    // 工作区侧可观测性：让工作区真正消费身体的 Agent 轨迹（回放对比/检索/导出/回归门禁）。
+    const out = await withTimeout(runTrace(rest), TIMEOUT_MS);
+    return out;
   }
   // 其余默认当作器官调用：omnisense-link hand calc '{"expression":"2+2"}'
   const organ = cmd;

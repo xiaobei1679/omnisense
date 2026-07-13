@@ -35,6 +35,20 @@ const ROUTES = {
     engine: url?.searchParams?.get('engine') || undefined,
   }),
   'GET /trace-summary': async (omni) => omni.traceSummary(),
+  'GET /trace-find': async (omni, b, url) => omni.findTracesByGoal(url?.searchParams?.get('goal') || '', {
+    limit: url?.searchParams?.get('limit') ? Number(url.searchParams.get('limit')) : 10,
+  }),
+  'GET /trace-diff': async (omni, b, url) => {
+    const a = url?.searchParams?.get('a');
+    const c = url?.searchParams?.get('b');
+    if (!a || !c) return { error: '需要 ?a=<runId>&b=<runId>' };
+    return omni.compareTraces(a, c);
+  },
+  'GET /trace-regression': async (omni) => omni.traceRegression(),
+  'POST /trace-baseline': async (omni, b) => {
+    if (!b.runId) return { error: '需要 { runId }' };
+    return omni.setTraceBaseline(b.runId);
+  },
 };
 
 function send(res, code, obj) {

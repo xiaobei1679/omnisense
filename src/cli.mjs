@@ -195,12 +195,63 @@ async function main() {
       break;
     }
     case 'trace': {
-      // Agent 执行轨迹追踪：默认汇总；--list 列表；--get=<id> 回放；--clear 清空
+      // Agent 执行轨迹追踪：默认汇总；--list 列表；--get=<id> 回放；--clear 清空；
+      // 新增回放对比/检索/导出/回归门禁：--diff=<a>,<b> / --find="<goal>" / --export=<file> / --baseline=<id> / --regression
       const limit = Number((rest.find(a => /^--limit=/.test(a)) || '').split('=')[1]) || 10;
       const engine = (rest.find(a => /^--engine=/.test(a)) || '').split('=')[1] || undefined;
       const get = (rest.find(a => /^--get=/.test(a)) || '').split('=')[1];
+      const has = (f) => rest.some(a => a.startsWith(f));
+      const val = (f, d) => { const m = rest.find(a => a.startsWith(f)); return m ? m.split('=')[1] : d; };
+      const diff = val('--diff=', '');
+      const findGoal = val('--find=', '');
+      const exportPath = val('--export=', '');
+      const exportFormat = val('--export-format=', 'json');
+      const baseline = val('--baseline=', '');
       if (flag('--clear')) { result = omni.clearTraces(); break; }
       if (get) { result = omni.getTrace(get); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (has('--diff=')) {
+        const [a, b] = diff.split(',').map(s => s.trim());
+        result = omni.compareTraces(a, b);
+        if (result.ok && !jsonMode) {
+          console.log(`\n🔬 Trace 回放对比 (${a} ↔ ${b})`);
+          console.log(`  A: ${result.a.goal} | 引擎 ${result.a.engine} | 完成 ${result.a.completed} | ${result.a.stepCount} 步 | ${result.a.durationMs}ms`);
+          console.log(`  B: ${result.b.goal} | 引擎 ${result.b.engine} | 完成 ${result.b.completed} | ${result.b.stepCount} 步 | ${result.b.durationMs}ms`);
+          console.log(`  差异数: ${result.divergenceCount} | 首次分歧: ${result.firstDivergence ?? '无'} | 判定: ${result.verdict}`);
+          if (result.divergences.length) {
+            console.log('  分歧明细:');
+            for (const d of result.divergences) {
+              const extra = (d.actionA ? ` A=${d.actionA}` : '') + (d.actionB ? ` B=${d.actionB}` : '');
+              console.log(`   · 第 ${d.step} 步 [${d.type}]${extra}`);
+            }
+          }
+        }
+        if (result.ok && result.verdict === 'regressed') process.exitCode = 1; // 回归即非零退出（CI 门禁）
+        break;
+      }
+      if (has('--find=')) {
+        result = omni.findTracesByGoal(findGoal, { limit });
+        if (!jsonMode) {
+          console.log(`\n🔍 同目标「${findGoal}」的运行 (${result.length} 条):`);
+          for (const r of result) console.log(`  · ${r.runId} 完成=${r.completed} 引擎=${r.engine} ${r.stepCount}步 ${r.durationMs}ms`);
+        }
+        break;
+      }
+      if (has('--export=')) {
+        result = omni.exportTraceDataset({ path: exportPath === '-' ? undefined : exportPath, format: exportFormat, goal: has('--find=') ? findGoal : undefined, limit });
+        if (!jsonMode) console.log(`\n📤 导出回归数据集: ${result.count} 条 → ${result.path || 'stdout'}(${result.format})`);
+        break;
+      }
+      if (has('--baseline=')) {
+        result = omni.setTraceBaseline(baseline);
+        if (!jsonMode) console.log(result.ok ? `✓ 已设置基线: ${result.runId} (${result.goal})` : `× ${result.error}`);
+        break;
+      }
+      if (flag('--regression')) {
+        result = omni.traceRegression();
+        if (result.ok && !jsonMode) console.log(`\n🚦 回归门禁: ${result.passed ? 'PASS' : 'FAIL'} (基线 ${result.baseline} ↔ 当前 ${result.current} | 判定 ${result.verdict} | 差异 ${result.divergenceCount}${result.firstDivergence ? ' @第' + result.firstDivergence + '步' : ''})`);
+        if (result.ok && !result.passed) process.exitCode = 1;
+        break;
+      }
       if (flag('--list')) { result = omni.traces({ limit, engine }); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       result = omni.traceSummary();
       if (!jsonMode) console.log(JSON.stringify(result, null, 2));
@@ -253,6 +304,11 @@ const USAGE = `OmniSense 命令行
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)
   trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)
+  trace --diff=<idA>,<idB>          回放对比两次运行，定位行为首次分歧点(verdict: identical/similar/improved/regressed；regressed 退出码 1)
+  trace --find="<目标>" [--limit=10] 按目标检索历史运行(同目标多次运行对比前提)
+  trace --export=<file.jsonl|-> [--export-format=json|jsonl] [--find="<目标>"] [--limit=10]   导出回归数据集(LangSmith 式 trace→dataset，供 CI 反复对比行为退化；- 表示 stdout)
+  trace --baseline=<id>             把某次 run 固定为基线(落盘 .omni-traces.json.baseline)
+  trace --regression                回归门禁：用基线对比最新 run，退化则退出码 1(可接 CI)
   help                 显示本帮助
 
 选项:
@@ -273,5 +329,5 @@ const USAGE = `OmniSense 命令行
 serve 安全：仅监听 127.0.0.1；设 OMNI_TOKEN 环境变量后要求 Authorization: Bearer <token>，切勿用 -h 0.0.0.0 或端口转发暴露公网。
 日志级别: 环境变量 OMNI_LOG_LEVEL=trace|debug|info|warn|error|silent。`;
 
-main().then(() => { if (cmd !== 'serve') process.exit(0); })
+main().then(() => { if (cmd !== 'serve') process.exit(process.exitCode || 0); })
   .catch(e => { console.error('错误:', e.message); process.exit(1); });

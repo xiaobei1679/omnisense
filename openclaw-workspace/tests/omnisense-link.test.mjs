@@ -8,8 +8,16 @@
 // 在 CLI 下经 process.exit 正常退出，此处不纳入自动化断言以免挂起测试套件。
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { runLink } from '../scripts/omnisense-link.mjs';
 import { listOrgans } from '../../integrations/openclaw/index.mjs';
+
+// 把 OmniSense 运行时产物指向临时目录，避免在工作区根目录创建 .omni-*.json 污染仓库。
+const _td = mkdtempSync(join(tmpdir(), 'omni-xlink-'));
+process.env.OMNI_MEMORY = join(_td, '.omni-memory.json');
+process.env.OMNI_TRACES = join(_td, '.omni-traces.json');
 
 // 追踪失败数：集成测试会构造 OmniSense 身体，核心 perceive/脑网关探测经全局 fetch 留下
 // undici keep-alive socket（核心既有特性），空闲 socket 会让事件循环约 60s 才回收，导致套件挂起。
@@ -128,6 +136,30 @@ it('runLink autopilot 跑自主循环（跨层：工作区->桥->身体，离线
     assert.ok(t.intent && Array.isArray(t.candidates), '每轮应有自生成意图与候选技能');
     assert.ok(t.executed, '应委派到某器官');
   }
+});
+
+it('runLink trace --summary 返回聚合指标（跨层：工作区消费身体 tracer）', async () => {
+  const r = await runLink(['trace', '--summary']);
+  assert.ok('total' in r, 'summary 应含 total');
+  assert.ok(r.traceFile, '应标注 trace 落盘路径');
+});
+
+it('runLink trace --list 返回运行数组（跨层）', async () => {
+  const r = await runLink(['trace', '--list']);
+  assert.equal(r.ok, true);
+  assert.ok(Array.isArray(r.runs), '应返回 runs 数组');
+});
+
+it('runLink trace --export=- 导出回归数据集（跨层：LangSmith 式 trace→dataset）', async () => {
+  const r = await runLink(['trace', '--export=-', '--export-format=json']);
+  assert.equal(r.ok, true);
+  assert.ok(Array.isArray(r.dataset), '应返回 dataset 数组');
+  assert.ok('count' in r, '应含 count');
+});
+
+it('runLink trace 无参数默认给 summary（不报错）', async () => {
+  const r = await runLink(['trace']);
+  assert.ok('total' in r, '无参数应回退到 summary');
 });
 // 不依赖 node:test 的 after 兜底（route brain.think 等离线器官调用 await 外部资源，会让 node:test 提前
 // finalize 文件并截断后续用例）；改为模块顶层独立定时器：留足 20s 让全部用例跑完后强制退出，
