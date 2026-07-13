@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runLink } from '../scripts/omnisense-link.mjs';
 import { listOrgans } from '../../integrations/openclaw/index.mjs';
+import { Tracer } from '../../src/core/tracer.mjs';
 
 // 把 OmniSense 运行时产物指向临时目录，避免在工作区根目录创建 .omni-*.json 污染仓库。
 const _td = mkdtempSync(join(tmpdir(), 'omni-xlink-'));
@@ -155,6 +156,24 @@ it('runLink trace --export=- 导出回归数据集（跨层：LangSmith 式 trac
   assert.equal(r.ok, true);
   assert.ok(Array.isArray(r.dataset), '应返回 dataset 数组');
   assert.ok('count' in r, '应含 count');
+});
+
+it('runLink trace --export=- --export-format=otlp 导出 OTLP/JSON（跨层：OTel-native 可投 Tempo/Phoenix）', async () => {
+  // 跨层测试不跑 agent，故先向同一 OMNI_TRACES 临时路径播一条确定性 run，确保导出有内容（诚实可测）。
+  const seed = new Tracer(process.env.OMNI_TRACES);
+  seed.recordRun({
+    goal: 'otlp-xlink-seed', engine: 'local', completed: true, startedAt: 1000, finishedAt: 1010,
+    steps: [{ step: 1, action: 'calc', action_input: { expression: '2+2' }, observation: { ok: true, output: { result: 4 } }, durationMs: 4 }],
+  });
+  const r = await runLink(['trace', '--export=-', '--export-format=otlp']);
+  assert.equal(r.ok, true);
+  assert.equal(r.format, 'otlp', '应标记 otlp 格式');
+  assert.ok(r.otlp && Array.isArray(r.otlp.resourceSpans) && r.otlp.resourceSpans.length >= 1, '应返回 OTLP resourceSpans[]');
+  const spans = r.otlp.resourceSpans[0].scopeSpans[0].spans;
+  const root = spans.find(s => s.parentSpanId === undefined);
+  assert.ok(root, '应有一个无 parentSpanId 的 root span');
+  const op = root.attributes.find(a => a.key === 'gen_ai.operation.name');
+  assert.ok(op && op.value.stringValue === 'invoke_agent', 'root span 应标记 gen_ai.operation.name=invoke_agent');
 });
 
 it('runLink trace 无参数默认给 summary（不报错）', async () => {

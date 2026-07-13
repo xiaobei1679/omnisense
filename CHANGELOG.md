@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v3.0.0 — 2026-07-13 (major)
+
+- OTLP/GenAI 可观测性导出：身体轨迹一键导出 OTLP/JSON（OTel-native，run→trace，root invoke_agent + 每步 execute_tool，gen_ai.*/error.type/status.code），可直投 Grafana Tempo/Phoenix/Jaeger/OTel Collector；CLI trace --export-format=otlp、serve GET /trace-export?format=otlp、工作区 omnisense-link trace --export-format=otlp 跨层复用同一份 tracer
+
 ## v2.4.0 — 2026-07-13 (minor)
 
 - Agent 轨迹回放对比与回归门禁：tracer 新增 compareRuns(首次分歧检测+verdict)/findRunsByGoal/exportDataset/基线·回归门禁；CLI trace 增 --diff/--find/--export/--baseline/--regression(regressed 退出码1可接CI)；serve 增 /trace-diff//trace-find//trace-regression//trace-baseline；工作区 omnisense-link 增 trace 子命令跨层消费身体 tracer；借鉴 Forkline/LangSmith/recut-ai 思想

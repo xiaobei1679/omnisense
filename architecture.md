@@ -122,7 +122,7 @@ src/
     tools.mjs         工具执行器（web_fetch/文件/calc/now/记忆/热搜… 安全白名单）
     agent.mjs         Agent 内核（ReAct 推理闭环 + localPlan 通用规划器[经验hints重建步骤] + playbook 自动复用 + 经验记忆召回注入推理 + 经验沉淀闭环）
     agents.mjs        多 Agent 协作（协调器 planSubtasks/planSubtasksSmart[LLM 智能拆解] + 角色子 agent 委派[并行/工具集沙箱] + 共享黑板 + 协调器综合 + 诚实部分失败）
-    tracer.mjs        Agent 执行轨迹追踪（可回放 trace 落盘 + 聚合指标；对齐 OpenTelemetry GenAI 语义约定 gen_ai.*）。增强：compareRuns(idA,idB) 回放对比（Forkline 式 first-divergence 检测：定位行为首次分歧步 + verdict identical/similar/improved/regressed）、findRunsByGoal(goal) 同目标多次运行检索、exportDataset() 导出回归数据集（LangSmith 式 trace→dataset）、setBaseline/regressionCheck 行为回归门禁（recut-ai/shadow 思想：退化即 FAIL，可接 CI）
+    tracer.mjs        Agent 执行轨迹追踪（可回放 trace 落盘 + 聚合指标；对齐 OpenTelemetry GenAI 语义约定 gen_ai.*）。增强：compareRuns(idA,idB) 回放对比（Forkline 式 first-divergence 检测：定位行为首次分歧步 + verdict identical/similar/improved/regressed）、findRunsByGoal(goal) 同目标多次运行检索、exportDataset() 导出回归数据集（LangSmith 式 trace→dataset）、setBaseline/regressionCheck 行为回归门禁（recut-ai/shadow 思想：退化即 FAIL，可接 CI）、exportOtlp() 导出 OTLP/JSON（OTel-native：run→trace，root span invoke_agent + 每步 execute_tool child span，gen_ai.*/error.type/status.code，可直接投 Grafana Tempo/Phoenix/Jaeger/OTel Collector）
   body.mjs            身体：把七器官整合成像真人一样的智能体 + live() 生命循环；`describe()`（器官树，含每能力 desc/net/examples）+ `agentCard()`（A2A 风格能力卡：把全部能力扁平化为 skills[]，借鉴 Google A2A Protocol 的 AgentCard 思想，仅取结构语义；net 诚实标注联网依赖）
     watch.mjs         常驻感知循环 + 差异检测(diffTopics) + 多模式(remember/alert/digest) + 新增热点联网摘要(summarizeNewTopics) 自主派发 Agent 编排
   providers/index.mjs 模型适配层（LLM/VLM/ASR/TTS 统一接口）

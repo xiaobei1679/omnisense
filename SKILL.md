@@ -61,9 +61,10 @@ node "{SKILL_DIR}/src/cli.mjs" trace --summary          # 聚合：成功率/平
 node "{SKILL_DIR}/src/cli.mjs" trace --list --limit=10  # 最近 10 条 run（含 runId）
 node "{SKILL_DIR}/src/cli.mjs" trace --get=<runId>      # 回放单条 trace（模型看见了什么→决定了什么→执行了什么）
 node "{SKILL_DIR}/src/cli.mjs" trace --clear            # 清空本地轨迹
+node "{SKILL_DIR}/src/cli.mjs" trace --export=spans.otlp.json --export-format=otlp  # 导出 OTLP/JSON（OTel-native，可投 Grafana Tempo/Phoenix/Jaeger）
 ```
 
-作为库：`omni.traceSummary()` · `omni.traces({limit,engine})` · `omni.getTrace(id)` · `omni.clearTraces()`。serve 暴露 `GET /trace-summary`、`GET /traces?engine=&limit=`。详见 README「🔭 Agent 执行轨迹追踪」。
+作为库：`omni.traceSummary()` · `omni.traces({limit,engine})` · `omni.getTrace(id)` · `omni.clearTraces()` · `omni.exportTraceOtlp({path})`（OTLP/JSON，对齐 OpenTelemetry GenAI 语义约定：run→trace，root span `invoke_agent` + 每步 `execute_tool` child span，`gen_ai.*`/`error.type`/`status.code`）。serve 暴露 `GET /trace-summary`、`GET /traces?engine=&limit=`、`GET /trace-export?format=otlp`。详见 README「🔭 Agent 执行轨迹追踪」与「📡 OTLP/GenAI 可观测性导出」。
 
 ## A2A 风格能力卡（Agent Card · 能力发现与委派，借鉴 Google A2A Protocol）
 

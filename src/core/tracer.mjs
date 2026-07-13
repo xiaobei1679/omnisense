@@ -306,15 +306,8 @@ export class Tracer {
     }));
   }
 
-  /**
-   * 导出回归数据集（对齐 LangSmith「trace → dataset」：把历史/生产 trace 导出为回归基准，
-   * 供 CI 反复跑同一目标对比行为是否退化）。离线、本地优先；仅保留结构化结论，不落全量大内容。
-   *  来源: https://theneuralbase.com/langsmith/learn/intermediate/setting-up-a-regression-test-suite
-   *        https://blog.langchain.com/p/647419d5-fa7e-493f-a997-d81fd0009f7a/ （LangSmith Fetch：从 trace 建回归测试套件，仅借鉴思想）
-   * @param {object} [opts] { goal, engine, completed(bool), limit, path, format('json'|'jsonl') }
-   * @returns {object} { ok, count, format, path, dataset[] }
-   */
-  exportDataset(opts = {}) {
+  /** 公共过滤：按 goal/engine/completed/limit 选 run（最近 N 条）。供 exportDataset / exportOtlp 复用 */
+  _filterRuns(opts = {}) {
     let arr = this.runs.slice();
     if (opts.goal) {
       const ng = normGoal(opts.goal);
@@ -323,6 +316,21 @@ export class Tracer {
     if (opts.engine) arr = arr.filter(r => r.engine === opts.engine);
     if (typeof opts.completed === 'boolean') arr = arr.filter(r => r.completed === opts.completed);
     if (opts.limit) arr = arr.slice(-opts.limit); // 最近 N 条
+    return arr;
+  }
+
+  /**
+   * 导出回归数据集（对齐 LangSmith「trace → dataset」：把历史/生产 trace 导出为回归基准，
+   * 供 CI 反复跑同一目标对比行为是否退化）。离线、本地优先；仅保留结构化结论，不落全量大内容。
+   *  来源: https://theneuralbase.com/langsmith/learn/intermediate/setting-up-a-regression-test-suite
+   *        https://blog.langchain.com/p/647419d5-fa7e-493f-a997-d81fd0009f7a/ （LangSmith Fetch：从 trace 建回归测试套件，仅借鉴思想）
+   * @param {object} [opts] { goal, engine, completed(bool), limit, path, format('json'|'jsonl'|'otlp') }
+   *   format='otlp' 时按 OTLP/JSON 导出（详见 exportOtlp），返回 { ok, count, format, path, otlp }。
+   * @returns {object} { ok, count, format, path, dataset[] | otlp }
+   */
+  exportDataset(opts = {}) {
+    if (opts.format === 'otlp') return this.exportOtlp(opts);
+    const arr = this._filterRuns(opts);
     const dataset = arr.map(r => ({
       runId: r.runId,
       goal: r.goal,
@@ -340,6 +348,117 @@ export class Tracer {
       writeFileSync(opts.path, text);
     }
     return { ok: true, count: dataset.length, format: opts.format === 'jsonl' ? 'jsonl' : 'json', path: opts.path || null, dataset };
+  }
+
+  // ── OTLP/GenAI 可观测性导出（OTel-native，可投递 Grafana Tempo / Phoenix / Jaeger / OTel Collector） ──
+  // 借鉴（思想/协议结构，非代码）：
+  //   OTLP/HTTP+JSON wire 编码：message body = { resourceSpans:[{ resource, scopeSpans:[{ scope, spans:[...] }] }] }；
+  //   每个 span 必填 traceId/spanId/name/kind/startTimeUnixNano/endTimeUnixNano/attributes，非根 span 含 parentSpanId；
+  //   时间值为纳秒级 Unix timestamp 字符串，traceId/spanId 为十六进制，kind/status.code 为整数，属性值按类型(stringValue 等)。
+  //     来源: https://opentelemetry.io/docs/specs/otlp/#otlphttp （OTLP/HTTP JSON 编码）
+  //   GenAI 语义约定：gen_ai.operation.name ∈ { invoke_agent(根), execute_tool(工具步) }、gen_ai.tool.name / call.arguments / call.result / error.type。
+  //     来源: https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/
+  //           https://learn.microsoft.com/zh-cn/microsoft-agent-365/developer/direct-open-telemetry-integration
+  //           https://greptime.cn/blogs/2026-05-09-opentelemetry-genai-semantic-conventions
+  //   一次 run → 一条 trace；run 本身一个 root span(invoke_agent)，每步一个 child span(execute_tool)。
+
+  // FNV-1a 派生确定性 hex（保证同一 runId 每次导出得到同一 traceId/spanId，OTel 可正确重建链路）
+  _hashHex(str, len) {
+    let s = this._fnv(str);
+    while (s.length < len) s += this._fnv(s + '#pad');
+    return s.slice(0, len);
+  }
+  _fnv(str) {
+    let h = 0x811c9dc5 >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16).padStart(8, '0');
+  }
+  _toNano(ms) { return String(Math.round((ms || 0) * 1e6)); }
+
+  /** 把若干 run 转换为 OTLP/JSON 对象（resourceSpans[]） */
+  _toOtlp(runs) {
+    const resourceSpans = [];
+    for (const r of runs) {
+      const traceId = this._hashHex(r.runId, 32);
+      const rootSpanId = this._hashHex(r.runId + '#root', 16);
+      const spans = [];
+      let cursor = r.startedAt || 0;
+      for (const s of (r.steps || [])) {
+        const isTool = !!s.action && s.action !== '(final_answer)' && s.action !== '(thought)';
+        const spanId = this._hashHex(r.runId + '#' + (s.step || 0), 16);
+        const start = cursor;
+        const dur = typeof s.durationMs === 'number' ? s.durationMs : 0;
+        const end = start + dur;
+        const attrs = [
+          { key: 'gen_ai.operation.name', value: { stringValue: isTool ? 'execute_tool' : 'agent.step' } },
+        ];
+        if (isTool) {
+          attrs.push({ key: 'gen_ai.tool.name', value: { stringValue: String(s.action) } });
+          if (s.action_input != null) attrs.push({ key: 'gen_ai.tool.call.arguments', value: { stringValue: JSON.stringify(s.action_input).slice(0, MAX_ARG) } });
+          const obs = s.observation || {};
+          if (obs.ok === false) {
+            const e = obs.error;
+            const etype = (e && typeof e === 'object') ? (e.code || e.name || 'tool_error') : 'tool_error';
+            attrs.push({ key: 'error.type', value: { stringValue: String(etype) } });
+            if (obs.error != null) attrs.push({ key: 'error.message', value: { stringValue: String(obs.error).slice(0, MAX_ERR) } });
+          } else if (obs.output != null) {
+            attrs.push({ key: 'gen_ai.tool.call.result', value: { stringValue: JSON.stringify(obs.output).slice(0, MAX_OUT) } });
+          }
+        }
+        spans.push({
+          traceId, spanId, parentSpanId: rootSpanId,
+          name: isTool ? String(s.action) : (s.action || 'agent.step'),
+          kind: 1, // INTERNAL
+          startTimeUnixNano: this._toNano(start),
+          endTimeUnixNano: this._toNano(end),
+          attributes: attrs,
+          events: [],
+          status: { code: (s.observation?.ok === false) ? 2 : 1 }, // 2=ERROR, 1=OK
+        });
+        cursor = end;
+      }
+      const rootAttrs = [
+        { key: 'gen_ai.operation.name', value: { stringValue: 'invoke_agent' } },
+        { key: 'gen_ai.agent.description', value: { stringValue: String(r.goal || '').slice(0, MAX_GOAL) } },
+        { key: 'gen_ai.agent.engine', value: { stringValue: String(r.engine || 'unknown') } },
+        { key: 'gen_ai.response.completed', value: { boolValue: !!r.completed } },
+        { key: 'gen_ai.response.used_llm', value: { boolValue: !!r.usedLLM } },
+        { key: 'gen_ai.response.final_answer', value: { stringValue: String(r.finalAnswer || '').slice(0, MAX_OUT) } },
+      ];
+      spans.unshift({
+        traceId, spanId: rootSpanId,
+        name: 'agent.run:' + (r.goal || r.runId),
+        kind: 2, // SERVER
+        startTimeUnixNano: this._toNano(r.startedAt),
+        endTimeUnixNano: this._toNano(r.finishedAt),
+        attributes: rootAttrs,
+        events: [],
+        status: { code: r.completed ? 1 : 2 },
+      });
+      resourceSpans.push({
+        resource: { attributes: [], droppedAttributesCount: 0 },
+        scopeSpans: [{ scope: { name: 'omnisense.tracer', version: '1.0.0' }, spans }],
+      });
+    }
+    return { resourceSpans };
+  }
+
+  /**
+   * 导出 OTLP/JSON（OTel-native，可对接 Grafana Tempo / Phoenix / Jaeger / OTel Collector 的 /v1/traces）。
+   * 离线、本地；与现有 json/jsonl 导出共享同一份过滤逻辑与诚实截断。
+   * @param {object} [opts] { goal, engine, completed(bool), limit, path }
+   * @returns {object} { ok, count, format:'otlp', path, otlp:{ resourceSpans:[] } }
+   */
+  exportOtlp(opts = {}) {
+    const arr = this._filterRuns(opts);
+    const otlp = this._toOtlp(arr);
+    if (opts.path) {
+      try { writeFileSync(opts.path, JSON.stringify(otlp, null, 2)); } catch { /* 落盘失败静默：导出不应阻断主流程 */ }
+    }
+    return { ok: true, count: arr.length, format: 'otlp', path: opts.path || null, otlp };
   }
 
   // ── 基线 / 回归门禁（CI 风：把某次 run 固定为基线，后续 run 与之对比，退化即判 FAIL） ──

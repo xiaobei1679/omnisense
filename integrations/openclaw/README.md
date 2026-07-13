@@ -101,7 +101,8 @@ console.log(JSON.parse(out));
 | `dispatchSkill(goal)` | `index.mjs` | 技能匹配与委派：基于 Agent Card 自动找到最佳技能并执行（纯关键词匹配，零外部依赖） |
 | `compareTraces(aId, bId)` | `index.mjs` 透传 `tracer.compareRuns` | 回放对比两次运行，定位首次分歧步 + verdict(identical/similar/improved/regressed)（Forkline 式 first-divergence 思想） |
 | `findTracesByGoal(goal, opts)` | `index.mjs` 透传 `tracer.findRunsByGoal` | 按目标检索历史运行（"同目标多次运行"对比前提） |
-| `exportTraceDataset(opts)` | `index.mjs` 透传 `tracer.exportDataset` | 导出回归数据集（LangSmith 式 trace→dataset，供 CI 反复对比行为退化） |
+| `exportTraceDataset(opts)` | `index.mjs` 透传 `tracer.exportDataset` | 导出回归数据集（LangSmith 式 trace→dataset，供 CI 反复对比行为退化；`opts.format='otlp'` 时返回 OTLP/JSON） |
+| `exportTraceOtlp(opts)` | `index.mjs` 透传 `tracer.exportOtlp` | 导出 OTLP/JSON（OTel-native：run→trace，root span `invoke_agent` + 每步 `execute_tool` child span，属性对齐 OpenTelemetry GenAI 语义约定 `gen_ai.*`/`error.type`/`status.code`，可直投 Grafana Tempo / Phoenix / Jaeger / OTel Collector 的 `/v1/traces`） |
 | `setTraceBaseline(id)` / `traceRegression(opts)` | `index.mjs` 透传 `tracer` | 基线 / 回归门禁：固定某 run 为基线，后续 run 退化即判 FAIL（recut-ai / shadow 思想，可接 CI） |
 | `ORGANS` | `index.mjs` | 七器官常量数组 `['eye','ear','mouth','brain','hand','perceive','foot']` |
 | `listOrgans()` | `index.mjs` | 返回器官副本，避免调用方误改常量 |
@@ -119,4 +120,4 @@ console.log(JSON.parse(out));
 - 内建 120s 超时守卫，单个器官调用不会无限挂起。
 - `runGoal` 的感知步骤已 `await` 解析，`trace.perceive` 是真实环境理解，而非未决 Promise。
 - 无需任何外部密钥即可离线运行（计算 / 记忆 / 感知 / 生命循环骨架全部本地真实执行）。
-- **可观测性**：经 `src/core/tracer.mjs`，`runGoal`/`runOrgan` 驱动的 agent 运行会自动落盘为可回放 trace（数据自持于 `.omni-traces.json`，不进仓库）。可在仓库根用 `node src/cli.mjs trace --summary` 聚合成功率/平均步数·耗时/工具级指标，或 `trace --list`/`--get=<id>` 回放。设计借鉴 LangSmith 全链路 Trace 与 OpenTelemetry GenAI 语义约定。
+- **可观测性**：经 `src/core/tracer.mjs`，`runGoal`/`runOrgan` 驱动的 agent 运行会自动落盘为可回放 trace（数据自持于 `.omni-traces.json`，不进仓库）。可在仓库根用 `node src/cli.mjs trace --summary` 聚合成功率/平均步数·耗时/工具级指标，或 `trace --list`/`--get=<id>` 回放；`trace --export=<file> --export-format=otlp` 一键导出 OTLP/JSON 直投 Grafana Tempo/Phoenix/Jaeger/OTel Collector。设计借鉴 LangSmith 全链路 Trace 与 OpenTelemetry GenAI 语义约定 + OTLP/HTTP+JSON 编码。

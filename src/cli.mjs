@@ -238,7 +238,7 @@ async function main() {
       }
       if (has('--export=')) {
         result = omni.exportTraceDataset({ path: exportPath === '-' ? undefined : exportPath, format: exportFormat, goal: has('--find=') ? findGoal : undefined, limit });
-        if (!jsonMode) console.log(`\n📤 导出回归数据集: ${result.count} 条 → ${result.path || 'stdout'}(${result.format})`);
+        if (!jsonMode) console.log(`\n📤 导出轨迹(${result.format}): ${result.count} 条 → ${result.path || 'stdout'}`);
         break;
       }
       if (has('--baseline=')) {
@@ -306,7 +306,7 @@ const USAGE = `OmniSense 命令行
   trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)
   trace --diff=<idA>,<idB>          回放对比两次运行，定位行为首次分歧点(verdict: identical/similar/improved/regressed；regressed 退出码 1)
   trace --find="<目标>" [--limit=10] 按目标检索历史运行(同目标多次运行对比前提)
-  trace --export=<file.jsonl|-> [--export-format=json|jsonl] [--find="<目标>"] [--limit=10]   导出回归数据集(LangSmith 式 trace→dataset，供 CI 反复对比行为退化；- 表示 stdout)
+  trace --export=<file|-> [--export-format=json|jsonl|otlp] [--find="<目标>"] [--limit=10]   导出轨迹(json/jsonl 回归数据集 或 otlp OTLP/JSON 直投 Grafana Tempo/Phoenix/Jaeger；- 表示 stdout)
   trace --baseline=<id>             把某次 run 固定为基线(落盘 .omni-traces.json.baseline)
   trace --regression                回归门禁：用基线对比最新 run，退化则退出码 1(可接 CI)
   help                 显示本帮助

@@ -82,8 +82,10 @@ export class OmniSense {
   compareTraces(aId, bId) { return this.tracer.compareRuns(aId, bId); }
   // 按目标检索历史运行（"同目标多次运行"对比前提）
   findTracesByGoal(goal, opts) { return this.tracer.findRunsByGoal(goal, opts); }
-  // 导出回归数据集（LangSmith 式 trace→dataset，供 CI 反复对比行为退化）
+  // 导出回归数据集（LangSmith 式 trace→dataset，供 CI 反复对比行为退化；format='otlp' 返回 OTLP/JSON）
   exportTraceDataset(opts) { return this.tracer.exportDataset(opts); }
+  // 导出 OTLP/JSON（OTel-native，可对接 Grafana Tempo / Phoenix / Jaeger / OTel Collector）
+  exportTraceOtlp(opts) { return this.tracer.exportOtlp(opts); }
   // 基线 / 回归门禁：固定某 run 为基线，后续 run 退化即判 FAIL（CI 门禁用）
   setTraceBaseline(runId) { return this.tracer.setBaseline(runId); }
   getTraceBaseline() { return this.tracer.getBaseline(); }

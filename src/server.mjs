@@ -49,6 +49,10 @@ const ROUTES = {
     if (!b.runId) return { error: '需要 { runId }' };
     return omni.setTraceBaseline(b.runId);
   },
+  'GET /trace-export': async (omni, b, url) => {
+    const format = url?.searchParams?.get('format') || 'json';
+    return omni.exportTraceDataset({ format, path: undefined, limit: url?.searchParams?.get('limit') ? Number(url.searchParams.get('limit')) : 10 });
+  },
 };
 
 function send(res, code, obj) {

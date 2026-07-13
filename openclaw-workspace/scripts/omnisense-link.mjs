@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
