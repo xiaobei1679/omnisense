@@ -50,9 +50,10 @@ node scripts/omnisense-link.mjs goal "记录一次跨层迭代验证" --json
 node scripts/omnisense-link.mjs card --json
 # 七器官树（含每能力 desc/net/examples）
 node scripts/omnisense-link.mjs describe --json
-# 按技能 id 直接委派到器官/方法（route <organ.method> [args...]）
+# 按技能 id 直接委派到器官/方法（route <organ.method> [args...]，organ 可为七器官任一）
 node scripts/omnisense-link.mjs route --list
 node scripts/omnisense-link.mjs route hand.calc '{"expression":"2+2"}'
+node scripts/omnisense-link.mjs route brain.think "我该关注什么"
 ```
 
 > 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。

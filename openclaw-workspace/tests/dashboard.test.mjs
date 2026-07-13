@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   parseRoadmap,
   countTestFiles,
@@ -15,7 +16,8 @@ import {
   renderHtml,
 } from '../scripts/dashboard.mjs';
 
-const ROOT = process.cwd();
+// 子包根目录（基于本文件位置，与启动 cwd 无关）：dashboard 的计数函数期望 root=openclaw-workspace。
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 test('parseRoadmap counts bullets per section (emoji headings ignored)', () => {
   const md = [

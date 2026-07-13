@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   parseMeta,
   validateRole,
@@ -13,7 +14,9 @@ import {
 } from '../scripts/agent/roles.mjs';
 
 const ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const REAL_DIR = resolve(process.cwd(), 'examples', 'agents');
+// 子包根目录（基于本文件位置，与启动 cwd 无关）
+const PKG_ROOT = fileURLToPath(new URL('..', import.meta.url));
+const REAL_DIR = resolve(PKG_ROOT, 'examples', 'agents');
 
 test('parseMeta extracts key/value lines', () => {
   const meta = parseMeta('id: reviewer\nname: 审核专员\nskills: a, b , c\n');
@@ -39,7 +42,7 @@ test('validateRole rejects bad id format', () => {
 });
 
 test('loadRole parses meta block and body', () => {
-  const dir = resolve(process.cwd(), '.tmp-roles-test');
+  const dir = resolve(PKG_ROOT, '.tmp-roles-test');
   mkdirSync(dir, { recursive: true });
   try {
     const file = resolve(dir, 'reviewer.md');
@@ -59,7 +62,7 @@ test('loadRole parses meta block and body', () => {
 });
 
 test('loadRole handles a missing meta block as invalid', () => {
-  const dir = resolve(process.cwd(), '.tmp-roles-test2');
+  const dir = resolve(PKG_ROOT, '.tmp-roles-test2');
   mkdirSync(dir, { recursive: true });
   try {
     const file = resolve(dir, 'bad.md');

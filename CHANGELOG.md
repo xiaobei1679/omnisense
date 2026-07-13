@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v1.6.0 — 2026-07-13 (minor)
+
+- 能力自描述与跨层委派迭代：1) OmniSense 内核 body.describe() 升级为 A2A Agent Card 风格结构化能力卡(METHOD_META/NET_HAND 模块化，新增 agentCard() 扁平技能卡，含 net 联网诚实标注);2) 工作区侧 omnisense-link.mjs 新增 describe(七器官树)/card(A2A 技能卡)/route<organ.method>(按技能 id 委派到任意器官);3) 跨层测试补 describe/route 用例(11 断言全绿，解决 undici keep-alive 致 node --test 挂起与 node:test 提前 finalize 的取舍);4) 修复工作区子包 8 个预存测试路径问题(基于 import.meta.url 子包根，不再依赖 cwd)，整套件 252/252 通过;5) 两套测试全绿(核心 185 + 工作区 252)。借鉴 Google A2A Protocol 的 AgentCard 思想(仅结构与字段语义，未引入传输/协议依赖)。
+
 ## v1.5.0 — 2026-07-13 (minor)
 
 - A2A 风格 Agent Card 能力自描述（body.agentCard()/CLI card/桥接 omni-body.mjs card）+ 工作区 omnisense-link 增强 describe(器官树)/card(扁平技能卡)/route(按 organ.method 委派)；借鉴 Google A2A Protocol 的 AgentCard 思想（仅取结构语义 id/name/description/tags/examples，未引入其传输/协议依赖），额外加 net 字段诚实标注联网依赖。两套测试全绿：OmniSense 185/185、子包 252/252。

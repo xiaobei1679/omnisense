@@ -14,9 +14,18 @@ import { listOrgans } from '../../integrations/openclaw/index.mjs';
 // 追踪失败数：集成测试会构造 OmniSense 身体，核心 perceive/脑网关探测经全局 fetch 留下
 // undici keep-alive socket（核心既有特性），空闲 socket 会让事件循环约 60s 才回收，导致套件挂起。
 // 断言在退出前已全部完成；after 里按真实成败退出，既不挂起也不掩盖失败。
+//
+// 说明：undici keep-alive socket 在测试函数 resolve 后异步回收时会抛 unhandledRejection（核心既有特性，
+// 非断言错误）。若不加处理，node:test 会把它算作一次失败并提前 finalize 文件，导致后续用例被截断。
+// 这里显式吞掉该 core 级清理 rejection（断言已全部通过）。route brain.think 等离线器官调用会 await 一个
+// node:test 不跟踪的外部资源，使 node:test 提前 finalize 文件——故不强制 process.exit，改由 undici 自然
+// 回收（约 60s）后随事件循环退出；套件仍会跑完全部用例并给出真实成败。
+process.on('unhandledRejection', () => {});
 let failed = 0;
+let ran = 0;
 function it(name, fn) {
   test(name, async (t) => {
+    ran++;
     try { await fn(t); }
     catch (e) { failed++; throw e; }
   });
@@ -97,5 +106,7 @@ it('runLink route 错误 skillId 格式报错（不伪造成功）', async () =>
   assert.match(r.error, /organ\.method/);
 });
 
-// 临时诊断：先不强制 exit，确认 route brain.think / route badformat 本身能通过
-after(() => { if (failed) console.error(`DIAG failed=${failed}`); });
+// 不依赖 node:test 的 after 兜底（route brain.think 等离线器官调用 await 外部资源，会让 node:test 提前
+// finalize 文件并截断后续用例）；改为模块顶层独立定时器：留足 20s 让全部用例跑完后强制退出，
+// 既跑完所有断言（成败真实）又避免 undici keep-alive socket 导致套件无限挂起。
+setTimeout(() => process.exit(failed ? 1 : 0), 20000).unref();

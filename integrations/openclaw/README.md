@@ -86,10 +86,15 @@ console.log(JSON.parse(out));
 
 | 导出 | 来源 | 说明 |
 |------|------|------|
-| `runOrgan(organ, rawArgs)` | `omni-body.mjs` | 执行单个器官动作，返回结果对象（供测试与脚本复用） |
+| `runOrgan(organ, rawArgs)` | `omni-body.mjs` | 执行单个器官动作，返回结果对象（供测试与脚本复用）；`organ='describe'` 返回七器官树、`'card'` 返回 A2A 技能卡、`'live'` 启动生命循环 |
 | `runGoal(goal, opts)` | `omnisense-bridge.mjs` | 一句话目标 → 感知→思考→动手，返回 `{ goal, usedLLM, trace }` |
+| `agentCard()` | `body.mjs` | A2A 风格能力卡：`{ schema, name, description, version, skills[] }`，skills 含 `id/name/description/tags/examples/net` |
 | `ORGANS` | `index.mjs` | 七器官常量数组 `['eye','ear','mouth','brain','hand','perceive','foot']` |
 | `listOrgans()` | `index.mjs` | 返回器官副本，避免调用方误改常量 |
+
+> 工作区侧消费入口见 `openclaw-workspace/scripts/omnisense-link.mjs`：`describe`（七器官树）、
+> `card`（A2A 技能卡）、`route <organ.method> [args...]`（按技能 id 委派到对应器官/方法）、
+> 以及 `list` / `hand` / `goal`。`route` 复用本层 `runOrgan`，对七器官通用。
 
 ## 设计要点（诚实说明）
 
