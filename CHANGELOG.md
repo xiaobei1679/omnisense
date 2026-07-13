@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v3.2.0 — 2026-07-13 (minor)
+
+- live() 生命循环默认升级为 autopilot 自驱（身体每拍用能力卡自主决策，借鉴 Stanford Generative Agents 持续自驱生命周期；--no-autopilot 保留旧写死步骤）；工作区新增 live 命令
+
 ## v3.1.0 — 2026-07-13 (minor)
 
 - autopilot 升级为结果驱动的动态议程重排（借鉴 BabyAGI 优先级随结果重排：每轮委派结果回写议程、动态调权，默认开启、--no-dynamic 可关；内核 body.mjs + 工作区 omnisense-link.mjs 双触达，离线自驱、全程零网络）

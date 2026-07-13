@@ -69,6 +69,8 @@
 
 其上层的 **`autopilot()` 自主循环**更进一步：身体用自身能力卡 `skillResolve` **自己决定每轮做什么**，再 `skillDispatch` 离线执行——感知→自生成意图→选最佳器官→执行→记录委派结果（借鉴 BabyAGI 自生成任务队列思想，离线零网络、零挂起）。
 
+> **v3.2.0 起**：`live()` 生命循环**默认即 autopilot 自驱**——身体每拍用自身能力卡自主决策并离线执行，把"活着"与"自主决策"统一为一件事（持续自驱生命周期借鉴 Stanford Generative Agents / Smallville：https://arxiv.org/abs/2304.03442）。`--no-autopilot` 回到写死步骤以兼容旧行为。
+
 ## 数据流（一次「看热点 + 思考」）
 
 1. 驱动方调用 `omni.seeHotAll()`（CLI `all` / serve `POST /all`）。

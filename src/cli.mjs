@@ -109,9 +109,24 @@ async function main() {
       const useLLM = flag('--llm');
       const speak = flag('--speak');
       const allowShell = flag('--allow-shell');
-      log.info(`[live] 启动生命循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, 说话=${speak}, shell=${allowShell}`);
-      result = await omni.live({ ticks, intervalMs: interval * 1000, useLLM, speak, allowShell });
-      if (!jsonMode) console.log('\n═══ 生命循环结果 ═══\n' + (result.trace || []).map(t => `· tick ${t.tick}: 感知 ${t.perceive?.topicCount ?? 0} 话题 | 行动 ${t.act?.completed ? '✓' : '✗'}`).join('\n'));
+      // 默认：每拍由身体自身能力卡自主决策（autopilot 自驱，借鉴 Stanford Generative Agents 持续自驱生命周期）；
+      // --no-autopilot 回到写死步骤；--no-dynamic/--dynamic 控制动态议程重排（仅 autopilot 路径生效）。
+      const autopilotMode = !flag('--no-autopilot');
+      const dynamic = rest.includes('--no-dynamic') ? false : (rest.includes('--dynamic') ? true : undefined);
+      log.info(`[live] 启动生命循环: ${ticks} 轮, 间隔 ${interval}s, 模型=${useLLM ? '在线' : '离线'}, 说话=${speak}, shell=${allowShell}, 自驱=${autopilotMode ? 'autopilot' : 'legacy'}`);
+      result = await omni.live({ ticks, intervalMs: interval * 1000, useLLM, speak, allowShell, autopilot: autopilotMode, dynamic });
+      if (!jsonMode) {
+        console.log('\n═══ 生命循环结果（' + (result.mode === 'live(autopilot)' ? 'autopilot 自驱 · 借鉴 Stanford Generative Agents 持续自驱生命周期' : 'legacy 写死步骤') + '）═══');
+        for (const t of (result.trace || [])) {
+          const topicN = t.perceive?.topicCount ?? 0;
+          if (t.executed) {
+            const w = t.agendaWeights ? ` | 权重[${t.agendaWeights.map(q => q.w.toFixed(2)).join(',')}]` : '';
+            console.log(`· tick ${t.tick}: 感知 ${topicN} 话题 | 委派 ${t.executed}${t.fallback ? ` (降级:${t.fallback})` : ''}${w}`);
+          } else {
+            console.log(`· tick ${t.tick}: 感知 ${topicN} 话题 | 行动 ${t.act?.completed ? '✓' : '✗'}`);
+          }
+        }
+      }
       break;
     }
     case 'autopilot': {
@@ -299,7 +314,7 @@ const USAGE = `OmniSense 命令行
   sense                聚合近期感知为环境模型
   body                自检身体：打印七种器官（眼/耳/嘴/脑/手/感知/脚）及各自能力
   card                打印 A2A 风格 Agent Card（七器官能力扁平化为 skills[]，供多智能体工作区发现与委派）
-  live [--ticks=3] [--interval=0] [--llm] [--speak] [--allow-shell]   生命循环：自驱地「感知→思考→动手→说话→移动」，像真人一样活着（默认离线、有限轮次）
+  live [--ticks=3] [--interval=0] [--llm] [--speak] [--allow-shell] [--no-autopilot] [--no-dynamic]   生命循环：身体每拍用自身能力卡自主决策（autopilot 自驱，像真人一样活着；默认）；--no-autopilot 回到写死步骤（感知→思考→动手→说话→移动）
   autopilot [--ticks=3] [--interval=0] [--llm] [--allow-shell] [--no-dynamic]   自主循环：身体用自身能力卡 skillResolve 自己决定每轮做什么并离线执行（借鉴 BabyAGI 自生成任务队列；默认动态议程——每轮结果回写议程、据结果重排下一步；--no-dynamic 关闭重排、尊重用户顺序）
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行

@@ -9,7 +9,7 @@
 //   node integrations/openclaw/omni-body.mjs perceive [--json]
 //   node integrations/openclaw/omni-body.mjs describe [--json]
 //   node integrations/openclaw/omni-body.mjs card [--json]
-//   node integrations/openclaw/omni-body.mjs live '{"ticks":2}' [--json]
+//   node integrations/openclaw/omni-body.mjs live '{"ticks":2}' [--json]   # 生命循环（默认 autopilot 自驱；--no-autopilot 回写死步骤）
 //   node integrations/openclaw/omni-body.mjs autopilot '{"ticks":2}' [--json]  # 身体自驱决策(基于能力卡)
 //   node integrations/openclaw/omni-body.mjs eye seeHotTopics bilibili [--json]   # 联网（离线降级）
 //   node integrations/openclaw/omni-body.mjs ear listenFeedback "用户说…" [--json]
@@ -49,7 +49,16 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'perceive': return body.perceive();
     case 'describe': return body.describe();
     case 'card': return body.agentCard();
-    case 'live': return await body.live(parseJsonArg(args[0]) || {});
+    case 'live': {
+      // 生命循环：默认每拍由身体自身能力卡自主决策（autopilot 自驱）；--no-autopilot 回到写死步骤；
+      // --no-dynamic/--dynamic 控制动态议程重排（仅 autopilot 路径生效）。
+      const base = parseJsonArg(args[0]) || {};
+      const opts = { ...base };
+      if (args.includes('--no-autopilot')) opts.autopilot = false;
+      if (args.includes('--no-dynamic')) opts.dynamic = false;
+      if (args.includes('--dynamic')) opts.dynamic = true;
+      return await body.live(opts);
+    }
     case 'autopilot': {
       const opts = parseJsonArg(args[0]) || {};
       if (args.includes('--no-dynamic')) opts.dynamic = false;

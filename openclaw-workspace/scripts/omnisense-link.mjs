@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -120,6 +120,18 @@ export async function runLink(args) {
     if (rest.includes('--dynamic')) opts.dynamic = true;
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const r = await withTimeout(omni.autopilot(opts), TIMEOUT_MS);
+    return r;
+  }
+  if (cmd === 'live') {
+    // 生命循环：默认每拍由身体自身能力卡自主决策（autopilot 自驱，借鉴 Stanford Generative Agents
+    // 持续自驱生命周期）；--no-autopilot 回到写死步骤。工作区侧"让身体活着"的活证据。
+    const ticks = Number(rest[0]) || 2;
+    const opts = { ticks };
+    if (rest.includes('--no-autopilot')) opts.autopilot = false;
+    if (rest.includes('--no-dynamic')) opts.dynamic = false;
+    if (rest.includes('--dynamic')) opts.dynamic = true;
+    const omni = (await import('../../src/index.mjs')).OmniSense.create();
+    const r = await withTimeout(omni.live(opts), TIMEOUT_MS);
     return r;
   }
   if (cmd === 'trace') {

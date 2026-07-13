@@ -213,6 +213,25 @@ it('runLink autopilot --no-dynamic 关闭动态重排：尊重顺序、无权重
   // 静态模式按 round-robin 取默认议程：第一轮应为默认议程第 0 项（思考类）
   assert.match(r.trace[0].intent, /思考|关注/, '--no-dynamic 应尊重默认议程顺序(首轮=思考意图)');
 });
+
+it('runLink live --no-autopilot 跑生命循环（跨层：写死步骤 + 工作区驱动身体）', async () => {
+  const r = await runLink(['live', '1', '--no-autopilot']);
+  assert.equal(r.ticks, 1);
+  assert.equal(r.mode, 'live', '应标记 legacy live 模式');
+  assert.equal(r.trace.length, 1);
+  assert.ok(r.trace[0].perceive && r.trace[0].think && r.trace[0].act, 'legacy 每轮应有 perceive/think/act');
+});
+
+it('runLink live 默认 autopilot 自驱生命循环（跨层：工作区驱动身体每拍自决策）', async () => {
+  const r = await runLink(['live', '2']);
+  assert.equal(r.ticks, 2);
+  assert.equal(r.mode, 'live(autopilot)', '应标记 autopilot 自驱');
+  assert.equal(r.trace.length, 2);
+  for (const t of r.trace) {
+    assert.ok(t.intent && Array.isArray(t.candidates), '每轮应有意图与候选技能');
+    assert.ok(t.executed, '应委派到某器官');
+  }
+});
 // 不依赖 node:test 的 after 兜底（route brain.think 等离线器官调用 await 外部资源，会让 node:test 提前
 // finalize 文件并截断后续用例）；改为模块顶层独立定时器：留足 20s 让全部用例跑完后强制退出，
 // 既跑完所有断言（成败真实）又避免 undici keep-alive socket 导致套件无限挂起。

@@ -290,8 +290,16 @@ export class Body {
     return result;
   }
 
-  // ── 生命循环：像真人一样持续「感知→思考→动手→说话→移动」──
+  // ── 生命循环：像真人一样持续「活着」──
   // 这是"和真人一样"的本质：不是被动接收指令，而是自驱地在世界里活着。
+  // 思想借鉴 Stanford「Generative Agents」(Smallville, Park et al. 2023, arXiv:2304.03442) 的
+  // **持续自驱认知生命周期**：智能体不断『感知→记忆→检索→反思→规划→行动』，而非按写死脚本生活。
+  //   https://arxiv.org/abs/2304.03442 · 中文解析 https://juejin.cn/post/7614110147108323368
+  // 区别于 Generative Agents（依赖 LLM 推理每一步）：OmniSense 离线即可自驱——每拍用自身能力卡
+  // skillResolve 自主决策做什么（即 autopilot 决策引擎），把"活着"与"自主决策"统一为一件事。
+  //   - 默认（autopilot!==false）：每拍由身体用自身能力卡自主决策并离线执行（autopilot 自驱），
+  //     真正像真人一样"据当下情境自己决定下一步"，零网络、零挂起。
+  //   - --no-autopilot（autopilot:false）：回到写死的「感知→思考→动手→说话→移动」步骤（兼容旧行为）。
   // 默认离线、有限轮次、所有步骤带 catch 兜底，绝不因无模型而挂起。
   async live(opts = {}) {
     const {
@@ -300,34 +308,55 @@ export class Body {
       useLLM = false,
       speak = false,
       allowShell = false,
+      autopilot = true,   // 默认：每拍由身体自身能力卡自主决策（autopilot 自驱）；false 回到写死步骤
+      agenda,
+      dynamic,
       onTick,
     } = opts;
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-    const trace = [];
-    log.info(`\n[身体·生命循环] 启动：${ticks} 轮 | 模型=${useLLM ? '在线' : '离线'} | 说话=${speak} | shell=${allowShell}`);
-    for (let i = 1; i <= ticks; i++) {
-      const step = { tick: i };
-      // 1) 感知：聚合近期眼耳输入 + 实时热搜，合成环境理解
-      step.perceive = this.perceive();
-      // 2) 思考：基于当前环境，决定这一轮该关注 / 做什么
-      step.think = await this.omni.brain.think(`第 ${i} 轮：基于当前感知，我该关注或做什么`, '').catch(e => ({ error: e.message }));
-      // 3) 动手（脑·行动）：把"下一步"转成可执行目标，离线确定性执行
-      const goal = `基于本轮感知，做一件具体的事：把最值得关注的话题记入长期记忆`;
-      step.act = await this.omni.brain.act(goal, { useLLM, allowShell, maxSteps: 4, remember: true }).catch(e => ({ completed: false, result: e.message }));
-      // 4) 说话：表达一句本轮观察（默认静默，--speak 开启）
-      if (speak) {
-        const top = (step.perceive?.topics || [])[0] || '当前环境';
-        step.speak = await this.omni.mouth.speak(`第 ${i} 轮：我注意到「${top}」。`, { tts: false }).catch(e => ({ error: e.message }));
+
+    // 兼容旧路径（写死步骤）：--no-autopilot / autopilot:false 时跑「感知→思考→动手→说话→移动」
+    if (autopilot === false) {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const trace = [];
+      log.info(`\n[身体·生命循环 live(legacy)] 启动：${ticks} 轮 | 模型=${useLLM ? '在线' : '离线'} | 说话=${speak} | shell=${allowShell}`);
+      for (let i = 1; i <= ticks; i++) {
+        const step = { tick: i };
+        // 1) 感知：聚合近期眼耳输入 + 实时热搜，合成环境理解
+        step.perceive = this.perceive();
+        // 2) 思考：基于当前环境，决定这一轮该关注 / 做什么
+        step.think = await this.omni.brain.think(`第 ${i} 轮：基于当前感知，我该关注或做什么`, '').catch(e => ({ error: e.message }));
+        // 3) 动手（脑·行动）：把"下一步"转成可执行目标，离线确定性执行
+        const goal = `基于本轮感知，做一件具体的事：把最值得关注的话题记入长期记忆`;
+        step.act = await this.omni.brain.act(goal, { useLLM, allowShell, maxSteps: 4, remember: true }).catch(e => ({ completed: false, result: e.message }));
+        // 4) 说话：表达一句本轮观察（默认静默，--speak 开启）
+        if (speak) {
+          const top = (step.perceive?.topics || [])[0] || '当前环境';
+          step.speak = await this.omni.mouth.speak(`第 ${i} 轮：我注意到「${top}」。`, { tts: false }).catch(e => ({ error: e.message }));
+        }
+        // 5) 移动 / 监视（脚）：本轮快照已通过 act 的 remember 落盘，这里标记完成
+        step.foot = `第 ${i} 轮完成`;
+        trace.push(step);
+        log.info(`[身体·生命循环 live(legacy)] tick ${i}/${ticks}：感知 ${step.perceive?.topicCount ?? 0} 话题 | 行动 ${step.act?.completed ? '✓' : '✗'}`);
+        if (onTick) onTick(step);
+        if (i < ticks && intervalMs) await sleep(intervalMs);
       }
-      // 5) 移动 / 监视（脚）：本轮快照已通过 act 的 remember 落盘，这里标记完成
-      step.foot = `第 ${i} 轮完成`;
-      trace.push(step);
-      log.info(`[身体·生命循环] tick ${i}/${ticks}：感知 ${step.perceive?.topicCount ?? 0} 话题 | 行动 ${step.act?.completed ? '✓' : '✗'}`);
-      if (onTick) onTick(step);
-      if (i < ticks && intervalMs) await sleep(intervalMs);
+      log.info('[身体·生命循环 live(legacy)] 结束。');
+      return { ticks, mode: 'live', trace, stopped: false };
     }
-    log.info('[身体·生命循环] 结束。');
-    return { ticks, trace, stopped: false };
+
+    // 新默认：身体每拍自己决定做什么（autopilot 自驱）。live 即"活着" = 持续自驱决策与行动，
+    // 把"和真人一样"再推进一层——不是被写死步骤驱动，而是用自身能力清单自主决策、并据结果自我调整
+    // （动态议程重排借鉴 BabyAGI 优先级重排；持续自驱生命周期借鉴 Stanford Generative Agents）。
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    // 可选 speak：每拍委派后让嘴说一句本轮选择（离线、tts:false）。
+    const speakHook = speak ? (step) => {
+      try { this.omni.mouth.speak(`第 ${step.tick} 轮：我选择「${step.intent}」并委派 ${step.executed}。`, { tts: false }); } catch {}
+    } : null;
+    const wrappedOnTick = (step) => { if (speakHook) speakHook(step); if (onTick) onTick(step); };
+    log.info(`\n[身体·生命循环 live] 启动：${ticks} 轮 | autopilot 自驱（每拍身体用自身能力卡自主决策）| 说话=${speak}`);
+    const ap = await this.autopilot({ ticks, intervalMs, useLLM, allowShell, onTick: wrappedOnTick, agenda, dynamic });
+    log.info('[身体·生命循环 live] 结束（autopilot 自驱）。');
+    return { ticks, mode: 'live(autopilot)', agendaDynamic: ap.agendaDynamic, trace: ap.trace, stopped: false };
   }
 
   // ── 自主循环（autopilot）：让身体"自己决定每轮做什么"──

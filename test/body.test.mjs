@@ -102,14 +102,31 @@ test('手 handList 返回内置工具名', () => {
   }
 });
 
-test('生命循环 live 跑 2 轮不抛错，trace 完整', async () => {
+test('生命循环 live --no-autopilot 跑 2 轮不抛错，trace 完整（legacy 写死步骤）', async () => {
   const body = new Body(fakeOmni());
-  const res = await body.live({ ticks: 2 });
+  const res = await body.live({ ticks: 2, autopilot: false });
   assert.equal(res.ticks, 2);
+  assert.equal(res.mode, 'live', 'legacy 模式应标记 live');
   assert.equal(res.trace.length, 2);
   for (const t of res.trace) {
     assert.ok(t.perceive && t.think && t.act, '每轮应有 perceive/think/act');
     assert.equal(t.act.completed, true);
+  }
+});
+
+test('生命循环 live 默认 autopilot 自驱：每拍身体自决定、委派动作器官（非退化感知）', async () => {
+  const body = new Body(fakeOmni());
+  const res = await body.live({ ticks: 3 });
+  assert.equal(res.ticks, 3);
+  assert.equal(res.mode, 'live(autopilot)', '默认应标记为 autopilot 自驱');
+  assert.equal(res.trace.length, 3);
+  for (const t of res.trace) {
+    assert.ok(t.perceive, '每轮应感知');
+    assert.ok(t.intent, '每轮应有自生成意图');
+    assert.ok(Array.isArray(t.candidates) && t.candidates.length > 0, '应基于能力卡产出候选技能');
+    assert.ok(t.executed && !t.executed.startsWith('perceive.sense'), '应委派到动作器官(非退化感知)');
+    const isAction = t.executed.startsWith('brain.') || t.executed.startsWith('mouth.') || t.executed.startsWith('ear.');
+    assert.ok(isAction, '默认议程应委派到会做事的器官(脑/嘴/耳，离线、零网络)');
   }
 });
 
