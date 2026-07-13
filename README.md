@@ -113,6 +113,7 @@ node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --jso
 | 🪪 **A2A 风格能力卡（Agent Card）** | `body.agentCard()` / CLI `card` / 桥接 `omni-body.mjs card` 把七器官能力扁平化为 `skills[]`（id/name/description/tags/examples/net），供多智能体工作区做能力发现与委派（借鉴 Google A2A Protocol 的 AgentCard 思想，仅借鉴结构与字段语义，未引入其传输/协议依赖） |
 | 🔗 **技能匹配与自动委派（skillDispatch）** | `body.skillResolve(goal)` 基于关键词匹配从 Agent Card 的 skills[] 中找到最匹配的器官/方法；`body.skillDispatch(goal)` 自动委派到最佳技能并调用。CLI `dispatch` 命令 / 工作区 `omnisense-link dispatch` 均可用（借鉴 IETF AgentCard 能力发现 + ARD intent→tool 匹配思想） |
 | 🤖 **自主循环（autopilot）** | 身体用自身能力卡 `skillResolve` **自己决定每轮做什么**并离线执行：感知→自生成意图→选最佳器官→`skillDispatch` 执行，全程零网络、像真人一样自驱活着（借鉴 BabyAGI 自生成任务队列思想：任务创建→优先级排序→执行→据结果重排→再生成） |
+| 🔧 **工具级缓存/熔断** | 复用 `breaker.mjs` 的 TTL 缓存 + 熔断器（此前只用于热搜），**扩展到 Agent 工具调用**：联网工具 `web_fetch`/`summarize_url`/`hot_topics` 命中缓存直接返回、避免重复联网；某工具持续失败则熔断、避免反复超时拖垮整条 agent 流水线。声明式启用（工具定义加 `cacheTtl`/`circuit`），默认工具行为完全不变。`cli cache` / 工作区 `omnisense-link cache` 可查状态与清空（借鉴 LangChain 的 LLM/工具调用缓存与 AutoGen「per-tool circuit breaker」生产实践） |
 
 ## 🔌 工具插件自发现（借鉴 Nanobot / OpenSquilla 技能加载器）
 
@@ -197,6 +198,8 @@ node src/cli.mjs trace --get=<runId>         # 回放某条 trace（模型看见
 node src/cli.mjs trace --clear               # 清空本地轨迹文件
 node src/cli.mjs trace --export=spans.jsonl --export-format=otlp   # 导出 OTLP/JSON（OTel-native，可投 Grafana Tempo/Phoenix/Jaeger）
 node src/cli.mjs dispatch "<目标>"             # 技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖；--detail 仅展示不执行）
+node src/cli.mjs cache                        # 工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时）
+node src/cli.mjs cache --clear               # 清空工具级缓存
 ```
 
 选项：`--json`（结构化 JSON 输出便于解析）、`--quiet`（静默过程日志）、`--tts`（出声）。
@@ -470,6 +473,39 @@ node openclaw-workspace/scripts/omnisense-link.mjs autopilot 2 --no-dynamic --js
 
 > 诚实边界：默认议程只映射到离线器官（脑/嘴/耳），`hand.*` 等需结构化参数的技能会被自动跳过并降级到感知，
 > 绝不因缺参数而报错或联网。有本机模型网关时 `autopilot` 同样可用（在线思考），但离线也可完整自活。
+
+---
+
+## 🔧 工具级缓存 / 熔断（把 breaker 基础设施扩展到 Agent 工具调用）
+
+`agent` / `multiagent` 每步都经统一入口 `executeTool()` 调工具。联网类工具（抓网页、摘要、聚合热搜）
+重复调用同一目标会反复触网、浪费带宽；某工具持续失败则会反复超时、拖垮整条 agent 流水线。
+OmniSense 把 **`breaker.mjs` 的 TTL 缓存 + 熔断器**（此前只用于热搜抓取）**复用并扩展到 Agent 工具调用**：
+
+- **命中缓存直接返回**：`web_fetch` / `summarize_url` / `hot_topics` 声明了 `cacheTtl`（60s / 300s / 60s），
+  同一目标在 TTL 内第二次调用直接返回缓存结果，**不重复联网**。
+- **持续失败熔断**：声明 `circuit:true` 的工具，连续失败达阈值（默认 3 次）后进入「开启」状态，
+  后续调用**直接短路返回 `circuitOpen:true`**，绝不反复超时；任意一次成功即复位。
+- **声明式、零侵入**：只在工具定义上加 `cacheTtl(ms)` / `circuit:true` 即生效；未声明的默认工具（`calc`/`read_file`/`write_file`/`now`/记忆类）行为**完全不变**，缓存/熔断不影响其正确性。
+- **可观测、可清空**：`cli cache` 看当前缓存条目数与熔断器状态，`cli cache --clear` 清空；工作区侧 `omnisense-link cache` 同源复用内核实现。
+
+设计借鉴（思想/模式，非代码）：
+
+- LangChain 的 LLM / 工具调用缓存（`InMemoryCache`：相同请求直接命中、不再重复触网，降低延迟与费用）：
+  `https://mintlify.wiki/langchain-ai/langchain/advanced/performance`
+- AutoGen / 生产实践里「把工具包进 per-tool circuit breaker」（`tenacity` / `Resilience4j` 思想；
+  altersquare 的 Tool-Calling Reliability 亦建议 wrap tools in per-tool circuit breakers）：
+  `https://altersquare.io/tool-calling-reliability-agent-frameworks-measurements-architecture/`
+
+```bash
+node src/cli.mjs cache                  # 工具级缓存/熔断状态（离线可用）
+node src/cli.mjs cache --clear        # 清空工具级缓存
+# 工作区侧同样可观测（合并后新项目：工作区能看 agent 工具流水线的健壮性）
+node openclaw-workspace/scripts/omnisense-link.mjs cache
+node openclaw-workspace/scripts/omnisense-link.mjs cache --clear
+```
+
+> 诚实边界：缓存只存工具成功输出（TTL 内复用），失败不入缓存；熔断是「诚实降级」的延续——工具真的不可用时明确报告 `circuitOpen`，绝不假装成功或无限重试。
 
 ---
 

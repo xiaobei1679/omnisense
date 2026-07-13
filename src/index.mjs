@@ -11,6 +11,7 @@ import { Brain } from './modules/brain.mjs';
 import { Perception } from './modules/perception.mjs';
 import { runWatch, runWatchTick } from './core/watch.mjs';
 import { runAgent } from './core/agent.mjs';
+import { toolCacheStats, clearToolCache, toolBreakerStatus } from './core/tools.mjs';
 import { runMultiAgent } from './core/agents.mjs';
 import { Body } from './body.mjs';
 import { log } from './core/logger.mjs';
@@ -94,6 +95,12 @@ export class OmniSense {
   // —— 常驻感知循环 ——
   watchTick(opts) { return runWatchTick(this, opts); }
   watch(opts) { return runWatch(this, opts); }
+
+  // —— 工具级缓存/熔断（复用 breaker 基础设施，扩展到 Agent 工具调用）——
+  // web_fetch / summarize_url / hot_topics 命中缓存直接返回（避免重复联网），持续失败则熔断（避免反复超时）。
+  toolCacheStats() { return toolCacheStats(); }
+  clearToolCache() { return clearToolCache(); }
+  toolBreakerStatus() { return toolBreakerStatus(); }
 
   // —— 身体：像真人一样的七器官 ——
   // 七器官：眼 eye / 耳 ear / 嘴 mouth / 脑 brain / 手 hand / 感知 perceive / 脚 foot

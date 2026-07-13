@@ -116,6 +116,7 @@ console.log(JSON.parse(out));
 > `dispatch <目标>`（**能力发现闭环**：自动匹配最合适的技能并委派），
 > 以及 `list` / `hand` / `goal`。`route` 复用本层 `runOrgan`，对七器官通用。
 > `dispatch` 复用 `body.skillDispatch`，基于关键词匹配自动选择最佳技能。
+> 另：`omnisense-link.mjs cache [--clear]` 让工作区侧观测身体的「工具级缓存/熔断」状态（复用内核同一份 breaker 基础设施，覆盖 web_fetch/summarize_url/hot_topics 的命中缓存与持续失败熔断）。
 
 ## 设计要点（诚实说明）
 

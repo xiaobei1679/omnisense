@@ -72,6 +72,9 @@ node "{SKILL_DIR}/src/cli.mjs" trace --export=spans.otlp.json --export-format=ot
 
 设计借鉴（思想/模式，非代码）：Google A2A Protocol · AgentCard `https://github.com/google/A2A` · 仅取「skill 自描述」结构用于能力发现，未引入其传输/协议依赖。
 
+## 🔧 工具级缓存 / 熔断（复用 breaker 扩展到 Agent 工具调用）
+`agent`/`multiagent` 每步经 `executeTool()` 调工具。联网工具 `web_fetch`/`summarize_url`/`hot_topics` 声明了 `cacheTtl`（60s/300s/60s），同一目标在 TTL 内直接命中缓存、不重复联网；声明 `circuit:true` 的工具连续失败达阈值（默认 3）后熔断、后续调用直接短路返回 `circuitOpen:true`，避免反复超时拖垮 agent 流水线。声明式、零侵入——未声明的默认工具行为完全不变。`node "{SKILL_DIR}/src/cli.mjs" cache` 查状态，`cache --clear` 清空；工作区侧 `node openclaw-workspace/scripts/omnisense-link.mjs cache` 同源复用内核实现（借鉴 LangChain LLM/工具调用缓存 + AutoGen per-tool circuit breaker 生产实践）。
+
 ## 🤖 自主循环（autopilot · 身体自己决定做什么，借鉴 BabyAGI）
 
 `live()` 让身体自驱活着，但每轮动作写死。`autopilot()` 更进一步：**身体用自身能力卡 `skillResolve`

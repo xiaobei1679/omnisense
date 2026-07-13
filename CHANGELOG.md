@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v4.0.0 — 2026-07-13 (major)
+
+- 工具级缓存/熔断扩展到 Agent 工具调用：复用 breaker.mjs 的 TTL 缓存+熔断器（此前仅热搜），覆盖 web_fetch/summarize_url/hot_topics——同一目标 TTL 内命中缓存直接返回(避免重复联网)、连续失败达阈值则熔断短路(防反复超时)；声明式启用(cacheTtl/circuit)、默认工具行为不变。新增 facade toolCacheStats/clearToolCache/toolBreakerStatus、CLI cache [--clear]、工作区 omnisense-link cache [--clear] 可观测；内核 tools.test 增 4 项单测、工作区增 2 项跨层断言。
+
 ## v3.2.0 — 2026-07-13 (minor)
 
 - live() 生命循环默认升级为 autopilot 自驱（身体每拍用能力卡自主决策，借鉴 Stanford Generative Agents 持续自驱生命周期；--no-autopilot 保留旧写死步骤）；工作区新增 live 命令

@@ -122,7 +122,7 @@ src/
     http.mjs          统一 HTTP 客户端（UA/超时/重试）
     memory.mjs        记忆中枢（深度语义检索：BM25-lite + 时间衰减 + 复用权重 + MMR 去冗余；键值 + 笔记 + 图谱，落盘）
     llm.mjs           本地模型网关代理层（免 key 双模式）
-    tools.mjs         工具执行器（web_fetch/文件/calc/now/记忆/热搜… 安全白名单）
+    tools.mjs         工具执行器（web_fetch/文件/calc/now/记忆/热搜… 安全白名单）；executeTool 统一入口复用 breaker.mjs 的 TTL 缓存 + 熔断器（声明式：工具定义加 cacheTtl/circuit 即启用，覆盖 web_fetch/summarize_url/hot_topics，避免重复联网与反复超时）
     agent.mjs         Agent 内核（ReAct 推理闭环 + localPlan 通用规划器[经验hints重建步骤] + playbook 自动复用 + 经验记忆召回注入推理 + 经验沉淀闭环）
     agents.mjs        多 Agent 协作（协调器 planSubtasks/planSubtasksSmart[LLM 智能拆解] + 角色子 agent 委派[并行/工具集沙箱] + 共享黑板 + 协调器综合 + 诚实部分失败）
     tracer.mjs        Agent 执行轨迹追踪（可回放 trace 落盘 + 聚合指标；对齐 OpenTelemetry GenAI 语义约定 gen_ai.*）。增强：compareRuns(idA,idB) 回放对比（Forkline 式 first-divergence 检测：定位行为首次分歧步 + verdict identical/similar/improved/regressed）、findRunsByGoal(goal) 同目标多次运行检索、exportDataset() 导出回归数据集（LangSmith 式 trace→dataset）、setBaseline/regressionCheck 行为回归门禁（recut-ai/shadow 思想：退化即 FAIL，可接 CI）、exportOtlp() 导出 OTLP/JSON（OTel-native：run→trace，root span invoke_agent + 每步 execute_tool child span，gen_ai.*/error.type/status.code，可直接投 Grafana Tempo/Phoenix/Jaeger/OTel Collector）

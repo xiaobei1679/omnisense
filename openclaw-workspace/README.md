@@ -66,6 +66,9 @@ node scripts/omnisense-link.mjs autopilot 2 --no-dynamic --json
 # --no-autopilot 回到写死步骤（感知→思考→动手→说话→移动）
 node scripts/omnisense-link.mjs live 2 --json
 node scripts/omnisense-link.mjs live 1 --no-autopilot --json
+# 工具级缓存/熔断：工作区侧观测身体的 Agent 工具流水线健壮性（复用内核同一份 breaker 基础设施）
+node scripts/omnisense-link.mjs cache              # 查工具缓存条目数 + 熔断器状态
+node scripts/omnisense-link.mjs cache --clear     # 清空工具级缓存
 # 可观测性：工作区侧消费身体的 Agent 轨迹（回放对比 / 检索 / 导出 / 回归门禁）
 node scripts/omnisense-link.mjs trace --summary        # 聚合指标
 node scripts/omnisense-link.mjs trace --list --limit=5 # 列出历史运行
