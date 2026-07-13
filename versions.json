@@ -1,0 +1,9 @@
+[
+  {
+    "version": "1.0.0",
+    "type": "baseline",
+    "date": "2026-07-13T03:53:35.401Z",
+    "tag": "v1.0.0",
+    "notes": "建立版本心跳机制：scripts/release.mjs(发布/回退) + VERSION + CHANGELOG.md + versions.json；引入 hourly minor / 3h major 自动判定。"
+  }
+]
