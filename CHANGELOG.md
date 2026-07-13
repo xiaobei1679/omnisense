@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v4.3.0 — 2026-07-13 (minor)
+
+- 升格监控为第八器官 monitor：①可视化仪表盘(零依赖HTML,展示器官/四层记忆/活动/告警)；②AI Agent 状态检测(基于tracer runs健康度)；③四层记忆快照；④多种状态检测(连续失败/48h不活跃/错误率突增+兼容health-observer)；⑤CLI monitor/dashboard 命令 + HTTP /monitor /dashboard 路由 + 桥接层 route 透传
+
 ## v4.2.0 — 2026-07-13 (minor)
 
 - watch autopilot 自驱决策接 tracer 可观测性闭环：autopilot / watch --autopilot 每 tick 自驱落盘 engine=autopilot trace（--trace 显式开启，watch --autopilot 默认记录），tracer.findRunsByGoal 增精确优先+包含回退前缀检索(trace --find=autopilot:)，内核+桥接+工作区三端同步 --trace。借鉴 LangGraph checkpointer / Octopoda 时间线回放。

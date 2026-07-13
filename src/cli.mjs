@@ -3,6 +3,7 @@
 // 用法: node src/cli.mjs <command> [参数] [--json] [--quiet] [--tts]
 import { OmniSense } from './index.mjs';
 import { log } from './core/logger.mjs';
+import { writeFileSync } from 'node:fs';
 
 const omni = OmniSense.create();
 const args = process.argv.slice(2);
@@ -303,6 +304,25 @@ async function main() {
       }
       break;
     }
+    case 'monitor': {
+      // 监控器官：统一状态快照 / Agent 健康 / 多种状态检测告警
+      const asAlerts = flag('--alerts');
+      const asHealth = flag('--health');
+      if (asAlerts) { result = omni.monitor.checkAlerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asHealth) { result = omni.monitor.agentHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      result = omni.monitor.snapshot();
+      if (!jsonMode) console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case 'dashboard': {
+      // 生成零依赖静态 HTML 仪表盘（可视化 Agent 状态/记忆/活动/告警）
+      const out = (rest.find(a => /^--out=/.test(a)) || '').split('=')[1] || './.omni-dashboard.html';
+      const html = omni.monitor.renderDashboard();
+      try { writeFileSync(out, html, 'utf8'); } catch (e) { console.error('仪表盘写盘失败:', e.message); process.exitCode = 1; break; }
+      result = { ok: true, out, bytes: html.length };
+      if (!jsonMode) console.log(`📊 监控仪表盘已生成: ${out} (${html.length} bytes)\n用浏览器打开即可查看 Agent 状态/记忆/活动/告警可视化。`);
+      break;
+    }
     case 'help':
     case undefined:
       console.log(USAGE); return;
@@ -341,6 +361,8 @@ const USAGE = `OmniSense 命令行
   dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new] [--autopilot] [--autopilot-agenda="a,b,c"]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--autopilot 升级为"常驻自驱身体"：每 tick 由身体自身能力卡自主决策并离线执行(像真人一样活着，借鉴 OpenClaw 心跳闭环/Sophia System3)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   cache [--clear]      工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时）
+  monitor [--alerts|--health]   监控器官：统一状态快照(Agent状态/记忆/活动/告警) / --alerts 仅看告警 / --health 仅看 Agent 健康
+  dashboard [--out=./.omni-dashboard.html]   生成零依赖可视化 HTML 仪表盘(Agent状态/记忆四层/活动/告警)，浏览器打开即看
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)
   trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)
   trace --diff=<idA>,<idB>          回放对比两次运行，定位行为首次分歧点(verdict: identical/similar/improved/regressed；regressed 退出码 1)

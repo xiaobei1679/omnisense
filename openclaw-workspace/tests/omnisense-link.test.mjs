@@ -41,11 +41,11 @@ function it(name, fn) {
   });
 }
 
-it('runLink list 返回七器官（与桥接层一致）', async () => {
+it('runLink list 返回八器官（七器官 + 监控，与桥接层一致）', async () => {
   const r = await runLink(['list']);
   assert.equal(r.ok, true);
   assert.deepEqual(r.organs, listOrgans());
-  assert.equal(r.organs.length, 7);
+  assert.equal(r.organs.length, 8);
 });
 
 it('runLink 默认调用 hand calc 离线可用（跨层：工作区->桥->身体）', async () => {
@@ -78,15 +78,29 @@ it('runLink card 返回 A2A 风格能力卡（跨层：工作区->桥->身体）
   assert.ok(r.skills.every(s => s.id && s.name && 'net' in s), '每个 skill 含 id/name/net');
 });
 
-it('runLink describe 返回七器官树（每器官含结构化 methods）', async () => {
+it('runLink describe 返回八器官（七器官 + 监控）树（每器官含结构化 methods）', async () => {
   const r = await runLink(['describe']);
   assert.equal(r.ok, true);
-  assert.equal(r.organs.length, 7);
+  assert.equal(r.organs.length, 8);
   for (const o of r.organs) {
     assert.ok(Array.isArray(o.methods), `${o.key} 应有 methods 数组`);
     assert.ok(o.methods.length > 0, `${o.key} methods 不应为空`);
     assert.ok(o.methods.every(m => m.name && 'desc' in m && 'net' in m), `${o.key} 每个 method 含 name/desc/net`);
   }
+});
+
+it('runLink monitor snapshot 跨层消费监控器官(状态/记忆/活动/告警)', async () => {
+  const r = await runLink(['monitor', 'snapshot']);
+  assert.ok(r.status, '应有整体状态');
+  assert.ok(r.organs && r.organs.count >= 1, '应含器官数');
+  assert.ok('activity' in r, '应含活动');
+  assert.ok(Array.isArray(r.alerts), '告警应为数组');
+});
+
+it('runLink monitor dashboard 跨层生成可视化 HTML 仪表盘', async () => {
+  const html = await runLink(['monitor', 'dashboard']);
+  assert.ok(typeof html === 'string' && html.startsWith('<!doctype html>'), '应返回自包含 HTML');
+  assert.ok(html.includes('监控仪表盘') && html.includes('记忆状态'), '应含器官/记忆/告警可视化区块');
 });
 
 it('runLink route --list 列出全部能力（与 card skills 数一致）', async () => {

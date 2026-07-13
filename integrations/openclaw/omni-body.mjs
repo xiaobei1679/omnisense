@@ -77,9 +77,10 @@ export async function runOrgan(organ, rawArgs = []) {
     case 'ear':
     case 'mouth':
     case 'brain':
+    case 'monitor':
       return await body[organ](args[0], ...args.slice(1));
     default:
-      throw new Error(`未知器官: ${organ}（可选 eye/ear/mouth/brain/hand/perceive/foot/describe/card/live）`);
+      throw new Error(`未知器官: ${organ}（可选 eye/ear/mouth/brain/hand/perceive/foot/monitor/describe/card/live）`);
   }
 }
 

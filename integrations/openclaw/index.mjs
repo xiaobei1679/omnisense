@@ -4,8 +4,8 @@
 export { runOrgan } from './omni-body.mjs';
 export { runGoal } from './omnisense-bridge.mjs';
 
-// 七器官清单（与 body.describe() 一致，供上层枚举/校验）
-export const ORGANS = ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot'];
+// 器官清单（与 body.describe() 一致，供上层枚举/校验：七器官 + 监控器官）
+export const ORGANS = ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot', 'monitor'];
 
 // 返回器官副本，避免调用方误改常量
 export function listOrgans() {

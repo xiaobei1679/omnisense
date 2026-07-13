@@ -29,11 +29,11 @@ test('perceive：离线聚合环境不抛错', async () => {
   assert.ok(r && typeof r === 'object');
 });
 
-test('describe：返回七器官清单', async () => {
+test('describe：返回八器官（七器官 + 监控）清单', async () => {
   const r = await runOrgan('describe');
-  assert.equal(r.length, 7);
+  assert.equal(r.length, 8);
   const keys = r.map(o => o.key);
-  for (const k of ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot']) {
+  for (const k of ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot', 'monitor']) {
     assert.ok(keys.includes(k), '缺少器官: ' + k);
   }
 });
@@ -54,9 +54,9 @@ test('runGoal：感知→思考→动手 返回 trace（离线）', async () => 
   assert.ok('think' in r.trace, 'trace 应含 think');
 });
 
-test('barrel index：导出七器官清单且不被外部篡改', () => {
-  assert.deepEqual(ORGANS, ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot']);
+test('barrel index：导出八器官（七器官 + 监控）清单且不被外部篡改', () => {
+  assert.deepEqual(ORGANS, ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot', 'monitor']);
   const copy = listOrgans();
   copy.push('hacked');
-  assert.equal(ORGANS.length, 7, '原常量不应被 listOrgans 返回值影响');
+  assert.equal(ORGANS.length, 8, '原常量不应被 listOrgans 返回值影响');
 });

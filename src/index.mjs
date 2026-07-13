@@ -9,6 +9,7 @@ import { Ears } from './modules/ears.mjs';
 import { Mouth } from './modules/mouth.mjs';
 import { Brain } from './modules/brain.mjs';
 import { Perception } from './modules/perception.mjs';
+import { Monitor } from './modules/monitor.mjs';
 import { runWatch, runWatchTick } from './core/watch.mjs';
 import { runAgent } from './core/agent.mjs';
 import { toolCacheStats, clearToolCache, toolBreakerStatus } from './core/tools.mjs';
@@ -32,6 +33,8 @@ export class OmniSense {
     this.body = new Body(this);
     // 可观测性：Agent 执行轨迹追踪（落盘，可回放 / 聚合指标）
     this.tracer = new Tracer(env.OMNI_TRACES || './.omni-traces.json');
+    // 监控器官：统一观测 Agent 状态 / 记忆 / 多种状态检测（可视化仪表盘），把子包 health-observer/dashboard 升格为内核一等公民
+    this.monitor = new Monitor(this.bus, this);
   }
 
   static create() { loadEnv(); return new OmniSense(); }

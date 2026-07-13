@@ -35,6 +35,7 @@ export const ORGANS = [
   { key: 'hand',     name: '手',   module: 'tools',     desc: '做：联网抓 / 读写文件 / 计算 / 记忆 / 总结' },
   { key: 'perceive', name: '感知', module: 'perception', desc: '感：把眼耳输入汇成环境理解' },
   { key: 'foot',     name: '脚',   module: 'watch',     desc: '行：常驻感知、在世界里移动与监视' },
+  { key: 'monitor',  name: '监控', module: 'monitor',   desc: '监：Agent 状态/记忆/多种状态检测（可视化仪表盘）' },
 ];
 
 // ── 能力自描述元数据（借鉴 A2A Protocol 的 Agent Card：每个技能带 desc / tags / examples）──
@@ -93,6 +94,16 @@ const METHOD_META = {
     watch:           { desc: '常驻感知巡逻', net: false },
     watchTick:       { desc: '单次移动快照', net: false },
   },
+  // 监控器官：把散落子包的 health-observer/dashboard/observer 升格为内核一等公民，
+  // 统一观测 Agent 状态(tracer 轨迹) / 记忆(四层) / 多种状态检测(连续失败/48h无产出/失败率飙升) + 可视化仪表盘。
+  monitor: {
+    snapshot:     { desc: '统一状态快照(Agent状态/记忆/活动/告警)', net: false },
+    health:       { desc: 'Agent 健康(成功率/无活动时长)', net: false },
+    alerts:       { desc: '多种状态检测告警(连续失败/48h无产出/失败率飙升)', net: false },
+    dashboard:    { desc: '生成零依赖可视化 HTML 仪表盘', net: false },
+    recordMetric: { desc: '记录一个 Agent 的指标(兼容 health-observer)', net: false },
+    checkAlerts:  { desc: '检查告警(可选指定 agentId)', net: false },
+  },
 };
 // 手（hand）工具中需要联网的子集（其余离线）
 const NET_HAND = new Set(['web_fetch', 'summarize_url', 'hot_topics']);
@@ -114,6 +125,8 @@ export class Body {
   foot(action = 'watch', o) {
     return action === 'watchTick' ? runWatchTick(this.omni, o) : runWatch(this.omni, o);
   }
+  // 监控：把 Agent 状态/记忆/多种状态检测升格为第 8 器官（复用 tracer + 四层记忆 + 兼容 health-observer 指标）
+  monitor(action, ...rest) { return this.omni.monitor[action](...rest); }
 
   // 手：直接调用真实动手能力（web_fetch / read_file / write_file / list_dir / memory_* / calc / now / hot_topics / summarize_url）
   hand(name, args = {}) {

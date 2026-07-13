@@ -53,6 +53,8 @@ const ROUTES = {
     const format = url?.searchParams?.get('format') || 'json';
     return omni.exportTraceDataset({ format, path: undefined, limit: url?.searchParams?.get('limit') ? Number(url.searchParams.get('limit')) : 10 });
   },
+  'GET /monitor': async (omni) => omni.monitor.snapshot(),
+  'GET /dashboard': async (omni) => omni.monitor.renderDashboard(),
 };
 
 function send(res, code, obj) {
@@ -84,6 +86,17 @@ export function startServer(omni, { port = 8787, host = '127.0.0.1', token = pro
     }
     const route = ROUTES[key];
     if (!route) return send(res, 404, { error: `未知路径 ${req.method} ${url.pathname}` });
+    // /dashboard 返回零依赖 HTML 仪表盘（可视化），单独按 text/html 输出
+    if (key === 'GET /dashboard') {
+      try {
+        const html = await route(omni, {}, url);
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(html);
+      } catch (e) {
+        log.error('[serve]', e?.message || e);
+        return send(res, 500, { ok: false, error: e?.message || String(e) });
+      }
+    }
     try {
       let body = {};
       if (req.method === 'POST') {

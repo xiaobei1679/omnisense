@@ -25,19 +25,19 @@ function fakeOmni() {
   };
 }
 
-test('ORGANS 含七器官且与模块文件名对应', () => {
+test('ORGANS 含八器官（七器官 + 监控）且与模块文件名对应', () => {
   const keys = ORGANS.map(o => o.key);
-  assert.deepEqual(keys, ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot']);
+  assert.deepEqual(keys, ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot', 'monitor']);
   const mods = ORGANS.map(o => o.module);
-  for (const m of ['eyes', 'ears', 'mouth', 'brain', 'tools', 'perception', 'watch']) {
-    assert.ok(mods.includes(m), `七器官应含模块 ${m}`);
+  for (const m of ['eyes', 'ears', 'mouth', 'brain', 'tools', 'perception', 'watch', 'monitor']) {
+    assert.ok(mods.includes(m), `器官应含模块 ${m}`);
   }
 });
 
 test('describe 返回 7 器官且各自带能力列表', () => {
   const body = new Body(fakeOmni());
   const d = body.describe();
-  assert.equal(d.length, 7);
+  assert.equal(d.length, 8);
   for (const o of d) {
     assert.ok(Array.isArray(o.methods) && o.methods.length > 0, `器官 ${o.key} 应有能力列表`);
   }
