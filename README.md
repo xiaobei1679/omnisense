@@ -416,6 +416,28 @@ omnisense/
 
 ---
 
+## 版本与回退（版本心跳）
+
+OmniSense 用 `scripts/release.mjs` 做**本地版本管理 + 自动回退**，配合「心跳」自动化每小时迭代：
+
+- **每小时一次小版本 (minor)**：`MAJOR.MINOR+1.0`
+- **每 3 小时一次大版本 (major)**：`MAJOR+1.0.0`，`MINOR` 归零
+- 每次发布都会：写 `VERSION` + `package.json`、追加 `CHANGELOG.md` 与 `versions.json`、**打 git tag `vX.Y.Z`**、本地 commit。
+- **全部本地，绝不推送**——推送需你明确下令。
+
+常用命令（托管 node）：
+
+```bash
+node scripts/release.mjs current                         # 打印当前版本 + 最新 tag
+node scripts/release.mjs list                            # 列出所有本地版本(tag)
+node scripts/release.mjs auto --notes "本次更新说明"     # 自动判定 minor/major 并发布
+node scripts/release.mjs bump --type minor --notes "..." # 手动 minor
+node scripts/release.mjs bump --type major --notes "..." # 手动 major
+node scripts/release.mjs rollback v1.0.0                 # 非破坏式回退到指定 tag(新提交，历史保留)
+```
+
+回退是**非破坏式**的：以新提交把工作树还原到目标 tag 的内容，原提交历史完整保留；如需彻底丢弃某版本之后的所有更新，可手动 `git reset --hard vX.Y.Z`。
+
 ## 诚实边界（务必知晓）
 
 - ✅ **联网抓取/下载**是真实本地执行，不依赖任何 key，在任何环境都真跑。

@@ -12,5 +12,12 @@
     "date": "2026-07-13T03:54:13.499Z",
     "tag": "v1.1.0",
     "notes": "新增版本逻辑单元测试(test/version.test.mjs)：parseVersion/nextVersionOf/decideAuto/latestMajorTime；保证心跳版本判定可测。"
+  },
+  {
+    "version": "1.2.0",
+    "type": "minor",
+    "date": "2026-07-13T03:58:23.340Z",
+    "tag": "v1.2.0",
+    "notes": "版本心跳机制收口：package.json 增加 release 脚本 + files 纳入 VERSION/CHANGELOG/versions.json/scripts；README/SKILL 增补『版本与回退』章节；版本逻辑单测已落地(test/version.test.mjs)。距基线>3h，按规则升 major。"
   }
 ]

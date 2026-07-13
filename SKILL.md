@@ -138,6 +138,14 @@ curl -s            http://127.0.0.1:8787/health
 - 测试：`npm test`（node --test，纯逻辑离线 fixture；B站 WBI 以固定密钥离线校验）；`npm run lint` 对 src/test 全量 `node --check`。CI 见 `.github/workflows/test.yml`（Node 18/20/22，先 lint 后 test）。
 - 启用外部模型（可选）：复制 `src/.env.example` 为 `.env` 填 `LLM_*/VLM_*/ASR_*/TTS_*`；网关不可用时自动回退。
 
+## 版本与回退（版本心跳）
+
+用 `scripts/release.mjs` 做本地版本管理 + 自动回退，心跳自动化每小时迭代：
+
+- 每小时 minor（`MAJOR.MINOR+1.0`）；每 3 小时 major（`MAJOR+1.0.0`，minor 归零）。
+- 每次发布写 `VERSION`+`package.json`、追加 `CHANGELOG.md`/`versions.json`、打 git tag、本地 commit。**绝不推送**。
+- `node scripts/release.mjs list` 看版本；`node scripts/release.mjs rollback vX.Y.Z` 非破坏式回退（历史保留）。
+
 ## 诚实边界（务必知晓）
 - 眼/耳的**联网抓取/下载**是真实本地执行，不依赖任何 key，在任意环境都真跑。
 - **文本推理（脑思考 / 嘴说话给意见对话）两种免 key 路径，都已经打通**：
