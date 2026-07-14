@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear] | monitor [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear] | monitor [--config-file=<path>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -177,13 +177,18 @@ export async function runLink(args) {
   if (cmd === 'monitor') {
     // 监控器官：工作区侧消费身体的统一状态快照 / Agent 健康 / 多种状态检测告警 / 可视化仪表盘。
     // 合并后新项目：工作区能真正观测身体的"活着"（Agent 状态 + 记忆四层 + 活动 + 告警）。复用内核同一份实现。
+    // --config-file=<path>：从 JSON 文件加载阈值配置（Observability-as-Code，优先级低于环境变量），合并后新项目
+    //   工作区侧也能消费"版本可控的阈值文件"，而不只依赖环境变量。
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
-    const sub = rest[0] || 'snapshot';
+    const cfgFile = (rest.find(a => a.startsWith('--config-file=')) || '').split('=')[1];
+    if (cfgFile) omni.monitor.loadConfigFile(cfgFile);
+    const sub = rest.find(a => !a.startsWith('--')) || 'snapshot';
     const fn = omni.monitor[sub];
     if (typeof fn !== 'function') {
       return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config）` };
     }
-    const r = await withTimeout(fn.apply(omni.monitor, rest.slice(1)), TIMEOUT_MS);
+    const callArgs = rest.filter(a => a !== sub && !a.startsWith('--config-file='));
+    const r = await withTimeout(fn.apply(omni.monitor, callArgs), TIMEOUT_MS);
     return r;
   }
   // 其余默认当作器官调用：omnisense-link hand calc '{"expression":"2+2"}'

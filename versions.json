@@ -166,5 +166,12 @@
     "date": "2026-07-14T15:28:07.305Z",
     "tag": "v6.1.0",
     "notes": "monitor 告警阈值可配置化：11 类阈值经 OMNI_MONITOR_* 环境变量/opts 覆盖(opts>env>default，值可溯源、非法回退)，新增 config 总线方法(第15个)+CLI --config+dashboard 阈值配置区块+工作区 monitor config；消灭硬编码阈值反模式(借鉴 Grafana/Prometheus 动态阈值)"
+  },
+  {
+    "version": "7.0.0",
+    "type": "major",
+    "date": "2026-07-14T16:33:54.075Z",
+    "tag": "v7.0.0",
+    "notes": "monitor 阈值配置支持 JSON 文件（Observability-as-Code）：新增 loadThresholdFile + 扩展 resolveThreshold 第四来源 file + 构造器自动加载 OMNI_MONITOR_CONFIG 或默认 ~/.omnisense/monitor.json + 新增 loadConfigFile + 内核 CLI --config-file 与工作区 omnisense-link 桥接；新增 5 项内核单测 + 1 项跨层；借鉴 Grafana/Prometheus Observability-as-Code"
   }
 ]

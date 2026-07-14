@@ -93,7 +93,8 @@ node scripts/omnisense-link.mjs monitor alerts      # 告警列表
 node scripts/omnisense-link.mjs monitor dashboard   # 零依赖 HTML 仪表盘
 node scripts/omnisense-link.mjs monitor toolHealth  # 工具管线健康：缓存命中 / 熔断状态 / 工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警
 node scripts/omnisense-link.mjs monitor trendAnomalies  # 趋势异常（OLS 斜率：延迟/成功率/记忆持续爬坡或劣化）
-node scripts/omnisense-link.mjs monitor config      # 可调告警阈值（值/来源 default·env·opts/环境变量名，OMNI_MONITOR_* 可覆盖）
+node scripts/omnisense-link.mjs monitor config      # 可调告警阈值（值/来源 default·env·file·opts/环境变量名，OMNI_MONITOR_* 可覆盖）
+node scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json config  # 从 JSON 文件加载阈值（Observability-as-Code，合并后新项目工作区侧也能消费版本可控的阈值文件）
 ```
 
 > 能力卡与委派借鉴 Google A2A Protocol 的 AgentCard 思想（`https://github.com/google/A2A`）：仅取「skill 自描述（id/name/description/tags/examples）」这一结构用于工作区侧能力发现；OmniSense 额外加 `net` 字段诚实标注联网依赖。`card` / `describe` / `route` / `dispatch` / `autopilot` / `live` / `trace` 均离线可跑、可单测（见 `tests/omnisense-link.test.mjs`）。`dispatch` 再借鉴 IETF AgentCard（能力发现）与 ARD（intent→tool 匹配）思想；`autopilot` 借鉴 BabyAGI 自生成任务队列思想，让工作区能真正驱动身体"自驱"而非只被动委派——默认开启动态议程（每轮结果回写议程、据结果调权，每步 trace 带 `agendaWeights` 快照，`--no-dynamic` 关闭重排、尊重用户顺序）；`live` 默认即 autopilot 自驱（身体每拍用自身能力卡自主决策，像真人一样活着；持续自驱生命周期借鉴 Stanford Generative Agents / Smallville：https://arxiv.org/abs/2304.03442，`--no-autopilot` 回写死步骤），让工作区能真正"让身体活着"；`trace` 复用内核 `tracer` 的 compareRuns / findRunsByGoal / exportDataset / exportOtlp / regressionCheck，让工作区能真正对身体的行为做可观测性分析（借鉴 Forkline 分歧检测、LangSmith trace→dataset、OTLP/OTel GenAI 语义约定、recut-ai/shadow 回归门禁思想）。

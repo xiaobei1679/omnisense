@@ -16,6 +16,8 @@
 //     a 2% 工具错误率经 10 次工具调用会放大成高得多的 workflow 失败率。熔断开启(circuit_open)即 agent
 //     流水线降级信号(借鉴 dev.to 的 AgentCircuitBreaker 思想：https://dev.to/pockit_tools/llm-observability-deep-dive-how-to-monitor-trace-and-debug-ai-agents-in-production-2mob)。
 import { writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { EVENTS } from '../core/bus.mjs';
 import { log } from '../core/logger.mjs';
 
@@ -49,8 +51,33 @@ const THRESHOLD_SPEC = {
   trendSlopeFleet:     ['OMNI_MONITOR_TREND_SLOPE_FLEET', 0.5, '/点 · 舰队健康引擎数下降斜率阈值(trend_regression)'],
 };
 
-// 解析单个阈值：opts 覆盖 > 环境变量 > 默认；返回 { value, source }。
-function resolveThreshold(key, opts, env) {
+// 阈值配置来源之三：JSON 文件（Observability-as-Code）。
+// 借鉴 Grafana/Prometheus「阈值即配置、纳入版本控制——每次阈值变更都是一次可审查的提交」实践
+// （https://codelit.io/blog/observability-as-code · https://thegarnetwiki.com/devops/monitoring-as-code）：
+// 把全部告警/异常阈值写成一份 JSON 配置，优先级 opts > 环境变量 > JSON文件 > 内置默认。
+// 文件不存在/损坏时静默降级（绝不因观测配置影响主流程）。默认路径 ~/.omnisense/monitor.json，
+// 可用构造 opts.thresholdFile 或环境变量 OMNI_MONITOR_CONFIG 指向任意路径（也支持测试用临时文件）。
+const DEFAULT_MONITOR_CONFIG_PATH = (() => {
+  try { return join(homedir(), '.omnisense', 'monitor.json'); } catch { return null; }
+})();
+
+// 读取并校验阈值 JSON 文件：仅保留 THRESHOLD_SPEC 中定义的 key（防御：忽略未知键，避免误配污染阈值）。
+function loadThresholdFile(path) {
+  if (!path || typeof path !== 'string') return null;
+  try {
+    if (!existsSync(path)) return null;
+    const obj = JSON.parse(readFileSync(path, 'utf8'));
+    if (!obj || typeof obj !== 'object') return null;
+    const clean = {};
+    for (const k of Object.keys(THRESHOLD_SPEC)) {
+      if (Object.prototype.hasOwnProperty.call(obj, k)) clean[k] = obj[k];
+    }
+    return Object.keys(clean).length ? clean : null;
+  } catch { return null; }
+}
+
+// 解析单个阈值：opts 覆盖 > 环境变量 > JSON文件 > 默认；返回 { value, source }。
+function resolveThreshold(key, opts, env, fileObj) {
   const [envKey, def] = THRESHOLD_SPEC[key];
   if (opts && Object.prototype.hasOwnProperty.call(opts, key)) {
     const v = Number(opts[key]);
@@ -60,6 +87,10 @@ function resolveThreshold(key, opts, env) {
   if (raw != null && String(raw).trim() !== '') {
     const v = Number(raw);
     if (Number.isFinite(v)) return { value: v, source: 'env' };
+  }
+  if (fileObj && Object.prototype.hasOwnProperty.call(fileObj, key)) {
+    const v = Number(fileObj[key]);
+    if (Number.isFinite(v)) return { value: v, source: 'file' };
   }
   return { value: def, source: 'default' };
 }
@@ -91,8 +122,14 @@ export class Monitor {
     this.bus = bus;
     this.omni = omni;
     this.metricsFile = opts.metricsFile || DEFAULT_METRIC_FILE;
-    // 阈值配置：opts.thresholds 覆盖 > 环境变量 > 内置默认；来源可经 config() 观测（诚实标注）。
-    this._resolveConfig(opts.thresholds);
+    this._optsThresholds = opts.thresholds || null;
+    // 阈值配置 JSON 文件（Observability-as-Code）：opts.thresholdFile > 环境变量 OMNI_MONITOR_CONFIG > 默认 ~/.omnisense/monitor.json
+    const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
+    this._thresholdFile = opts.thresholdFile || env.OMNI_MONITOR_CONFIG || DEFAULT_MONITOR_CONFIG_PATH;
+    const fileObj = loadThresholdFile(this._thresholdFile);
+    this._thresholdFileLoaded = !!fileObj;
+    // 阈值配置：opts.thresholds 覆盖 > 环境变量 > JSON文件 > 内置默认；来源可经 config() 观测（诚实标注）。
+    this._resolveConfig(this._optsThresholds, fileObj);
     // 记忆增长基线：内存缓存（检测更可靠、测试无文件污染），构造时若文件已有则载入以便跨进程延续。
     const seeded = this._loadMetrics();
     this._baseline = seeded._memBaseline || null;        // 稳定基线：供 memoryHealth.growth（自首次观察起的累计增长，仅首次建立）
@@ -122,15 +159,27 @@ export class Monitor {
 
   // ── 阈值配置解析 + 观测 ──
   // 把所有告警/异常阈值收敛到 this.cfg（数值）与 this._cfgSource（来源），避免散落硬编码。
-  _resolveConfig(optsThresholds) {
+  _resolveConfig(optsThresholds, fileObj) {
     const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
     this.cfg = {};
     this._cfgSource = {};
     for (const key of Object.keys(THRESHOLD_SPEC)) {
-      const { value, source } = resolveThreshold(key, optsThresholds, env);
+      const { value, source } = resolveThreshold(key, optsThresholds, env, fileObj);
       this.cfg[key] = value;
       this._cfgSource[key] = source;
     }
+  }
+
+  // 运行时切换阈值配置 JSON 文件并重新解析（不做破坏性重建）：
+  // 常用于 CLI `monitor --config-file=<path>` / 工作区 `omnisense-link monitor --config-file=<path>`。
+  // 优先级保持 opts > env > json文件 > 默认；返回加载结果与当前生效覆盖清单。
+  loadConfigFile(path) {
+    this._thresholdFile = path || null;
+    const fileObj = loadThresholdFile(path);
+    this._thresholdFileLoaded = !!fileObj;
+    this._resolveConfig(this._optsThresholds, fileObj);
+    const cfg = this.config();
+    return { ok: true, configFile: this._thresholdFile, loaded: !!fileObj, count: cfg.count, overrides: cfg.overrides };
   }
 
   // 返回当前生效的阈值配置（值 + 来源 default/env/opts + 环境变量名 + 说明），供 CLI/工作区/仪表盘观测。
@@ -149,7 +198,7 @@ export class Monitor {
       };
     }
     const overrides = Object.keys(thresholds).filter(k => thresholds[k].overridden);
-    return { ok: true, thresholds, overrides, count: overrides.length, metricsFile: this.metricsFile };
+    return { ok: true, thresholds, overrides, count: overrides.length, metricsFile: this.metricsFile, configFile: this._thresholdFile || null, configFileLoaded: this._thresholdFileLoaded };
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -821,8 +870,12 @@ export class Monitor {
       return `<div class="row"><span class="lbl">${esc(k)}</span><span class="val" style="color:${col}">${esc(v.value)}</span>
         <span class="muted">${esc(v.desc)} · 来源 <b style="color:${col}">${esc(v.source)}</b> · <code>${esc(v.envKey)}</code></span></div>`;
     }).join('');
+    const cfgFileNote = cfg.configFile
+      ? `<div class="muted" style="margin-bottom:6px">配置来源文件: <code>${esc(cfg.configFile)}</code>${cfg.configFileLoaded ? '' : '（未找到，已用默认/环境变量）'}</div>`
+      : '';
     const cfgHtml = `
-      <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项（可用对应环境变量或构造 opts.thresholds 覆盖）</div>
+      <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项（可用对应环境变量 / JSON 配置 / 构造 opts.thresholds 覆盖）</div>
+      ${cfgFileNote}
       ${cfgRows}`;
 
     return `<!doctype html>

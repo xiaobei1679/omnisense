@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v7.0.0 — 2026-07-14 (major)
+
+- monitor 阈值配置支持 JSON 文件（Observability-as-Code）：新增 loadThresholdFile + 扩展 resolveThreshold 第四来源 file + 构造器自动加载 OMNI_MONITOR_CONFIG 或默认 ~/.omnisense/monitor.json + 新增 loadConfigFile + 内核 CLI --config-file 与工作区 omnisense-link 桥接；新增 5 项内核单测 + 1 项跨层；借鉴 Grafana/Prometheus Observability-as-Code
+
 ## v6.1.0 — 2026-07-14 (minor)
 
 - monitor 告警阈值可配置化：11 类阈值经 OMNI_MONITOR_* 环境变量/opts 覆盖(opts>env>default，值可溯源、非法回退)，新增 config 总线方法(第15个)+CLI --config+dashboard 阈值配置区块+工作区 monitor config；消灭硬编码阈值反模式(借鉴 Grafana/Prometheus 动态阈值)

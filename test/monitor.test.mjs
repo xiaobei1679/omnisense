@@ -2,7 +2,7 @@
 // 全部离线、确定性，用最小 fake omni（bus 桩 + memory/tracer/body 桩）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Monitor } from '../src/modules/monitor.mjs';
@@ -345,10 +345,16 @@ test('detectAnomalies 集成趋势退化去重：相同 type+agent 只保留一�
 });
 
 test('config: 无 env/opts 时全部返回默认值且 source=default', () => {
-  const m = mkMon([]);
+  // 显式传入不存在的 thresholdFile，确保不依赖 ~/.omnisense/monitor.json 是否存在（确定性）。
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, {
+    metricsFile: join(TD, `def-${Math.random().toString(36).slice(2)}.json`),
+    thresholdFile: join(TD, 'no-such-config.json'),
+  });
   const c = m.config();
   assert.equal(c.ok, true);
   assert.equal(c.count, 0, '默认无覆盖');
+  assert.equal(c.configFileLoaded, false);
   assert.equal(c.thresholds.inactiveMs.value, 48 * 3600 * 1000, 'inactiveMs 默认 48h');
   assert.equal(c.thresholds.spikeFactor.value, 2, 'spikeFactor 默认 2');
   assert.equal(c.thresholds.trendSlopeP95.value, 50, 'trendSlopeP95 默认 50');
@@ -387,6 +393,80 @@ test('config: 环境变量覆盖默认(source=env)，非法值回退默认', () 
     delete process.env.OMNI_MONITOR_MEM_BULK;
     delete process.env.OMNI_MONITOR_SPIKE_FACTOR;
   }
+});
+
+test('config: JSON 文件覆盖默认(source=file，Observability-as-Code)', () => {
+  const cfgPath = join(TD, `mon-config-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(cfgPath, JSON.stringify({ spikeFactor: 7, memBulk: 3, trendSlopeP95: 200 }), 'utf8');
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, {
+    metricsFile: join(TD, `fc-${Math.random().toString(36).slice(2)}.json`),
+    thresholdFile: cfgPath,
+  });
+  const c = m.config();
+  assert.equal(c.thresholds.spikeFactor.value, 7, 'JSON 文件覆盖 spikeFactor');
+  assert.equal(c.thresholds.spikeFactor.source, 'file');
+  assert.equal(c.thresholds.memBulk.value, 3, 'JSON 文件覆盖 memBulk');
+  assert.equal(c.thresholds.memBulk.source, 'file');
+  assert.equal(c.thresholds.trendSlopeP95.value, 200);
+  assert.equal(c.configFile, cfgPath, 'config 应暴露配置文件路径');
+  assert.equal(c.configFileLoaded, true);
+  assert.equal(c.count, 3, '应识别 3 项被覆盖');
+});
+
+test('config: --config-file 加载未知键被忽略、非法值回退默认', () => {
+  const cfgPath = join(TD, `mon-bad-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(cfgPath, JSON.stringify({ spikeFactor: 9, unknownKey: 999, memBulk: 'not-a-number' }), 'utf8');
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, { metricsFile: join(TD, `fb-${Math.random().toString(36).slice(2)}.json`) });
+  const r = m.loadConfigFile(cfgPath);
+  assert.equal(r.ok, true);
+  assert.equal(r.loaded, true);
+  const c = m.config();
+  assert.equal(c.thresholds.spikeFactor.value, 9, '合法键生效');
+  assert.equal(c.thresholds.spikeFactor.source, 'file');
+  assert.equal(c.thresholds.memBulk.value, 20, '非法值回退默认');
+  assert.equal(c.thresholds.memBulk.source, 'default');
+  assert.equal(c.overrides.includes('unknownKey'), false, '未知键不应污染阈值');
+});
+
+test('config: --config-file 指向不存在文件 → 静默降级(loaded=false，保持默认)', () => {
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, { metricsFile: join(TD, `fmi-${Math.random().toString(36).slice(2)}.json`) });
+  const r = m.loadConfigFile(join(TD, 'does-not-exist.json'));
+  assert.equal(r.loaded, false);
+  const c = m.config();
+  assert.equal(c.thresholds.spikeFactor.source, 'default', '文件不存在应回退默认');
+  assert.equal(c.configFileLoaded, false);
+});
+
+test('config: 优先级 opts > env > file > default（env 盖过 file，opts 盖过 env）', () => {
+  const cfgPath = join(TD, `mon-pri-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(cfgPath, JSON.stringify({ spikeFactor: 7 }), 'utf8');
+  const omni = makeOmni([], fakeMemory());
+  process.env.OMNI_MONITOR_SPIKE_FACTOR = '4';
+  try {
+    const m = new Monitor(omni.bus, omni, {
+      metricsFile: join(TD, `pri-${Math.random().toString(36).slice(2)}.json`),
+      thresholdFile: cfgPath,
+      thresholds: { spikeFactor: 11 },
+    });
+    const c = m.config();
+    assert.equal(c.thresholds.spikeFactor.value, 11, 'opts 最高优先级，盖过 env 与 file');
+    assert.equal(c.thresholds.spikeFactor.source, 'opts');
+  } finally {
+    delete process.env.OMNI_MONITOR_SPIKE_FACTOR;
+  }
+});
+
+test('dashboard 阈值区块含配置文件路径(Observability-as-Code 可溯源)', () => {
+  const cfgPath = join(TD, `mon-dash-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(cfgPath, JSON.stringify({ spikeFactor: 6 }), 'utf8');
+  const m = mkMon([]);
+  m.loadConfigFile(cfgPath);
+  const html = m.renderDashboard();
+  assert.ok(html.includes('配置来源文件'), '仪表盘应展示配置来源文件行');
+  assert.ok(html.includes(cfgPath), '仪表盘应含配置文件路径');
 });
 
 test('阈值真实生效：memBulk 降低后更小的记忆增长即触发批量注入', () => {
