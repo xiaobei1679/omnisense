@@ -121,11 +121,13 @@
 
 ## 监控器官（monitor · 第 8 器官：统一观测身体是否健康）
 
-`tracer` 回答"身体**做了什么**"，而 `monitor` 回答"身体**现在健康吗**"——这是 Agent 可观测性的第二支柱（Industry 三支柱：Traces / Metrics / Evaluations，对齐 LangSmith / Langfuse / Helicone / Arize / CloudWatch GenAI）。`monitor` 经 `bus.register('monitor', method, fn)` 暴露 **12 个总线方法**（核心 6：snapshot/alerts/dashboard/statusGrid/memoryHealth/anomalies；新增 6：recentRuns/latency/toolHealth/recordMetric/checkAlerts/collect），把身体各子系统（眼/耳/脑/手/感知/脚 + 记忆 + 工具管线）的健康聚合为一份零依赖 HTML 仪表盘（`monitor dashboard`），CLI `monitor --summary/--tools/--anomalies/--grid` 取结构化数据、serve `GET /monitor` 暴露。
+`tracer` 回答"身体**做了什么**"，而 `monitor` 回答"身体**现在健康吗**"——这是 Agent 可观测性的第二支柱（Industry 三支柱：Traces / Metrics / Evaluations，对齐 LangSmith / Langfuse / Helicone / Arize / CloudWatch GenAI）。`monitor` 经 `bus.register('monitor', method, fn)` 暴露 **15 个总线方法**（核心 6：snapshot/alerts/dashboard/statusGrid/memoryHealth/anomalies；新增 9：recentRuns/latency/toolHealth/recordMetric/checkAlerts/collect/trendAnomalies/trends/config），把身体各子系统（眼/耳/脑/手/感知/脚 + 记忆 + 工具管线）的健康聚合为一份零依赖 HTML 仪表盘（`monitor dashboard`），CLI `monitor --summary/--tools/--anomalies/--grid/--trends/--config` 取结构化数据、serve `GET /monitor` 暴露。
 
 - **工具管线健康（toolHealth，v4.5.0 新增）**：把"工具可靠性是 agent 延迟的暗物质"（OpenLIT / VictoriaMetrics 思想）落为可观测信号——`toolCacheStats()` 缓存命中分布 + `toolBreakerStatus()` 熔断器状态（任一 `open` 即 `circuit_open` 告警）+ 每工具 P50/P95/P99/avg 延迟分布（取自 `tracer` 每步 `action`/`durationMs`）。借鉴 dev.to AgentCircuitBreaker 的「circuit-open 即一等健康信号」思路。
+- **趋势异常检测（trendAnomalies / trends，v6.0.0 新增）**：对延迟 P95、成功率、记忆规模等时序做 OLS 线性回归取斜率，斜率超阈值即报"持续爬坡/持续劣化"趋势告警（借鉴 SRE 趋势预警：不只看瞬时点、更看方向）。
+- **可调告警阈值（config，v6.1.0 新增）**：全部告警/异常/网格/趋势判定阈值不再硬编码，经 `THRESHOLD_SPEC`（11 个 key→[环境变量名, 默认值, 说明]）集中声明，可由 `OMNI_MONITOR_*` 环境变量或 `new Monitor({thresholds:{...}})` 覆盖；`resolveThreshold()` 按 opts > env > default 优先级解析，每个阈值可溯源（source=default/env/opts），非法值自动回退默认。`config()` 返回全量阈值及来源，`dashboard` 增「阈值配置」区块（借鉴 Grafana 动态阈值 + Prometheus 阈值动态化，规避硬编码阈值反模式）。
 - **异常检测（detectAnomalies）**：覆盖 circuit_open（熔断开启）、记忆健康劣化、引擎延迟突增、`run` 失败率超标等规则，命中即发 warning 告警，可接 `monitor --anomalies` / `checkAlerts`。
-- 工作区侧经 `openclaw-workspace/scripts/omnisense-link.mjs monitor [snapshot|health|alerts|dashboard|toolHealth]` 跨层复用内核同一份 monitor（同源 bus 契约），三层（内核 `node src/cli.mjs monitor` / 桥接 `omni-body.mjs` / 工作区）一致。
+- 工作区侧经 `openclaw-workspace/scripts/omnisense-link.mjs monitor [snapshot|health|alerts|dashboard|toolHealth|trends|trendAnomalies|config]` 跨层复用内核同一份 monitor（同源 bus 契约），三层（内核 `node src/cli.mjs monitor` / 桥接 `omni-body.mjs` / 工作区）一致。
 
 ## 目录结构
 
@@ -156,7 +158,7 @@ src/
     mouth.mjs        嘴巴：意见/对话/出声
     brain.mjs        大脑：思考/决策/规划/行动(act) + synthesize()
     perception.mjs   感知：环境模型聚合
-    monitor.mjs       监控器官（第 8 器官）：统一观测身体是否健康（snapshot/alerts/dashboard + 12 个总线方法，含 toolHealth 工具管线健康：缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警；借鉴 LangSmith/Langfuse/Helicone/Arize/CloudWatch GenAI 三支柱 + OpenLIT「工具可靠性是 agent 延迟的暗物质」+ dev.to AgentCircuitBreaker）
+    monitor.mjs       监控器官（第 8 器官）：统一观测身体是否健康（snapshot/alerts/dashboard + 15 个总线方法，含 toolHealth 工具管线健康：缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警 + 趋势异常(OLS 斜率) + 可调告警阈值(config：OMNI_MONITOR_* 环境变量/opts 覆盖，值可溯源 default/env/opts)；借鉴 LangSmith/Langfuse/Helicone/Arize/CloudWatch GenAI 三支柱 + OpenLIT「工具可靠性是 agent 延迟的暗物质」+ dev.to AgentCircuitBreaker + Grafana/Prometheus 动态阈值）
   test/                 node:test 离线单测（bus/breaker/config/logger/brain/server/providers/llm/eyes/memory/tools/agent/watch/monitor）
 .github/workflows/    Node 18/20/22 CI（语法检查 + 单测）
 ```

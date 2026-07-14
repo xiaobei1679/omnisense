@@ -28,6 +28,42 @@ const LIVENESS_HEALTHY_MS = 3600000;     // <1h 视为活跃(healthy)
 const LIVENESS_DEGRADED_MS = 86400000;   // 1h~24h 降级(degraded)，>24h 失联(down)
 const MAX_TREND_POINTS = 120;            // 趋势点环形缓冲上限（约 120 次快照，足够观察曲线形态）
 
+// ── 阈值配置（可调，避免硬编码告警阈值这一反模式）──
+// 借鉴 Prometheus/Grafana 可观测最佳实践：「先监控建立基线，再据基线设阈值；阈值应动态化而非固定值，
+// 以减少误报」(https://alwaysinvictus.blog.csdn.net/article/details/157546925 · https://www.grafana.com/docs/grafana/latest/alerting/examples/dynamic-thresholds/)。
+// 不同部署（吵闹/安静、快/慢机器）需要不同阈值——把所有告警/异常阈值抽成一份可观测、可覆盖的配置：
+//   优先级：构造 opts.thresholds > 环境变量 > 内置默认。每个阈值的生效来源在 config() 里诚实标注。
+// 全部零依赖、离线、可测；不设环境变量时行为与旧版完全一致（默认值即旧硬编码值）。
+const THRESHOLD_SPEC = {
+  // key: [环境变量名, 默认值, 单位/说明]
+  inactiveMs:          ['OMNI_MONITOR_INACTIVE_MS', INACTIVE_MS, 'ms · 无产出多久判 inactive 告警'],
+  spikeFactor:         ['OMNI_MONITOR_SPIKE_FACTOR', SPIKE_FACTOR, 'x · 失败率/延迟飙升至基线几倍判突增'],
+  memStaleMs:          ['OMNI_MONITOR_MEM_STALE_MS', MEM_STALE_MS, 'ms · 记忆记录多久判「陈旧」'],
+  memBulk:             ['OMNI_MONITOR_MEM_BULK', MEM_BULK_THRESHOLD, '条 · 单次检查记忆层增长几条判批量注入'],
+  livenessHealthyMs:   ['OMNI_MONITOR_LIVENESS_HEALTHY_MS', LIVENESS_HEALTHY_MS, 'ms · 引擎多久内算 healthy'],
+  livenessDegradedMs:  ['OMNI_MONITOR_LIVENESS_DEGRADED_MS', LIVENESS_DEGRADED_MS, 'ms · 引擎多久内算 degraded（超出算 down）'],
+  trendSlopeP95:       ['OMNI_MONITOR_TREND_SLOPE_P95', 50, 'ms/点 · P95 延迟趋势爬坡斜率阈值(trend_regression)'],
+  trendSlopeSuccess:   ['OMNI_MONITOR_TREND_SLOPE_SUCCESS', 0.02, '/点 · 成功率趋势下降斜率阈值(trend_drift)'],
+  trendSlopeMemGrow:   ['OMNI_MONITOR_TREND_SLOPE_MEM_GROW', 10, '条/点 · 记忆快速增长斜率阈值(trend_pre_warning)'],
+  trendSlopeMemIdle:   ['OMNI_MONITOR_TREND_SLOPE_MEM_IDLE', 0.5, '条/点 · 记忆增长停滞斜率阈值(空转 pre_warning)'],
+  trendSlopeFleet:     ['OMNI_MONITOR_TREND_SLOPE_FLEET', 0.5, '/点 · 舰队健康引擎数下降斜率阈值(trend_regression)'],
+};
+
+// 解析单个阈值：opts 覆盖 > 环境变量 > 默认；返回 { value, source }。
+function resolveThreshold(key, opts, env) {
+  const [envKey, def] = THRESHOLD_SPEC[key];
+  if (opts && Object.prototype.hasOwnProperty.call(opts, key)) {
+    const v = Number(opts[key]);
+    if (Number.isFinite(v)) return { value: v, source: 'opts' };
+  }
+  const raw = env ? env[envKey] : undefined;
+  if (raw != null && String(raw).trim() !== '') {
+    const v = Number(raw);
+    if (Number.isFinite(v)) return { value: v, source: 'env' };
+  }
+  return { value: def, source: 'default' };
+}
+
 function completedCount(runs) {
   return runs.filter(r => r.completed).length;
 }
@@ -55,6 +91,8 @@ export class Monitor {
     this.bus = bus;
     this.omni = omni;
     this.metricsFile = opts.metricsFile || DEFAULT_METRIC_FILE;
+    // 阈值配置：opts.thresholds 覆盖 > 环境变量 > 内置默认；来源可经 config() 观测（诚实标注）。
+    this._resolveConfig(opts.thresholds);
     // 记忆增长基线：内存缓存（检测更可靠、测试无文件污染），构造时若文件已有则载入以便跨进程延续。
     const seeded = this._loadMetrics();
     this._baseline = seeded._memBaseline || null;        // 稳定基线：供 memoryHealth.growth（自首次观察起的累计增长，仅首次建立）
@@ -79,6 +117,39 @@ export class Monitor {
     this.bus.register('monitor', 'toolHealth', () => this.toolHealth());
     this.bus.register('monitor', 'trends', p => this.trends(p || {}));
     this.bus.register('monitor', 'trendAnomalies', () => this._detectTrendAnomalies());
+    this.bus.register('monitor', 'config', () => this.config());
+  }
+
+  // ── 阈值配置解析 + 观测 ──
+  // 把所有告警/异常阈值收敛到 this.cfg（数值）与 this._cfgSource（来源），避免散落硬编码。
+  _resolveConfig(optsThresholds) {
+    const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
+    this.cfg = {};
+    this._cfgSource = {};
+    for (const key of Object.keys(THRESHOLD_SPEC)) {
+      const { value, source } = resolveThreshold(key, optsThresholds, env);
+      this.cfg[key] = value;
+      this._cfgSource[key] = source;
+    }
+  }
+
+  // 返回当前生效的阈值配置（值 + 来源 default/env/opts + 环境变量名 + 说明），供 CLI/工作区/仪表盘观测。
+  // 让「阈值为什么是这个数、能怎么调」透明可查（可观测性最佳实践：阈值应可见、可调、可溯源）。
+  config() {
+    const thresholds = {};
+    for (const key of Object.keys(THRESHOLD_SPEC)) {
+      const [envKey, def, desc] = THRESHOLD_SPEC[key];
+      thresholds[key] = {
+        value: this.cfg[key],
+        source: this._cfgSource[key],
+        envKey,
+        default: def,
+        overridden: this._cfgSource[key] !== 'default',
+        desc,
+      };
+    }
+    const overrides = Object.keys(thresholds).filter(k => thresholds[k].overridden);
+    return { ok: true, thresholds, overrides, count: overrides.length, metricsFile: this.metricsFile };
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -138,7 +209,7 @@ export class Monitor {
     const grid = Object.entries(byEngine).map(([engine, g]) => {
       const errorRate = g.total ? (g.total - g.completed) / g.total : 0;
       const ageMs = g.last ? now - g.last : Infinity;
-      const liveness = g.last ? (ageMs < LIVENESS_HEALTHY_MS ? 'healthy' : ageMs < LIVENESS_DEGRADED_MS ? 'degraded' : 'down') : 'unknown';
+      const liveness = g.last ? (ageMs < this.cfg.livenessHealthyMs ? 'healthy' : ageMs < this.cfg.livenessDegradedMs ? 'degraded' : 'down') : 'unknown';
       const errState = errorRate <= 0.01 ? 'healthy' : errorRate <= 0.05 ? 'degraded' : 'critical';
       const status = [liveness, errState].sort((a, b) => rank[b] - rank[a])[0];
       return {
@@ -265,7 +336,7 @@ export class Monitor {
     const p95s = pts.map(p => p.p95).filter(v => v != null);
     if (p95s.length >= 4) {
       const slope = linRegSlope(p95s);
-      if (slope > 50) { // 每趋势点爬升 >50ms
+      if (slope > this.cfg.trendSlopeP95) { // 每趋势点爬升超阈值(默认 >50ms)
         const recent = p95s.slice(-3);
         alerts.push({
           level: 'warning', type: 'trend_regression',
@@ -279,7 +350,7 @@ export class Monitor {
     const srs = pts.map(p => p.successRate).filter(v => v != null);
     if (srs.length >= 4) {
       const slope = linRegSlope(srs);
-      if (slope < -0.02) { // 每趋势点下降 >2%
+      if (slope < -this.cfg.trendSlopeSuccess) { // 每趋势点下降超阈值(默认 >2%)
         alerts.push({
           level: 'warning', type: 'trend_drift',
           message: `成功率持续下降（斜率 ${(slope * 100).toFixed(1)}%/点，最近 3 次均值 ${(srs.slice(-3).reduce((a, b) => a + b, 0) / 3 * 100).toFixed(0)}%，初始 ${(srs[0] * 100).toFixed(0)}%）——Agent 行为漂移`,
@@ -292,14 +363,14 @@ export class Monitor {
     const mems = pts.map(p => p.memTotal).filter(v => v != null);
     if (mems.length >= 4) {
       const slope = linRegSlope(mems);
-      if (slope > 10) {
+      if (slope > this.cfg.trendSlopeMemGrow) {
         alerts.push({
           level: 'info', type: 'trend_pre_warning',
           message: `记忆快速增长（斜率 ${slope.toFixed(1)}条/点，最近 3 次均值 ${Math.round(mems.slice(-3).reduce((a, b) => a + b, 0) / 3)} 条，初始 ${Math.round(mems[0])} 条）——可能的记忆写入风暴`,
           agent: 'memory',
         });
       }
-      if (Math.abs(slope) < 0.5 && mems.length >= 6) {
+      if (Math.abs(slope) < this.cfg.trendSlopeMemIdle && mems.length >= 6) {
         alerts.push({
           level: 'info', type: 'trend_pre_warning',
           message: `记忆增长近乎停滞（斜率 ${slope.toFixed(1)}条/点），身体可能处于"空转"状态，不记新东西`,
@@ -312,7 +383,7 @@ export class Monitor {
     const fleets = pts.map(p => p.fleetHealthy).filter(v => v != null);
     if (fleets.length >= 4) {
       const slope = linRegSlope(fleets);
-      if (slope < -0.5) {
+      if (slope < -this.cfg.trendSlopeFleet) {
         alerts.push({
           level: 'warning', type: 'trend_regression',
           message: `健康引擎数持续下降（斜率 ${slope.toFixed(2)}/点），舰队多个引擎可能正在逐步退化`,
@@ -337,17 +408,18 @@ export class Monitor {
     const avgConf = confidences.length ? Number((confidences.reduce((a, b) => a + b, 0) / confidences.length).toFixed(2)) : null;
     const lowConf = confidences.filter(c => c < 0.5).length;
     const now = Date.now();
+    const staleMs = this.cfg.memStaleMs;
     let stale = 0;
-    for (const n of notes) if (n.t && now - n.t > MEM_STALE_MS) stale++;
-    for (const k of knowledge) if (k.at && now - k.at > MEM_STALE_MS) stale++;
-    for (const s of skills) if (s.at && now - s.at > MEM_STALE_MS) stale++;
+    for (const n of notes) if (n.t && now - n.t > staleMs) stale++;
+    for (const k of knowledge) if (k.at && now - k.at > staleMs) stale++;
+    for (const s of skills) if (s.at && now - s.at > staleMs) stale++;
     const base = this._readBaseline();
     const growth = {};
     for (const k of ['memory', 'rule', 'skill', 'knowledge']) growth[k] = base ? (layers[k] - (base[k] || 0)) : 0;
     if (!this._baseline) this._saveBaseline(layers); // 仅首次建立稳定基线（不每次覆盖，否则 growth 恒为 0）
     return {
       layers, skillUtilization: Number(skillUtil.toFixed(2)), avgConfidence: avgConf,
-      lowConfidence: lowConf, staleCount: stale, staleWindowDays: 7, growth, baseline: base,
+      lowConfidence: lowConf, staleCount: stale, staleWindowDays: Math.round(staleMs / 86400000), growth, baseline: base,
     };
   }
 
@@ -376,7 +448,7 @@ export class Monitor {
       const recent = runs.slice(-10).map(r => r.durationMs).filter(d => typeof d === 'number' && d > 0).sort((a, b) => a - b);
       if (baseRuns.length && recent.length) {
         const p95a = percentile(baseRuns, 95), p95r = percentile(recent, 95);
-        if (p95a && p95r > p95a * SPIKE_FACTOR) {
+        if (p95a && p95r > p95a * this.cfg.spikeFactor) {
           alerts.push({ level: 'warning', type: 'duration_spike', message: `近 10 次 P95 延迟 ${p95r}ms 飙升至基线 ${p95a}ms 的 ${(p95r / p95a).toFixed(1)}x`, agent: 'latency' });
         }
       }
@@ -395,7 +467,7 @@ export class Monitor {
       const cur = this._currentLayers();
       for (const k of ['memory', 'rule', 'skill', 'knowledge']) {
         const d = cur[k] - (base[k] || 0);
-        if (d >= MEM_BULK_THRESHOLD) {
+        if (d >= this.cfg.memBulk) {
           alerts.push({ level: 'warning', type: 'memory_bulk_injection', message: `记忆层 ${k} 自上次检查增长 ${d} 条（疑似批量注入）`, agent: 'memory' });
         }
       }
@@ -525,9 +597,10 @@ export class Monitor {
       alerts.push({ level: 'error', type: 'consecutive_failures', message: '连续 3 次运行未完成', agent: 'tracer' });
     }
     const la = lastActiveAt(runs);
+    const inactiveHrs = this.cfg.inactiveMs / 3600000;
     if (la) {
       const hrs = (Date.now() - la) / 3600000;
-      if (hrs > 48) alerts.push({ level: 'warning', type: 'inactive', message: `超过 48h 无运行产出（${Math.round(hrs)}h）`, agent: 'tracer' });
+      if (hrs > inactiveHrs) alerts.push({ level: 'warning', type: 'inactive', message: `超过 ${Math.round(inactiveHrs)}h 无运行产出（${Math.round(hrs)}h）`, agent: 'tracer' });
     } else {
       alerts.push({ level: 'warning', type: 'no_data', message: '尚无任何运行轨迹', agent: 'tracer' });
     }
@@ -535,7 +608,7 @@ export class Monitor {
       const baseRate = (runs.length - completed) / runs.length;
       const recent = runs.slice(-5);
       const recentRate = (recent.length - completedCount(recent)) / recent.length;
-      if (baseRate > 0 && recentRate > baseRate * SPIKE_FACTOR) {
+      if (baseRate > 0 && recentRate > baseRate * this.cfg.spikeFactor) {
         alerts.push({
           level: 'warning', type: 'error_rate_spike',
           message: `近 5 次失败率 ${recentRate.toFixed(2)} 飙升至基线 ${baseRate.toFixed(2)} 的 ${(recentRate / baseRate).toFixed(1)}x`,
@@ -545,7 +618,8 @@ export class Monitor {
     }
 
     const recorded = this._loadMetrics();
-    const ids = agentId ? [agentId] : Object.keys(recorded).filter(k => k !== '_memBaseline');
+    // 排除所有内部键（_memBaseline/_anomalyBaseline/_trend 等），只遍历真正的 agent 指标历史。
+    const ids = agentId ? [agentId] : Object.keys(recorded).filter(k => !k.startsWith('_'));
     for (const id of ids) {
       const hist = recorded[id];
       if (!Array.isArray(hist) || !hist.length) continue;
@@ -554,8 +628,8 @@ export class Monitor {
         alerts.push({ level: 'error', type: 'consecutive_errors', message: `${id} 连续 3 次报错`, agent: id });
       }
       const lastM = hist[hist.length - 1];
-      if (lastM && (Date.now() - new Date(lastM.ts).getTime()) / 3600000 > 48) {
-        alerts.push({ level: 'warning', type: 'inactive', message: `${id} 超过 48h 无产出`, agent: id });
+      if (lastM && (Date.now() - new Date(lastM.ts).getTime()) > this.cfg.inactiveMs) {
+        alerts.push({ level: 'warning', type: 'inactive', message: `${id} 超过 ${Math.round(this.cfg.inactiveMs / 3600000)}h 无产出`, agent: id });
       }
     }
     return alerts;
@@ -740,6 +814,17 @@ export class Monitor {
       <div style="margin-top:8px">${t.sparkline.memTotal} <span class="muted">记忆总量趋势</span></div>
       <div class="muted" style="margin-top:8px">采样点: ${t.count}（每次快照自动落盘轻量指标点，跨进程延续；环形缓冲上限 ${MAX_TREND_POINTS}）</div>`;
 
+    // 阈值配置（可调）：让"告警为什么触发、能怎么调"透明可查（避免硬编码阈值反模式）。
+    const cfg = this.config();
+    const cfgRows = Object.entries(cfg.thresholds).map(([k, v]) => {
+      const col = v.overridden ? '#d29922' : 'var(--muted)';
+      return `<div class="row"><span class="lbl">${esc(k)}</span><span class="val" style="color:${col}">${esc(v.value)}</span>
+        <span class="muted">${esc(v.desc)} · 来源 <b style="color:${col}">${esc(v.source)}</b> · <code>${esc(v.envKey)}</code></span></div>`;
+    }).join('');
+    const cfgHtml = `
+      <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项（可用对应环境变量或构造 opts.thresholds 覆盖）</div>
+      ${cfgRows}`;
+
     return `<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -808,6 +893,8 @@ export class Monitor {
   <section><h2>延迟指标 / Latency（P50/P95/P99）</h2>${latHtml}</section>
 
   <section><h2>趋势 / Trends（随时间变化的指标基线 · sparkline）</h2>${trendHtml}</section>
+
+  <section><h2>阈值配置 / Thresholds（可调告警阈值 · 来源可溯源）</h2>${cfgHtml}</section>
 
   <section><h2>记忆状态 / Memory Health（四层 + 记忆专属指标）</h2>${memHtml}</section>
 

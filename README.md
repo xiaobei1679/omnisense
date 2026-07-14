@@ -115,7 +115,7 @@ node integrations/openclaw/omnisense-bridge.mjs "记录一条测试记忆" --jso
 | 🤖 **自主循环（autopilot）** | 身体用自身能力卡 `skillResolve` **自己决定每轮做什么**并离线执行：感知→自生成意图→选最佳器官→`skillDispatch` 执行，全程零网络、像真人一样自驱活着（借鉴 BabyAGI 自生成任务队列思想：任务创建→优先级排序→执行→据结果重排→再生成） |
 | 🔧 **工具级缓存/熔断** | 复用 `breaker.mjs` 的 TTL 缓存 + 熔断器（此前只用于热搜），**扩展到 Agent 工具调用**：联网工具 `web_fetch`/`summarize_url`/`hot_topics` 命中缓存直接返回、避免重复联网；某工具持续失败则熔断、避免反复超时拖垮整条 agent 流水线。声明式启用（工具定义加 `cacheTtl`/`circuit`），默认工具行为完全不变。`cli cache` / 工作区 `omnisense-link cache` 可查状态与清空（借鉴 LangChain 的 LLM/工具调用缓存与 AutoGen「per-tool circuit breaker」生产实践） |
 | 🦶 **常驻自驱身体（watch --autopilot）** | 把 `watch` 常驻感知循环升级为**常驻自驱**：每 tick 由身体自身能力卡 `skillResolve` 自主决策并 `skillDispatch` 离线执行，脚（foot）从"巡逻"变成**持续自我驱动的活身体**（像真人一样在世界里自驱地活着）。与 `--agent`（变化即行动·固定目标）**互补**：两者可同时开，互相叠加。离线启发式实现（借鉴 OpenClaw「心跳闭环 / Heartbeat Loop」与 Sophia「System 3 持久自驱层」），零网络零 key（https://www.aigcopen.com/content/omni-channel/39278.html · https://arxiv.org/abs/2512.18202） |
-| 🔭 **监控器官 monitor（第 8 器官）** | 统一状态快照（状态/器官/四层记忆/活动/告警）＋ Agent 健康（错误率→healthy/degraded/critical）＋ 可观测三支柱（指标+追踪+日志，借鉴 LangSmith/Langfuse/CloudWatch GenAI）＋ 状态网格/舰队健康颜色化（借鉴 ClawHub）＋ 记忆健康（技能利用率/信任分/陈旧，借鉴 perfecxion）＋ 异常检测（延迟突增/吞吐骤降/记忆批量注入/**熔断开启 circuit_open**）＋ **工具管线健康（缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布，本轮新增常驻迭代）** ＋ 零依赖静态 HTML 驾驶舱仪表盘。CLI `monitor [--alerts|--health|--latency|--grid|--memory|--anomalies|--runs|--tools]`，工作区 `omnisense-link monitor <snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth>` 跨层复用同一份实现 |
+| 🔭 **监控器官 monitor（第 8 器官）** | 统一状态快照（状态/器官/四层记忆/活动/告警）＋ Agent 健康（错误率→healthy/degraded/critical）＋ 可观测三支柱（指标+追踪+日志，借鉴 LangSmith/Langfuse/CloudWatch GenAI）＋ 状态网格/舰队健康颜色化（借鉴 ClawHub）＋ 记忆健康（技能利用率/信任分/陈旧，借鉴 perfecxion）＋ 异常检测（延迟突增/吞吐骤降/记忆批量注入/**熔断开启 circuit_open**）＋ 工具管线健康（缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布）＋ 趋势异常检测（P95 爬坡/成功率漂移/记忆空转）＋ **可调告警阈值（`monitor --config`，本轮新增常驻迭代）：所有阈值可经 `OMNI_MONITOR_*` 环境变量或构造 opts 覆盖，来源(default/env/opts)可观测可溯源，避免硬编码阈值反模式** ＋ 零依赖静态 HTML 驾驶舱仪表盘（含「阈值配置」区块）。CLI `monitor [--alerts|--health|--latency|--grid|--memory|--anomalies|--runs|--tools|--trends|--config]`，工作区 `omnisense-link monitor <snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config>` 跨层复用同一份实现 |
 | 🔭 **自驱身体轨迹可观测（autopilot / watch --autopilot trace）** | 身体自驱决策（autopilot 每轮 / watch --autopilot 每 tick）经**同一份 tracer** 落盘为 `engine='autopilot'` 的可回放 trace：**可观测性闭环**——身体"自己活着"的行为同样可追溯、可回放、可防退化。`--trace` 显式开启（watch --autopilot 默认开启）；`trace --find="autopilot:"` 可检索全部自驱轨迹，`trace --diff`/`--regression`/`--export` 同样适用（对齐 Agent 可观测性四要素 Traces/Replay/Decision Log/Cost Attribution；借鉴 LangGraph checkpointer 每步落盘 + Octopoda 时间线回放思想，https://docs.langchain.com/oss/python/langgraph/persistence · https://ai-curator.jp/articles/cmo08r7qd00urdo1edgf942tn） |
 
 ## 🔌 工具插件自发现（借鉴 Nanobot / OpenSquilla 技能加载器）
@@ -578,10 +578,13 @@ node src/cli.mjs monitor --summary           # 统一状态快照
 node src/cli.mjs monitor --tools             # 工具管线健康：缓存/熔断/工具级 P50-P95-P99
 node src/cli.mjs monitor --anomalies         # 异常检测（含熔断开启 circuit_open）
 node src/cli.mjs monitor --grid              # 引擎状态网格（颜色化）
-node src/cli.mjs dashboard                    # 生成零依赖静态 HTML 仪表盘
+node src/cli.mjs monitor --config            # 生效的告警阈值（值/来源/环境变量名，可用 OMNI_MONITOR_* 覆盖）
+OMNI_MONITOR_SPIKE_FACTOR=3 node src/cli.mjs monitor --config   # 环境变量覆盖示例（source 变 env）
+node src/cli.mjs dashboard                    # 生成零依赖静态 HTML 仪表盘（含「阈值配置」区块）
 # 工作区侧跨层复用同一份实现（合并后新项目：工作区能真正观测身体）
 node openclaw-workspace/scripts/omnisense-link.mjs monitor snapshot
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
+node openclaw-workspace/scripts/omnisense-link.mjs monitor config     # 跨层查询生效告警阈值
 ```
 
 > 诚实边界：monitor 只读采集（tracer / memory / toolBreaker），任何采集失败均静默降级、绝不阻断主流程；`circuitOpen` 等告警是"诚实降级"的自然延伸——工具真的不可用时明确报告，绝不假装成功。

@@ -97,17 +97,21 @@ node "{SKILL_DIR}/src/cli.mjs" trace --export=spans.otlp.json --export-format=ot
 - **状态网格/舰队健康 `monitor --grid`**：每个引擎颜色化 healthy/degraded/down（借鉴 ClawHub 舰队健康）。
 - **记忆健康 `monitor --memory`**：技能利用率/平均信任分/低信任/陈旧/增长（借鉴 perfecxion）。
 - **异常检测 `monitor --anomalies`**：延迟突增/吞吐骤降/记忆批量注入/**熔断开启(circuit_open)** 四类信号（熔断开启直接反映 agent 工具流水线降级，借鉴 OpenLIT「工具可靠性是 agent 延迟的暗物质」）。
-- **工具管线健康 `monitor --tools`（本轮新增常驻迭代能力）**：工具缓存命中条目 + 每工具熔断器状态(开启/正常) + 工具级 P50/P95/P99 延迟分布（从 tracer 工具步聚合）——补齐"工具失败但 monitor 不报"盲区。
-- **可视化仪表盘 `dashboard`**：零依赖静态 HTML（驾驶舱风格），含器官/舰队健康/延迟 sparkline/记忆健康/工具管线健康/活动/告警/运行时间线。
+- **工具管线健康 `monitor --tools`**：工具缓存命中条目 + 每工具熔断器状态(开启/正常) + 工具级 P50/P95/P99 延迟分布（从 tracer 工具步聚合）——补齐"工具失败但 monitor 不报"盲区。
+- **可调告警阈值 `monitor --config`（本轮新增常驻迭代能力）**：所有告警/异常/网格判定阈值（不活跃窗口、延迟突增倍数、记忆陈旧窗口、记忆批量注入、liveness healthy/degraded 窗口、5 类趋势斜率）不再硬编码，可经 `OMNI_MONITOR_*` 环境变量或 `new Monitor({thresholds:{...}})` 覆盖；每个阈值可溯源（default/env/opts），非法值自动回退默认（借鉴 Grafana 动态阈值 + Prometheus 阈值动态化，避免硬编码阈值反模式）。
+- **可视化仪表盘 `dashboard`**：零依赖静态 HTML（驾驶舱风格），含器官/舰队健康/延迟 sparkline/记忆健康/工具管线健康/**阈值配置**/活动/告警/运行时间线。
 
 ```bash
 node "{SKILL_DIR}/src/cli.mjs" monitor --summary    # 统一状态快照
 node "{SKILL_DIR}/src/cli.mjs" monitor --tools      # 工具管线健康：缓存/熔断/工具级 P50-P95-P99
 node "{SKILL_DIR}/src/cli.mjs" monitor --grid       # 引擎状态网格(颜色化)
 node "{SKILL_DIR}/src/cli.mjs" monitor --anomalies  # 异常检测(含熔断开启)
-node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML 仪表盘
+node "{SKILL_DIR}/src/cli.mjs" monitor --config     # 查看/校验当前告警阈值(值/来源/环境变量名)
+OMNI_MONITOR_SPIKE_FACTOR=3 node "{SKILL_DIR}/src/cli.mjs" monitor --config  # 环境变量覆盖延迟突增阈值
+node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML 仪表盘(含阈值配置区块)
 # 工作区侧跨层复用同一份实现：
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
+node openclaw-workspace/scripts/omnisense-link.mjs monitor config
 ```
 
 ```bash

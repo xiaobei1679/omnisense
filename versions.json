@@ -159,5 +159,12 @@
     "date": "2026-07-14T13:15:05.263Z",
     "tag": "v6.0.0",
     "notes": "监控器官 monitor 增强：趋势异常检测(trend-based anomaly detection)——新增 _detectTrendAnomalies() 检测「慢煮青蛙」式渐进退化(P95爬坡 trend_regression/成功率漂移 trend_drift/记忆空转 trend_pre_warning/舰队健康退化)，集成进 detectAnomalies 与 snapshot；修复 pre-existing bug：snapshot() 中 _appendTrend 为死代码(直接 return 对象字面量致趋势点从未落盘)，trends/trend 字段等功能实质上一直未生效；新增 14 号总线方法 trendAnomalies + 公共方法别名；工作区 omnisense-link.mjs 增 trendAnomalies 跨层子命令；内核测试 +5(253/253)、子包 +1(274/274)全绿；借鉴 OpenObserve/AIOps 'gradual degradation' + LangSmith drift detection + Prometheus linReg 趋势回归思想。"
+  },
+  {
+    "version": "6.1.0",
+    "type": "minor",
+    "date": "2026-07-14T15:28:07.305Z",
+    "tag": "v6.1.0",
+    "notes": "monitor 告警阈值可配置化：11 类阈值经 OMNI_MONITOR_* 环境变量/opts 覆盖(opts>env>default，值可溯源、非法回退)，新增 config 总线方法(第15个)+CLI --config+dashboard 阈值配置区块+工作区 monitor config；消灭硬编码阈值反模式(借鉴 Grafana/Prometheus 动态阈值)"
   }
 ]
