@@ -53,13 +53,13 @@ function mkMon(runs = [], memory) {
   return new Monitor(omni.bus, omni, { metricsFile: join(TD, `m-${Math.random().toString(36).slice(2)}.json`) });
 }
 
-test('Monitor 构造并注册 18 个总线方法(核心 6 + 新增 12)', () => {
+test('Monitor 构造并注册 20 个总线方法(核心 6 + 新增 14，含综合健康评分)', () => {
   const reg = {};
   const bus = { register: (o, m) => { reg[`${o}.${m}`] = true; } };
   const omni = { bus, memory: fakeMemory(), tracer: makeTracer(), body: fakeBody() };
   new Monitor(bus, omni, { metricsFile: join(TD, 'reg.json') });
   for (const m of ['snapshot', 'health', 'alerts', 'dashboard', 'recordMetric', 'checkAlerts',
-    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth', 'thresholdAlerts', 'alertables']) {
+    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score']) {
     assert.ok(reg[`monitor.${m}`], `应注册 monitor.${m}`);
   }
 });
@@ -623,6 +623,78 @@ test('thresholdAlerts: 全部健康(ok/na)时无告警可推送(离线不伪造�
   assert.equal(r.critical, 0);
   assert.equal(r.warning, 0);
   assert.deepEqual(r.alerts, []);
+});
+
+test('healthScore: 返回综合健康评分结构(score/grade/status/5 维度/issues)', () => {
+  const m = mkMon([]);
+  const r = m.healthScore();
+  assert.equal(r.ok, true);
+  assert.ok('score' in r, '应含 score');
+  assert.ok(['A', 'B', 'C', 'D', 'F', 'N/A'].includes(r.grade), 'grade 应在合法集合');
+  assert.ok(['healthy', 'degraded', 'warning', 'critical', 'unknown'].includes(r.status), 'status 应在合法集合');
+  assert.equal(r.dimensions.length, 5, '应含 5 个加权维度');
+  for (const d of r.dimensions) {
+    assert.ok(['liveness', 'reliability', 'threshold', 'anomalies', 'tool'].includes(d.key), '维度 key 合法');
+    assert.ok(d.weight > 0 && d.label && typeof d.detail === 'string', '维度应含权重/标签/详情');
+    assert.ok(d.subScore == null || (d.subScore >= 0 && d.subScore <= 1), 'subScore 应在 [0,1] 或 null(未知)');
+  }
+  assert.ok(Array.isArray(r.issues), 'issues 应为数组');
+});
+
+test('healthScore: 单一近期成功运行 -> 满分(>=90) + 等级 A + status healthy', () => {
+  const now = Date.now();
+  const runs = [
+    { runId: 'r1', engine: 'llm', completed: true, startedAt: now, finishedAt: now + 100, durationMs: 100, steps: [] },
+  ];
+  const r = mkMon(runs).healthScore();
+  assert.equal(r.status, 'healthy', '应健康');
+  assert.equal(r.grade, 'A', '满分应等级 A');
+  assert.ok(r.score >= 90, `满分场景 score 应 ≥90，实际 ${r.score}`);
+  assert.equal(r.dimensions.find(d => d.key === 'reliability').subScore, 1, '成功率维度应为 1');
+});
+
+test('healthScore: 长期无活动(阈值 over) -> 评分显著低于满分 + 含关键问题 + 非 healthy', () => {
+  const old = Date.now() - 49 * 3600 * 1000; // 49h 前，超 inactiveMs(48h) 与 livenessDegradedMs(24h)
+  const runs = [
+    { runId: 'o1', engine: 'llm', completed: true, startedAt: old, finishedAt: old + 500, steps: [] },
+  ];
+  const r = mkMon(runs).healthScore();
+  assert.notEqual(r.grade, 'A', '退化场景不应再是 A');
+  assert.notEqual(r.status, 'healthy', '退化场景不应仍 healthy');
+  assert.ok(r.score < 90, `退化场景 score 应 <90，实际 ${r.score}`);
+  assert.ok(r.issueCount >= 2, '应聚合出 ≥2 个关键问题(长期无活动/引擎失联)');
+  assert.ok(r.issues.some(i => /inactiveMs|liveness/.test(i.message || i.key || '')), '关键问题应含长期无活动/引擎存活');
+});
+
+test('healthScore: 工具熔断开启 -> 工具管线维度扣分 + 关键问题含 circuit_open', () => {
+  const now = Date.now();
+  const runs = [
+    { runId: 'r1', engine: 'llm', completed: true, startedAt: now, finishedAt: now + 100, durationMs: 100, steps: [] },
+  ];
+  const m = mkMon(runs);
+  m.omni.toolBreakerStatus = () => [{ name: 'web_fetch', open: true, fails: 3, maxFails: 3 }];
+  m.omni.toolCacheStats = () => ({ size: 0, keys: [] });
+  const r = m.healthScore();
+  assert.equal(r.dimensions.find(d => d.key === 'tool').subScore, 0, '工具维度(1 开/1 总)应扣到 0');
+  assert.ok(r.issues.some(i => i.dimension === 'tool'), '关键问题应含工具管线项');
+});
+
+test('healthScore: 无运行轨迹 -> status unknown + grade N/A + score null(诚实不伪造读数)', () => {
+  const r = mkMon([]).healthScore();
+  assert.equal(r.status, 'unknown', '无数据应 unknown');
+  assert.equal(r.grade, 'N/A', '无数据应 N/A');
+  assert.equal(r.score, null, '无数据应 score=null，绝不伪造满分');
+});
+
+test('dashboard 含综合健康评分区块(0-100 + 等级 + 5 维度 + 关键问题)', () => {
+  const m = mkMon([
+    { runId: 'r1', goal: 'autopilot: x', engine: 'autopilot', completed: true, startedAt: Date.now() - 1000, finishedAt: Date.now() - 500, durationMs: 120, steps: [{}] },
+  ]);
+  const html = m.renderDashboard();
+  assert.ok(html.includes('综合健康评分'), '仪表盘应含综合健康评分区块');
+  assert.ok(html.includes('Health Score'), '应含英文标题');
+  assert.ok(html.includes('关键问题'), '应含关键问题聚合');
+  assert.ok(html.includes('Liveness'), '应展示五个维度之一');
 });
 
 test('Body.monitor 委托到 omni.monitor（第 8 器官接线正确）', () => {

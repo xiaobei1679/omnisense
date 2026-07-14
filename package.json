@@ -1,6 +1,6 @@
 {
   "name": "omnisense",
-  "version": "7.3.0",
+  "version": "8.0.0",
   "description": "通用 AI 身体框架：赋予 AI 眼/耳/嘴/脑/手/感知/脚七种真实能力（联网真抓取，模型免 key 双模式自适应），并整合多智能体工作区（openclaw-workspace）。零依赖、可移植——可作为独立 CLI / npm 包 / 库，或作为技能接入任意 Agent 框架。",
   "type": "module",
   "main": "src/index.mjs",

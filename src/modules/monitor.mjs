@@ -133,6 +133,12 @@ function linRegSlope(values) {
   return den === 0 ? 0 : num / den;
 }
 
+// 把任意数值夹到 [0,1]，供综合健康评分的各维度 subScore 归一化。
+function clamp01(x) {
+  if (Number.isNaN(x) || x == null) return 1; // 无数据维度按中性 1 处理（不扣分，诚实不伪造）
+  return Math.max(0, Math.min(1, x));
+}
+
 // 把 thresholdHealth 的着色状态(status ∈ ok/warn/over/na)映射为 Prometheus Alertmanager 的 severity 标签：
 //   over → critical（红·严重，需立即处理）· warn → warning（黄·关注）· ok/na → none（无需告警）。
 // Alertmanager 用 severity 标签做路由/静默/分组（severity="critical" 通常进电话/钉钉，warning 进工单），
@@ -191,6 +197,8 @@ export class Monitor {
     this.bus.register('monitor', 'thresholdHealth', () => this.thresholdHealth());
     this.bus.register('monitor', 'thresholdAlerts', () => this.thresholdAlerts());
     this.bus.register('monitor', 'alertables', () => this.thresholdAlerts());
+    this.bus.register('monitor', 'healthScore', () => this.healthScore());
+    this.bus.register('monitor', 'score', () => this.healthScore());
   }
 
   // ── 阈值配置解析 + 观测 ──
@@ -430,6 +438,119 @@ export class Monitor {
     const critical = alerts.filter(a => a.severity === 'critical').length;
     const warning = alerts.filter(a => a.severity === 'warning').length;
     return { ok: true, count: alerts.length, critical, warning, alerts };
+  }
+
+  // ── 综合健康评分（composite health score）：把分散的观测信号聚合成一个 0-100 综合健康分 + 等级(A/B/C/D/F) ──
+  // 借鉴业界「复合健康评分」思想（加权汇总多维度为一个统一分数，让一眼看清整体健康，而非同时盯 11 个阈值）：
+  //   - Nobl9 Composite SLO：把多个组件 SLO 按真实用户影响加权汇总为一个统一可靠性分（权重≠平均，非均等对待）
+  //     https://www.nobl9.com/features/composite-service-level-objectives · https://docs.nobl9.com/guides/slo-guides/composite-slos-use-cases/
+  //   - Vortex IQ / New Relic Operational Health Score：0-100 加权（Apdex/错误率/活跃事件/SLO 合规），给非工程角色一眼可读
+  //     https://www.vortexiq.ai/docs/nerve-centre/newrelic/nr_health_score
+  //   - dev.to Output Quality Score(OQS)：Agent 质量用加权均值 + 绿/黄/红阈值 + 可配置权重，一个分数定 SLO/趋势
+  //     https://dev.to/irparent/output-quality-score-the-single-number-that-tells-you-if-your-agent-is-good-enough-3lop
+  // 五个正交维度（权重可溯源、互不翻倍计分）：舰队存活 0.25 / 成功率(SLO error budget) 0.25 / 阈值合规 0.20 /
+  //   异常 0.15 / 工具管线 0.15。每个维度 subScore∈[0,1]；无数据维度标 unknown 且不计惩罚（诚实：不为无证据扣分/伪造读数）。
+  // score = round(100 * Σ weight·subScore)；等级 A≥90 / B≥75 / C≥60 / D≥40 / F<40；status 由分数映射。
+  healthScore() {
+    const runs = this._tracerRuns();
+    const total = runs.length;
+    const completed = completedCount(runs);
+    const successRate = total ? completed / total : 0;
+    const grid = this.statusGrid(runs);
+    const fleet = grid.fleet || {};
+
+    // 维度 1：舰队存活（健康/降级/失联引擎比例；失联=1、降级=0.4 扣分）
+    let liveness = null, livenessStatus = 'unknown', livenessDetail = '';
+    const engTotal = (fleet.healthy || 0) + (fleet.degraded || 0) + (fleet.down || 0) + (fleet.unknown || 0);
+    if (engTotal > 0) {
+      const penalty = (fleet.down || 0) * 1 + (fleet.degraded || 0) * 0.4;
+      liveness = clamp01(1 - penalty / engTotal);
+      livenessStatus = liveness >= 0.999 ? 'healthy' : liveness >= 0.6 ? 'degraded' : 'critical';
+      livenessDetail = `健康 ${(fleet.healthy || 0)} · 降级 ${(fleet.degraded || 0)} · 失联 ${(fleet.down || 0)}`;
+    }
+
+    // 维度 2：成功率（error budget，SLO 思想）
+    let reliability = null, reliabilityStatus = 'unknown';
+    if (total > 0) {
+      reliability = clamp01(successRate);
+      reliabilityStatus = reliability >= 0.99 ? 'healthy' : reliability >= 0.95 ? 'degraded' : 'warning';
+    }
+
+    // 维度 3：阈值合规（排除 liveness*Ms 两项，避免与维度1翻倍；over→0、warn→0.5、ok→1；na 不扣分）
+    const th = this.thresholdHealth();
+    let threshold = null, thresholdStatus = 'unknown';
+    const scored = th.items.filter(i => i.status !== 'na' && !i.key.startsWith('liveness'));
+    if (scored.length) {
+      const pen = scored.reduce((a, i) => a + (i.status === 'over' ? 1 : i.status === 'warn' ? 0.5 : 0), 0);
+      threshold = clamp01(1 - pen / scored.length);
+      const overs = scored.filter(i => i.status === 'over').length;
+      thresholdStatus = overs ? 'critical' : scored.some(i => i.status === 'warn') ? 'warning' : 'healthy';
+    }
+
+    // 维度 4：异常（error 级→0、warning→0.5、info→0.2 折算 subScore；无异常→1）
+    const anoms = this.detectAnomalies();
+    const aErr = anoms.filter(a => a.level === 'error').length;
+    const aWarn = anoms.filter(a => a.level === 'warning').length;
+    const aInfo = anoms.filter(a => a.level === 'info').length;
+    let anomaly = 1;
+    if (anoms.length) {
+      const pen = aErr * 1 + aWarn * 0.5 + aInfo * 0.2;
+      anomaly = clamp01(1 - pen / anoms.length);
+    }
+    const anomalyStatus = aErr ? 'critical' : aWarn ? 'warning' : aInfo ? 'degraded' : 'healthy';
+
+    // 维度 5：工具管线（开启的熔断器比例扣分；无熔断记录→1）
+    const thObj = this.toolHealth();
+    const breakers = Array.isArray(thObj.breakers) ? thObj.breakers : [];
+    let tool = 1, toolStatus = 'healthy';
+    if (breakers.length) {
+      const open = thObj.openCircuits || 0;
+      tool = clamp01(1 - open / breakers.length);
+      toolStatus = open ? (open >= breakers.length ? 'critical' : 'warning') : 'healthy';
+    }
+
+    const dims = [
+      { key: 'liveness', label: '舰队存活', weight: 0.25, subScore: liveness, status: livenessStatus, detail: livenessDetail },
+      { key: 'reliability', label: '成功率(SLO)', weight: 0.25, subScore: reliability, status: reliabilityStatus, detail: `成功率 ${(successRate * 100).toFixed(1)}% (${completed}/${total})` },
+      { key: 'threshold', label: '阈值合规', weight: 0.20, subScore: threshold, status: thresholdStatus, detail: scored.length ? `${scored.filter(i => i.status === 'over').length} 超标 / ${scored.filter(i => i.status === 'warn').length} 关注` : '无足够数据' },
+      { key: 'anomalies', label: '异常', weight: 0.15, subScore: anomaly, status: anomalyStatus, detail: `${aErr} error / ${aWarn} warning / ${aInfo} info` },
+      { key: 'tool', label: '工具管线', weight: 0.15, subScore: tool, status: toolStatus, detail: `${thObj.openCircuits || 0} 个熔断器开启 / ${breakers.length} 个工具` },
+    ];
+    const eff = dims.map(d => (d.subScore == null ? 1 : d.subScore));
+    let score = Math.round(100 * dims.reduce((a, d, i) => a + d.weight * eff[i], 0));
+
+    // 无运行轨迹（连 liveness/reliability 都无数据）：整体不可评分，诚实返回 unknown（score=null，绝不伪造满分）
+    let status, grade;
+    if (total === 0) {
+      status = 'unknown';
+      grade = 'N/A';
+      score = null;
+    } else {
+      grade = score >= 90 ? 'A' : score >= 75 ? 'B' : score >= 60 ? 'C' : score >= 40 ? 'D' : 'F';
+      status = score >= 75 ? 'healthy' : score >= 60 ? 'degraded' : score >= 40 ? 'warning' : 'critical';
+    }
+
+    // 关键问题（按严重度聚合，最多 12 条）
+    const issues = [];
+    for (const it of th.items) {
+      if (it.status === 'over' || it.status === 'warn') {
+        issues.push({ severity: it.severity, dimension: 'threshold', key: it.key, status: it.status,
+          message: `${it.key} ${it.status === 'over' ? '超标' : '关注'}：当前 ${it.current == null ? 'na' : it.current} / 阈值 ${it.threshold.value}（来源 ${it.threshold.source}）` });
+      }
+    }
+    for (const a of anoms) issues.push({ severity: a.level === 'error' ? 'critical' : a.level === 'warning' ? 'warning' : 'info', dimension: 'anomaly', type: a.type, message: a.message });
+    if (fleet.down) issues.push({ severity: 'critical', dimension: 'liveness', message: `${fleet.down} 个引擎失联(down)` });
+    else if (fleet.degraded) issues.push({ severity: 'warning', dimension: 'liveness', message: `${fleet.degraded} 个引擎降级(degraded)` });
+    for (const b of breakers) if (b.open) issues.push({ severity: 'warning', dimension: 'tool', name: b.name, message: `工具 ${b.name} 熔断器开启（降级）` });
+    const sevRank = { critical: 0, warning: 1, info: 2 };
+    issues.sort((a, b) => (sevRank[a.severity] ?? 9) - (sevRank[b.severity] ?? 9));
+    const top = issues.slice(0, 12);
+
+    return {
+      ok: true, score, grade, status, generatedAt: new Date().toISOString(),
+      dimensions: dims.map(d => ({ ...d, subScore: d.subScore == null ? null : Number(d.subScore.toFixed(3)) })),
+      issues: top, issueCount: issues.length,
+    };
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -968,6 +1089,26 @@ export class Monitor {
     const pct = (p, w) => (w ? Math.round((p / w) * 100) : 0);
     const ms = (n) => (n == null ? '—' : n + 'ms');
     const statusColor = (st) => (st === 'healthy' ? '#3fb950' : (st === 'critical' || st === 'down') ? '#f85149' : '#d29922');
+    // 综合健康评分（composite health score）：把分散信号聚成一个 0-100 分 + 等级，一眼看清整体健康。
+    const hs = this.healthScore();
+    const hsColor = (st) => (st === 'healthy' ? '#3fb950' : (st === 'critical' || st === 'down') ? '#f85149' :
+      (st === 'warning' || st === 'degraded') ? '#d29922' : 'var(--muted)');
+    const hsRows = (hs.dimensions || []).map(d => {
+      const col = d.status === 'unknown' ? 'var(--muted)' : hsColor(d.status);
+      const ss = d.subScore == null ? 'na' : Math.round(d.subScore * 100) + '%';
+      return `<div class="row"><span class="lbl"><span class="th-dot" style="background:${col}"></span>${esc(d.label)}</span>
+        <span class="val" style="color:${col}">${ss}</span>
+        <span class="muted">权重 ${Math.round(d.weight * 100)}% · ${esc(d.status)} · ${esc(d.detail || '')}</span></div>`;
+    }).join('');
+    const hsIssues = (hs.issues && hs.issues.length)
+      ? hs.issues.slice(0, 6).map(i => `<div class="row"><span class="muted">[${esc(i.severity)}] ${esc(i.message)}</span></div>`).join('')
+      : '<div class="muted">（暂无关键问题）</div>';
+    const hsHtml = `
+      <div class="status" style="background:${hsColor(hs.status)};font-size:18px">综合健康评分: ${hs.score == null ? 'N/A' : hs.score + ' / 100'} · 等级 ${esc(hs.grade)} · 状态 ${esc(hs.status)}</div>
+      <div style="margin-top:12px;color:var(--muted);font-size:12px">五个加权维度（Liveness 25% / 成功率 25% / 阈值合规 20% / 异常 15% / 工具管线 15%，无数据维度标 na 不扣分，借鉴 Nobl9 Composite SLO 与 New Relic 健康分）</div>
+      <div style="margin-top:6px">${hsRows}</div>
+      <div style="margin-top:10px"><b>关键问题 (${hs.issueCount || 0})：</b></div>
+      <div style="margin-top:4px">${hsIssues}</div>`;
 
     const organHtml = (s.organs && s.organs.items || []).map(o =>
       `<li><span class="dot"></span><b>${esc(o.name)}</b> <code>${esc(o.key)}</code> · ${o.methods} 项能力</li>`).join('') || '<li>（无器官）</li>';
@@ -1188,6 +1329,8 @@ export class Monitor {
     <div class="card"><div class="v">${act.inactiveHours != null ? act.inactiveHours + 'h' : '—'}</div><div class="l">距上次活动</div></div>
   </div>
 
+  <section><h2>综合健康评分 / Health Score（0-100 加权汇总 · 一个分数看清整体健康）</h2>${hsHtml}</section>
+
   <section><h2>舰队健康 / Status Grid（引擎状态网格）</h2>
     <div style="margin-bottom:10px">${fleetHtml}</div>
     <div class="ecards">${gridHtml}</div>
@@ -1227,6 +1370,7 @@ export class Monitor {
   alerts(agent) { return this.allAlerts(agent); }
   dashboard(snap) { return this.renderDashboard(snap); }
   trendAnomalies() { return this._detectTrendAnomalies(); }
+  score() { return this.healthScore(); }
 }
 
 export { INACTIVE_MS, SPIKE_FACTOR };

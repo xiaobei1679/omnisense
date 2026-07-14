@@ -321,9 +321,11 @@ async function main() {
       const asConfig = flag('--config');
       const asThresholdHealth = flag('--threshold-health');
       const asThresholdAlerts = flag('--threshold-alerts');
+      const asScore = flag('--score') || flag('--health-score');
       if (asConfig) { result = omni.monitor.config(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asThresholdHealth) { result = omni.monitor.thresholdHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asThresholdAlerts) { result = omni.monitor.thresholdAlerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asScore) { result = omni.monitor.healthScore(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asAlerts) { result = omni.monitor.alerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asTools) { result = omni.monitor.toolHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asTrends) { result = omni.monitor.trends(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
@@ -384,7 +386,7 @@ const USAGE = `OmniSense 命令行
   dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new] [--autopilot] [--autopilot-agenda="a,b,c"]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--autopilot 升级为"常驻自驱身体"：每 tick 由身体自身能力卡自主决策并离线执行(像真人一样活着，借鉴 OpenClaw 心跳闭环/Sophia System3)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
   cache [--clear]      工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时）
-  monitor [--alerts|--health|--latency|--grid|--memory|--anomalies|--runs|--tools|--trends|--config|--threshold-health] [--config-file=<path>]   监控器官：统一状态快照 / --alerts 统一告警(含异常) / --health Agent健康 / --latency P50/P95/P99 / --grid 引擎状态网格 / --memory 记忆健康 / --anomalies 异常检测 / --runs 运行时间线 / --tools 工具管线健康(缓存/熔断/工具级延迟) / --trends 随时间变化的指标趋势基线(sparkline) / --config 生效的告警阈值配置(值/来源/环境变量名/配置文件路径，可用 OMNI_MONITOR_* 或 ~/.omnisense/monitor.json 覆盖) / --threshold-health 当前测量值 vs 阈值 红黄绿着色(ok/warn/over/na) / --config-file=<path> 从指定 JSON 文件加载阈值(Observability-as-Code)
+  monitor [--alerts|--health|--latency|--grid|--memory|--anomalies|--runs|--tools|--trends|--config|--threshold-health|--threshold-alerts|--score] [--config-file=<path>]   监控器官：统一状态快照 / --alerts 统一告警(含异常) / --health Agent健康 / --latency P50/P95/P99 / --grid 引擎状态网格 / --memory 记忆健康 / --anomalies 异常检测 / --runs 运行时间线 / --tools 工具管线健康(缓存/熔断/工具级延迟) / --trends 随时间变化的指标趋势基线(sparkline) / --config 生效的告警阈值配置(值/来源/环境变量名/配置文件路径，可用 OMNI_MONITOR_* 或 ~/.omnisense/monitor.json 覆盖) / --threshold-health 当前测量值 vs 阈值 红黄绿着色(ok/warn/over/na) / --threshold-alerts 可直推 Alertmanager 的告警清单(labels+annotations+稳定 fingerprint) / --score 综合健康评分(0-100 + 等级 A/B/C/D/F，加权汇总 Liveness/成功率/阈值/异常/工具管线，借鉴 Nobl9 Composite SLO 与 New Relic 健康分) / --config-file=<path> 从指定 JSON 文件加载阈值(Observability-as-Code)
   dashboard [--out=./.omni-dashboard.html]   生成零依赖可视化 HTML 仪表盘(Agent状态/记忆四层/活动/告警)，浏览器打开即看
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)
   trace [--summary] [--list] [--get=<id>] [--engine=llm|local|dispatcher] [--limit=10] [--clear]   Agent 执行轨迹追踪(可回放 trace：成功率/平均步数·耗时/工具级耗时/错误归类)

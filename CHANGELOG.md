@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v8.0.0 — 2026-07-14 (major)
+
+- monitor 新增综合健康评分 healthScore（0-100 加权汇总 Liveness/可靠性/阈值/异常/工具管线 5 维度 + 等级 A/B/C/D/F + 仪表盘区块 + 跨层复用，借鉴 Nobl9 Composite SLO 与 New Relic 健康分）
+
 ## v7.3.0 — 2026-07-14 (minor)
 
 - monitor 新增可推送告警清单 thresholdAlerts/alertables（Alertmanager 形状 fingerprint+labels{severity}+annotations，over→critical/warn→warning 对齐 severity 标签），CLI --threshold-alerts 与 工作区 monitor thresholdAlerts 跨层复用同一份实现；dashboard 阈值区块附可推送告警清单子块；借鉴 Prometheus Alertmanager 告警数据模型
