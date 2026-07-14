@@ -370,6 +370,10 @@ export class Tracer {
   //           https://learn.microsoft.com/zh-cn/microsoft-agent-365/developer/direct-open-telemetry-integration
   //           https://greptime.cn/blogs/2026-05-09-opentelemetry-genai-semantic-conventions
   //   一次 run → 一条 trace；run 本身一个 root span(invoke_agent)，每步一个 child span(execute_tool)。
+  //   每个 span 注入 OTel GenAI span events（对齐 uptrace / opentelemetry.io 的「内容放事件而非属性」约定）：
+  //   root → gen_ai.user.message(目标) / gen_ai.assistant.message(最终答案) / exception(未完成 run 根因)；
+  //   child → gen_ai.assistant.message(思考) / gen_ai.tool.message(工具结果或错误) / exception(失败步根因)。
+  //   事件便于 Collector 按隐私策略过滤/丢弃、且不污染 Trace 视图与索引。
 
   // FNV-1a 派生确定性 hex（保证同一 runId 每次导出得到同一 traceId/spanId，OTel 可正确重建链路）
   _hashHex(str, len) {
@@ -386,8 +390,17 @@ export class Tracer {
     return h.toString(16).padStart(8, '0');
   }
   _toNano(ms) { return String(Math.round((ms || 0) * 1e6)); }
+  // 构造一个 OTLP span event（OTel 事件形状：name + timeUnixNano + attributes）。
+  // 借鉴 OTel GenAI 语义约定：per-step 内容（prompt/completion/tool 结果/异常）应放「事件」而非「属性」，
+  // 这样 Collector 可按隐私策略过滤或丢弃、且不污染索引/Trace 视图（uptrace / opentelemetry.io/blog 均强调此点）。
+  _e(name, attrsObj, nano) {
+    const attributes = Object.entries(attrsObj || {}).map(([k, v]) => ({
+      key: k, value: { stringValue: String(v) },
+    }));
+    return { timeUnixNano: String(nano), name, attributes };
+  }
 
-  /** 把若干 run 转换为 OTLP/JSON 对象（resourceSpans[]） */
+  /** 把若干 run 转换为 OTLP/JSON 对象（resourceSpans[]），并为每个 span 注入 OTel GenAI span events */
   _toOtlp(runs) {
     const resourceSpans = [];
     for (const r of runs) {
@@ -401,11 +414,13 @@ export class Tracer {
         const start = cursor;
         const dur = typeof s.durationMs === 'number' ? s.durationMs : 0;
         const end = start + dur;
+        const callId = `call_${r.runId}_${s.step || 0}`;
         const attrs = [
           { key: 'gen_ai.operation.name', value: { stringValue: isTool ? 'execute_tool' : 'agent.step' } },
         ];
         if (isTool) {
           attrs.push({ key: 'gen_ai.tool.name', value: { stringValue: String(s.action) } });
+          attrs.push({ key: 'gen_ai.tool.call.id', value: { stringValue: callId } }); // 关联工具调用（对齐 gen_ai.tool.call.id）
           if (s.action_input != null) attrs.push({ key: 'gen_ai.tool.call.arguments', value: { stringValue: JSON.stringify(s.action_input).slice(0, MAX_ARG) } });
           const obs = s.observation || {};
           if (obs.ok === false) {
@@ -417,6 +432,36 @@ export class Tracer {
             attrs.push({ key: 'gen_ai.tool.call.result', value: { stringValue: JSON.stringify(obs.output).slice(0, MAX_OUT) } });
           }
         }
+        // ── span events（OTel GenAI 语义约定：per-step 内容放事件，便于 Collector 过滤/丢弃且不污染索引）──
+        const events = [];
+        // 思考（推理链）：agent.step 的 thought 落为 assistant.message 事件（对齐 gen_ai.assistant.message）
+        if (s.thought != null) {
+          events.push(this._e('gen_ai.assistant.message', {
+            'gen_ai.completion.role': 'assistant',
+            'gen_ai.completion.content': clip(String(s.thought), MAX_ARG),
+          }, this._toNano(start)));
+        }
+        // 工具结果（成功输出 / 失败错误）：落为 tool.message 事件（对齐 gen_ai.tool.message）
+        if (isTool) {
+          const obs = s.observation || {};
+          const msg = obs.ok === false
+            ? String(obs.error != null ? obs.error : 'tool_error')
+            : JSON.stringify(obs.output ?? null);
+          events.push(this._e('gen_ai.tool.message', {
+            'gen_ai.tool.name': String(s.action),
+            'gen_ai.tool.message': msg.slice(0, MAX_OUT),
+          }, this._toNano(end)));
+        }
+        // 失败步：根因异常事件（对齐 OTel exception 事件：exception.type / exception.message / exception.escaped=false）
+        if (s.observation?.ok === false) {
+          const obs = s.observation || {};
+          const etype = (obs.error && typeof obs.error === 'object') ? (obs.error.code || obs.error.name || 'tool_error') : 'tool_error';
+          events.push(this._e('exception', {
+            'exception.type': etype,
+            'exception.message': clip(String(obs.error != null ? obs.error : 'tool_error'), MAX_ERR),
+            'exception.escaped': false,
+          }, this._toNano(end)));
+        }
         spans.push({
           traceId, spanId, parentSpanId: rootSpanId,
           name: isTool ? String(s.action) : (s.action || 'agent.step'),
@@ -424,7 +469,7 @@ export class Tracer {
           startTimeUnixNano: this._toNano(start),
           endTimeUnixNano: this._toNano(end),
           attributes: attrs,
-          events: [],
+          events,
           status: { code: (s.observation?.ok === false) ? 2 : 1 }, // 2=ERROR, 1=OK
         });
         cursor = end;
@@ -437,6 +482,26 @@ export class Tracer {
         { key: 'gen_ai.response.used_llm', value: { boolValue: !!r.usedLLM } },
         { key: 'gen_ai.response.final_answer', value: { stringValue: String(r.finalAnswer || '').slice(0, MAX_OUT) } },
       ];
+      // root span events：用户请求（gen_ai.user.message）+ 最终答案（gen_ai.assistant.message）+ 未完成异常（exception）
+      const rootEvents = [
+        this._e('gen_ai.user.message', {
+          'gen_ai.prompt.role': 'user',
+          'gen_ai.prompt.content': clip(String(r.goal || ''), MAX_GOAL),
+        }, this._toNano(r.startedAt)),
+      ];
+      if (r.finalAnswer != null) {
+        rootEvents.push(this._e('gen_ai.assistant.message', {
+          'gen_ai.completion.role': 'assistant',
+          'gen_ai.completion.content': clip(String(r.finalAnswer), MAX_OUT),
+        }, this._toNano(r.finishedAt)));
+      }
+      if (!r.completed) {
+        rootEvents.push(this._e('exception', {
+          'exception.type': 'agent_run_incomplete',
+          'exception.message': clip(String(r.finalAnswer || 'run not completed'), MAX_ERR),
+          'exception.escaped': false,
+        }, this._toNano(r.finishedAt)));
+      }
       spans.unshift({
         traceId, spanId: rootSpanId,
         name: 'agent.run:' + (r.goal || r.runId),
@@ -444,7 +509,7 @@ export class Tracer {
         startTimeUnixNano: this._toNano(r.startedAt),
         endTimeUnixNano: this._toNano(r.finishedAt),
         attributes: rootAttrs,
-        events: [],
+        events: rootEvents,
         status: { code: r.completed ? 1 : 2 },
       });
       resourceSpans.push({

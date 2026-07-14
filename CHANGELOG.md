@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v8.1.0 — 2026-07-14 (minor)
+
+- monitor 常驻轨道延续 · OTLP 导出增强：为每个 span 注入 OTel GenAI span events（root→gen_ai.user.message 目标 / gen_ai.assistant.message 最终答案 / 未完成 exception；child→gen_ai.assistant.message 思考 / gen_ai.tool.message 工具结果或错误 / 失败步 exception；并加 gen_ai.tool.call.id 关联）。对齐 uptrace / opentelemetry.io「内容放事件而非属性」约定，便于 Collector 按隐私策略过滤、不污染索引。三层（内核/桥接/工作区）同源一致；内核+2 单测、工作区跨层断言升级；npm test 282/282、子包 279/279、lint 52 全绿。
+
 ## v8.0.0 — 2026-07-14 (major)
 
 - monitor 新增综合健康评分 healthScore（0-100 加权汇总 Liveness/可靠性/阈值/异常/工具管线 5 维度 + 等级 A/B/C/D/F + 仪表盘区块 + 跨层复用，借鉴 Nobl9 Composite SLO 与 New Relic 健康分）

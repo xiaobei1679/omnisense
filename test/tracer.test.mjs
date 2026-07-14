@@ -213,3 +213,83 @@ test('Tracer: exportDataset(format:"otlp") 委托到 OTLP 导出（单一 CLI �
   assert.ok(r.otlp && r.otlp.resourceSpans.length === 1, '应返回 OTLP 结构');
   rmSync(tmpPath('otlp-del.json'), { force: true });
 });
+
+test('Tracer: exportOtlp 为每个 span 注入 OTel GenAI span events（user/assistant/tool/exception）', () => {
+  const tr = new Tracer(tmpPath('otlp-events.json'));
+  tr.recordRun({
+    goal: '帮我查天气并算温差', engine: 'local', completed: true,
+    finalAnswer: '温差 8 度', startedAt: 1000, finishedAt: 1030,
+    steps: [
+      { step: 1, action: 'web_fetch', thought: '先抓天气页', action_input: { url: 'http://w' }, observation: { ok: true, output: { temp: 20 } }, durationMs: 10 },
+      { step: 2, action: 'calc', thought: '算温差', action_input: { expression: '28-20' }, observation: { ok: true, output: { result: 8 } }, durationMs: 4 },
+    ],
+  });
+  const spans = tr.exportOtlp().otlp.resourceSpans[0].scopeSpans[0].spans;
+  const root = spans.find(s => s.parentSpanId === undefined);
+  const childWeb = spans.find(s => s.attributes.some(a => a.key === 'gen_ai.tool.name' && a.value.stringValue === 'web_fetch'));
+  const childCalc = spans.find(s => s.attributes.some(a => a.key === 'gen_ai.tool.name' && a.value.stringValue === 'calc'));
+  assert.ok(root && childWeb && childCalc, '应含 root 与两个工具 child span');
+
+  const evName = (sp, name) => sp.events.find(e => e.name === name);
+  const evAttr = (e, k) => e?.attributes.find(a => a.key === k)?.value?.stringValue;
+
+  // root：用户请求 + 最终答案
+  assert.ok(evName(root, 'gen_ai.user.message'), 'root 应含 gen_ai.user.message 事件');
+  assert.equal(evAttr(evName(root, 'gen_ai.user.message'), 'gen_ai.prompt.content'), '帮我查天气并算温差');
+  assert.ok(evName(root, 'gen_ai.assistant.message'), 'root 应含 gen_ai.assistant.message 事件(最终答案)');
+  assert.equal(evAttr(evName(root, 'gen_ai.assistant.message'), 'gen_ai.completion.content'), '温差 8 度');
+  // root 完成态不应有 exception 事件
+  assert.ok(!evName(root, 'exception'), '已完成 run 的 root 不应有 exception 事件');
+
+  // 工具 child：思考(assistant.message) + 工具结果(tool.message) + 关联 call.id
+  assert.ok(evName(childWeb, 'gen_ai.assistant.message'), '工具 span 应含思考事件');
+  assert.equal(evAttr(evName(childWeb, 'gen_ai.assistant.message'), 'gen_ai.completion.content'), '先抓天气页');
+  assert.ok(evName(childWeb, 'gen_ai.tool.message'), '工具 span 应含 gen_ai.tool.message 事件');
+  assert.equal(evAttr(evName(childWeb, 'gen_ai.tool.message'), 'gen_ai.tool.message'), JSON.stringify({ temp: 20 }));
+  // 工具调用关联 id（对齐 gen_ai.tool.call.id，便于与模型响应关联）
+  const callId = childWeb.attributes.find(a => a.key === 'gen_ai.tool.call.id');
+  assert.ok(callId, '工具 span 应含 gen_ai.tool.call.id 属性');
+  assert.ok(/^call_/.test(callId.value.stringValue), 'gen_ai.tool.call.id 应以 call_ 开头');
+
+  // 每个事件都应符合 OTLP 形状：timeUnixNano 数字串 + name + 非空 attributes
+  for (const sp of spans) {
+    assert.ok(Array.isArray(sp.events) && sp.events.length >= 1, `span ${sp.name} 应至少含 1 个事件`);
+    for (const e of sp.events) {
+      assert.ok(/^\d+$/.test(e.timeUnixNano), '事件 timeUnixNano 应为纳秒数字串');
+      assert.ok(typeof e.name === 'string' && e.name.length > 0, '事件应有 name');
+      assert.ok(Array.isArray(e.attributes) && e.attributes.length >= 1, '事件应含 attributes');
+    }
+  }
+  rmSync(tmpPath('otlp-events.json'), { force: true });
+});
+
+test('Tracer: exportOtlp 失败步注入 exception 事件 + 未完成 run 的 root 注入 agent_run_incomplete 异常', () => {
+  const tr = new Tracer(tmpPath('otlp-exc.json'));
+  tr.recordRun({
+    goal: '抓坏站', engine: 'local', completed: false,
+    finalAnswer: '未完成', startedAt: 2000, finishedAt: 2030,
+    steps: [
+      { step: 1, action: 'web_fetch', action_input: { url: 'http://x' }, observation: { ok: false, error: 'ECONNREFUSED' }, durationMs: 20 },
+    ],
+  });
+  const spans = tr.exportOtlp().otlp.resourceSpans[0].scopeSpans[0].spans;
+  const root = spans.find(s => s.parentSpanId === undefined);
+  const child = spans.find(s => s.parentSpanId !== undefined);
+  const evName = (sp, name) => sp.events.find(e => e.name === name);
+  const evAttr = (e, k) => e?.attributes.find(a => a.key === k)?.value?.stringValue;
+
+  // 失败步：exception 事件（对齐 OTel exception 约定）
+  assert.ok(evName(child, 'exception'), '失败步应含 exception 事件');
+  assert.equal(evAttr(evName(child, 'exception'), 'exception.type'), 'tool_error');
+  assert.equal(evAttr(evName(child, 'exception'), 'exception.message'), 'ECONNREFUSED');
+  assert.equal(evAttr(evName(child, 'exception'), 'exception.escaped'), 'false');
+  // 工具结果事件即便失败也携带错误信息（便于 root-cause）
+  assert.ok(evName(child, 'gen_ai.tool.message'), '失败步仍应有 tool.message 事件');
+  assert.equal(evAttr(evName(child, 'gen_ai.tool.message'), 'gen_ai.tool.message'), 'ECONNREFUSED');
+
+  // 未完成 run：root 注入 agent_run_incomplete 异常事件
+  assert.ok(evName(root, 'exception'), '未完成 run 的 root 应含 exception 事件');
+  assert.equal(evAttr(evName(root, 'exception'), 'exception.type'), 'agent_run_incomplete');
+  assert.equal(evAttr(evName(root, 'exception'), 'exception.escaped'), 'false');
+  rmSync(tmpPath('otlp-exc.json'), { force: true });
+});

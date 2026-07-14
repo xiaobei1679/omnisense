@@ -298,6 +298,17 @@ it('runLink trace --export=- --export-format=otlp 导出 OTLP/JSON（跨层：OT
   assert.ok(root, '应有一个无 parentSpanId 的 root span');
   const op = root.attributes.find(a => a.key === 'gen_ai.operation.name');
   assert.ok(op && op.value.stringValue === 'invoke_agent', 'root span 应标记 gen_ai.operation.name=invoke_agent');
+  // 跨层一致性：工作区消费的 OTLP 应同样携带 OTel GenAI span events（三层同源）
+  const evName = (sp, name) => sp.events.find(e => e.name === name);
+  const evAttr = (e, k) => e?.attributes.find(a => a.key === k)?.value?.stringValue;
+  assert.ok(evName(root, 'gen_ai.user.message'), '跨层 root 应含 gen_ai.user.message 事件(目标)');
+  assert.equal(evAttr(evName(root, 'gen_ai.user.message'), 'gen_ai.prompt.content'), 'otlp-xlink-seed');
+  const child = spans.find(s => s.parentSpanId !== undefined);
+  assert.ok(child && evName(child, 'gen_ai.tool.message'), '跨层工具 child 应含 gen_ai.tool.message 事件(结果)');
+  assert.equal(evAttr(evName(child, 'gen_ai.tool.message'), 'gen_ai.tool.message'), JSON.stringify({ result: 4 }));
+  for (const sp of spans) {
+    assert.ok(Array.isArray(sp.events) && sp.events.length >= 1, `跨层 span ${sp.name} 应至少含 1 个事件`);
+  }
 });
 
 it('runLink trace 无参数默认给 summary（不报错）', async () => {
