@@ -208,5 +208,12 @@
     "date": "2026-07-14T21:00:06.159Z",
     "tag": "v8.1.0",
     "notes": "monitor 常驻轨道延续 · OTLP 导出增强：为每个 span 注入 OTel GenAI span events（root→gen_ai.user.message 目标 / gen_ai.assistant.message 最终答案 / 未完成 exception；child→gen_ai.assistant.message 思考 / gen_ai.tool.message 工具结果或错误 / 失败步 exception；并加 gen_ai.tool.call.id 关联）。对齐 uptrace / opentelemetry.io「内容放事件而非属性」约定，便于 Collector 按隐私策略过滤、不污染索引。三层（内核/桥接/工作区）同源一致；内核+2 单测、工作区跨层断言升级；npm test 282/282、子包 279/279、lint 52 全绿。"
+  },
+  {
+    "version": "8.2.0",
+    "type": "minor",
+    "date": "2026-07-14T22:13:18.886Z",
+    "tag": "v8.2.0",
+    "notes": "monitor 综合健康评分维度权重可配置化（opts>env>JSON文件>default 四源，复用 Observability-as-Code，计分前归一化恒在 0-100；新增 weights 总线方法第21个）"
   }
 ]

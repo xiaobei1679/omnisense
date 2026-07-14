@@ -196,6 +196,40 @@ it('runLink monitor healthScore 跨层消费综合健康评分(0-100 + 等级 A/
   assert.ok('score' in r2, '别名 score 应同样返回综合健康评分');
 });
 
+it('runLink monitor weights 跨层消费健康评分维度权重(值/归一化/来源)', async () => {
+  // 合并后新项目：工作区能查询身体的"综合健康评分维度权重"（可用 OMNI_MONITOR_WEIGHT_* 或
+  // ~/.omnisense/monitor-weights.json 覆盖，避免权重写死反模式；复用内核同一份 monitor.weights()）。
+  const r = await runLink(['monitor', 'weights']);
+  assert.equal(r.ok, true);
+  assert.ok(r.weights && typeof r.weights === 'object', 'weights 应含各维度权重');
+  for (const k of ['liveness', 'reliability', 'threshold', 'anomalies', 'tool']) {
+    assert.ok(k in r.weights, `应含维度 ${k}`);
+    assert.equal(typeof r.weights[k].weight, 'number', `${k}.weight 应为数值`);
+    assert.ok('normalized' in r.weights[k], `${k} 应含归一化权重`);
+    assert.ok(['default', 'env', 'opts', 'file'].includes(r.weights[k].source), `${k}.source 应为 default/env/opts/file`);
+    assert.equal(r.weights[k].envKey, `OMNI_MONITOR_WEIGHT_${k.toUpperCase()}`, `${k} 应暴露对应环境变量名`);
+  }
+  assert.equal(r.weights.liveness.weight, 0.25, '跨层：liveness 默认权重 0.25');
+  assert.equal(r.weights.tool.weight, 0.15, '跨层：tool 默认权重 0.15');
+  assert.equal(r.sum, 1, '跨层：默认权重和应为 1');
+});
+
+it('runLink monitor --weights-file 跨层从 JSON 文件加载维度权重(Observability-as-Code)', async () => {
+  // 合并后新项目：工作区能消费一份"版本可控的健康评分权重 JSON 文件"（复用内核同一份 loadWeightsFile + weights()）。
+  const wPath = join(_td, `monitor-weights-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(wPath, JSON.stringify({ liveness: 0.5, tool: 0.3, anomalies: 0.2 }), 'utf8');
+  const r = await runLink(['monitor', '--weights-file=' + wPath, 'weights']);
+  assert.equal(r.ok, true);
+  assert.equal(r.weights.liveness.weight, 0.5, '跨层：JSON 文件覆盖 liveness');
+  assert.equal(r.weights.liveness.source, 'file', '跨层：source 应为 file');
+  assert.equal(r.weights.tool.weight, 0.3, '跨层：JSON 文件覆盖 tool');
+  assert.equal(r.weights.anomalies.weight, 0.2, '跨层：JSON 文件覆盖 anomalies');
+  assert.equal(r.weights.reliability.weight, 0.25, '跨层：未覆盖项保持默认');
+  assert.equal(r.weightFile, wPath, '跨层：应暴露权重文件路径');
+  assert.equal(r.weightFileLoaded, true);
+  assert.equal(r.count, 3, '跨层：应识别 3 项被覆盖');
+});
+
 it('runLink monitor --config-file 跨层从 JSON 文件加载阈值(Observability-as-Code)', async () => {
   // 合并后新项目：工作区不仅能用环境变量覆盖阈值，还能消费一份"版本可控的阈值 JSON 文件"
   // （Observability-as-Code，借鉴 Grafana/Prometheus「阈值即配置、纳入版本控制」实践）。

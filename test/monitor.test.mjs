@@ -53,13 +53,13 @@ function mkMon(runs = [], memory) {
   return new Monitor(omni.bus, omni, { metricsFile: join(TD, `m-${Math.random().toString(36).slice(2)}.json`) });
 }
 
-test('Monitor 构造并注册 20 个总线方法(核心 6 + 新增 14，含综合健康评分)', () => {
+test('Monitor 构造并注册 21 个总线方法(核心 6 + 新增 15，含综合健康评分与维度权重)', () => {
   const reg = {};
   const bus = { register: (o, m) => { reg[`${o}.${m}`] = true; } };
   const omni = { bus, memory: fakeMemory(), tracer: makeTracer(), body: fakeBody() };
   new Monitor(bus, omni, { metricsFile: join(TD, 'reg.json') });
   for (const m of ['snapshot', 'health', 'alerts', 'dashboard', 'recordMetric', 'checkAlerts',
-    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score']) {
+    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score', 'weights']) {
     assert.ok(reg[`monitor.${m}`], `应注册 monitor.${m}`);
   }
 });
@@ -469,6 +469,146 @@ test('dashboard 阈值区块含配置文件路径(Observability-as-Code 可溯�
   assert.ok(html.includes(cfgPath), '仪表盘应含配置文件路径');
 });
 
+test('weights: 无 env/opts 时默认权重(0.25/0.25/0.20/0.15/0.15)且 source=default、归一化和=1', () => {
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, {
+    metricsFile: join(TD, `wdef-${Math.random().toString(36).slice(2)}.json`),
+    weightFile: join(TD, 'no-such-weights.json'),
+  });
+  const w = m.weights();
+  assert.equal(w.ok, true);
+  assert.equal(w.count, 0, '默认无覆盖');
+  assert.equal(w.weightFileLoaded, false);
+  assert.equal(w.weights.liveness.weight, 0.25, 'liveness 默认 0.25');
+  assert.equal(w.weights.reliability.weight, 0.25, 'reliability 默认 0.25');
+  assert.equal(w.weights.threshold.weight, 0.20, 'threshold 默认 0.20');
+  assert.equal(w.weights.anomalies.weight, 0.15, 'anomalies 默认 0.15');
+  assert.equal(w.weights.tool.weight, 0.15, 'tool 默认 0.15');
+  assert.equal(w.weights.liveness.source, 'default');
+  assert.equal(w.weights.liveness.envKey, 'OMNI_MONITOR_WEIGHT_LIVENESS');
+  assert.equal(w.sum, 1, '默认权重和应为 1');
+  assert.equal(w.weights.liveness.normalized, 0.25, '归一化权重应一致');
+});
+
+test('weights: opts.weights 覆盖默认(优先级最高, source=opts)', () => {
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, {
+    metricsFile: join(TD, `wcfg-${Math.random().toString(36).slice(2)}.json`),
+    weights: { liveness: 0.5, reliability: 0.3, threshold: 0.1, anomalies: 0.05, tool: 0.05 },
+  });
+  const w = m.weights();
+  assert.equal(w.weights.liveness.weight, 0.5);
+  assert.equal(w.weights.liveness.source, 'opts');
+  assert.equal(w.weights.liveness.overridden, true);
+  assert.equal(w.sum, 1.0);
+  assert.equal(w.count, 5);
+});
+
+test('weights: 环境变量覆盖默认(source=env)，非法值回退默认', () => {
+  const omni = makeOmni([], fakeMemory());
+  process.env.OMNI_MONITOR_WEIGHT_TOOL = '0.4';
+  process.env.OMNI_MONITOR_WEIGHT_ANOMALIES = 'not-a-number'; // 非法 → 回退默认
+  try {
+    const m = new Monitor(omni.bus, omni, { metricsFile: join(TD, `wenv-${Math.random().toString(36).slice(2)}.json`) });
+    const w = m.weights();
+    assert.equal(w.weights.tool.weight, 0.4, 'env 覆盖 tool');
+    assert.equal(w.weights.tool.source, 'env');
+    assert.equal(w.weights.anomalies.weight, 0.15, '非法 env 回退默认');
+    assert.equal(w.weights.anomalies.source, 'default');
+  } finally {
+    delete process.env.OMNI_MONITOR_WEIGHT_TOOL;
+    delete process.env.OMNI_MONITOR_WEIGHT_ANOMALIES;
+  }
+});
+
+test('weights: JSON 文件覆盖默认(source=file，Observability-as-Code)', () => {
+  const wPath = join(TD, `mon-weights-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(wPath, JSON.stringify({ liveness: 0.6, tool: 0.3, anomalies: 0.1 }), 'utf8');
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, {
+    metricsFile: join(TD, `wfc-${Math.random().toString(36).slice(2)}.json`),
+    weightFile: wPath,
+  });
+  const w = m.weights();
+  assert.equal(w.weights.liveness.weight, 0.6, 'JSON 文件覆盖 liveness');
+  assert.equal(w.weights.liveness.source, 'file');
+  assert.equal(w.weights.tool.weight, 0.3, 'JSON 文件覆盖 tool');
+  assert.equal(w.weights.anomalies.weight, 0.1, 'JSON 文件覆盖 anomalies');
+  assert.equal(w.weights.reliability.weight, 0.25, '未覆盖项保持默认');
+  assert.equal(w.weightFile, wPath, 'weights 应暴露配置文件路径');
+  assert.equal(w.weightFileLoaded, true);
+  assert.equal(w.count, 3, '应识别 3 项被覆盖');
+});
+
+test('weights: --weights-file 加载未知键被忽略、非法值回退默认', () => {
+  const wPath = join(TD, `mon-weights-bad-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(wPath, JSON.stringify({ liveness: 0.8, unknownKey: 0.9, tool: 'not-a-number' }), 'utf8');
+  const omni = makeOmni([], fakeMemory());
+  const m = new Monitor(omni.bus, omni, { metricsFile: join(TD, `wfb-${Math.random().toString(36).slice(2)}.json`) });
+  const r = m.loadWeightsFile(wPath);
+  assert.equal(r.ok, true);
+  assert.equal(r.loaded, true);
+  const w = m.weights();
+  assert.equal(w.weights.liveness.weight, 0.8, '合法键生效');
+  assert.equal(w.weights.liveness.source, 'file');
+  assert.equal(w.weights.tool.weight, 0.15, '非法值回退默认');
+  assert.equal(w.weights.tool.source, 'default');
+  assert.equal(w.overrides.includes('unknownKey'), false, '未知键不应污染权重');
+});
+
+test('weights: 优先级 opts > env > file > default（env 盖过 file，opts 盖过 env）', () => {
+  const wPath = join(TD, `mon-weights-pri-${Math.random().toString(36).slice(2)}.json`);
+  writeFileSync(wPath, JSON.stringify({ liveness: 0.7 }), 'utf8');
+  const omni = makeOmni([], fakeMemory());
+  process.env.OMNI_MONITOR_WEIGHT_LIVENESS = '0.5';
+  try {
+    const m = new Monitor(omni.bus, omni, {
+      metricsFile: join(TD, `wpri-${Math.random().toString(36).slice(2)}.json`),
+      weightFile: wPath,
+      weights: { liveness: 0.9 },
+    });
+    const w = m.weights();
+    assert.equal(w.weights.liveness.weight, 0.9, 'opts 最高优先级，盖过 env 与 file');
+    assert.equal(w.weights.liveness.source, 'opts');
+  } finally {
+    delete process.env.OMNI_MONITOR_WEIGHT_LIVENESS;
+  }
+});
+
+test('healthScore: 维度权重配置生效 —— tool 权重置 1 时分数随工具健康(0/100)变化', () => {
+  const now = Date.now();
+  const runs = [{ runId: 'r1', engine: 'llm', completed: true, startedAt: now, finishedAt: now + 100, durationMs: 100, steps: [] }];
+  const zeroW = { liveness: 0, reliability: 0, threshold: 0, anomalies: 0, tool: 1 };
+  // 无熔断：tool subScore=1 → 分数 100
+  const omniClosed = makeOmni(runs, fakeMemory());
+  const mClosed = new Monitor(omniClosed.bus, omniClosed, { metricsFile: join(TD, `hs-w-close-${Math.random().toString(36).slice(2)}.json`), weights: zeroW });
+  const rClosed = mClosed.healthScore();
+  assert.equal(rClosed.score, 100, 'tool 权重=1、无熔断 → 分数 100');
+  assert.equal(rClosed.dimensions.find(d => d.key === 'tool').weight, 1, '维度权重应反映配置');
+  assert.equal(rClosed.dimensions.find(d => d.key === 'reliability').weight, 0, '其余维度权重应反映配置');
+  // 熔断开启：tool subScore=0 → 分数 0
+  const omniOpen = makeOmni(runs, fakeMemory());
+  const mOpen = new Monitor(omniOpen.bus, omniOpen, { metricsFile: join(TD, `hs-w-open-${Math.random().toString(36).slice(2)}.json`), weights: zeroW });
+  mOpen.omni.toolBreakerStatus = () => [{ name: 'web_fetch', open: true, fails: 3, maxFails: 3 }];
+  mOpen.omni.toolCacheStats = () => ({ size: 0, keys: [] });
+  const rOpen = mOpen.healthScore();
+  assert.equal(rOpen.score, 0, 'tool 权重=1、熔断开启 → 分数 0（证明权重确实改变了打分）');
+});
+
+test('healthScore: 权重之和≠1 时仍归一化到 0-100（全维度满分不应溢出）', () => {
+  const now = Date.now();
+  const omni = makeOmni([
+    { runId: 'r1', engine: 'llm', completed: true, startedAt: now, finishedAt: now + 100, durationMs: 100, steps: [] },
+  ], fakeMemory());
+  // 故意给一组和≠1 的权重（全 0.5），归一化后每维度 0.2
+  const m = new Monitor(omni.bus, omni, {
+    metricsFile: join(TD, `hs-w-norm-${Math.random().toString(36).slice(2)}.json`),
+    weights: { liveness: 0.5, reliability: 0.5, threshold: 0.5, anomalies: 0.5, tool: 0.5 },
+  });
+  const r = m.healthScore();
+  assert.equal(r.score, 100, '全部 subScore=1 时归一化后分数仍应为 100，不溢出');
+});
+
 test('阈值真实生效：memBulk 降低后更小的记忆增长即触发批量注入', () => {
   const omni = makeOmni([], {
     layerSnapshot: () => ({ memory: { keys: 5, facts: 0, notes: 0 }, rule: 0, skill: 0, knowledge: 0 }),
@@ -694,7 +834,7 @@ test('dashboard 含综合健康评分区块(0-100 + 等级 + 5 维度 + 关键�
   assert.ok(html.includes('综合健康评分'), '仪表盘应含综合健康评分区块');
   assert.ok(html.includes('Health Score'), '应含英文标题');
   assert.ok(html.includes('关键问题'), '应含关键问题聚合');
-  assert.ok(html.includes('Liveness'), '应展示五个维度之一');
+  assert.ok(html.includes('舰队存活'), '应展示五个维度之一(标签)');
 });
 
 test('Body.monitor 委托到 omni.monitor（第 8 器官接线正确）', () => {

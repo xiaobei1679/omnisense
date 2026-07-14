@@ -114,6 +114,7 @@ node "{SKILL_DIR}/src/cli.mjs" monitor --config-file=./my-monitor.json  # 从 JS
 node "{SKILL_DIR}/src/cli.mjs" monitor --threshold-health  # 当前测量值 vs 阈值 红黄绿着色(ok/warn/over/na)
 node "{SKILL_DIR}/src/cli.mjs" monitor --threshold-alerts  # 可推送告警清单(Alertmanager 形状: fingerprint+labels{severity}+annotations)
 node "{SKILL_DIR}/src/cli.mjs" monitor --score            # 综合健康评分(0-100 加权 5 维度 + 等级 A/B/C/D/F)
+node "{SKILL_DIR}/src/cli.mjs" monitor --weights          # 综合健康评分维度权重(值/归一化/来源，可用 OMNI_MONITOR_WEIGHT_* 或 JSON 文件覆盖)
 node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML 仪表盘(含阈值配置/健康评分区块)
 # 工作区侧跨层复用同一份实现：
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
@@ -123,6 +124,7 @@ node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdHealth  # �
 node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdAlerts  # 跨层产出 Alertmanager 形状告警(可直推外部告警系统)
 node openclaw-workspace/scripts/omnisense-link.mjs monitor healthScore     # 跨层综合健康评分(score/grade/status/dimensions)
 node openclaw-workspace/scripts/omnisense-link.mjs monitor score           # 别名: 跨层综合健康评分
+node openclaw-workspace/scripts/omnisense-link.mjs monitor weights          # 跨层查询综合健康评分维度权重(值/归一化/来源)
 ```
 
 ```bash

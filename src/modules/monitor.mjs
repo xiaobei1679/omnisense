@@ -52,6 +52,27 @@ const THRESHOLD_SPEC = {
   trendSlopeFleet:     ['OMNI_MONITOR_TREND_SLOPE_FLEET', 0.5, '/点 · 舰队健康引擎数下降斜率阈值(trend_regression)'],
 };
 
+// ── 综合健康评分维度权重（可调，避免"权重写死"这一反模式）──
+// 借鉴业界复合健康评分的「非等权重」思想（Nobl9 Composite SLO 把多组件按真实业务影响加权、权重≠平均；
+// dev.to Output Quality Score 明确把权重列为可配置项）：不同部署关心不同维度——有的团队"成功率"压倒一切，
+// 有的团队把"工具管线健康"看得比"阈值合规"重。把 5 个健康维度(舰队存活/成功率/阈值合规/异常/工具管线)的
+// 权重抽成一份可观测、可覆盖的配置：优先级 构造 opts.weights > 环境变量 OMNI_MONITOR_WEIGHT_* > JSON 文件 > 内置默认。
+// 默认沿用 v8.0.0 的 0.25/0.25/0.20/0.15/0.15（与历史行为一致）。权重可为任意 ≥0 数，计分前归一化(使分数恒在 0-100)。
+const WEIGHT_SPEC = {
+  liveness:    ['OMNI_MONITOR_WEIGHT_LIVENESS', 0.25, '权重 · 舰队存活维度(失联/降级引擎扣分)'],
+  reliability: ['OMNI_MONITOR_WEIGHT_RELIABILITY', 0.25, '权重 · 成功率(SLO error budget)维度'],
+  threshold:   ['OMNI_MONITOR_WEIGHT_THRESHOLD', 0.20, '权重 · 阈值合规维度(当前值 vs 阈值，不含 liveness*Ms 避免翻倍)'],
+  anomalies:   ['OMNI_MONITOR_WEIGHT_ANOMALIES', 0.15, '权重 · 异常维度(error/warning/info 折算)'],
+  tool:        ['OMNI_MONITOR_WEIGHT_TOOL', 0.15, '权重 · 工具管线维度(熔断开启/缓存/工具延迟)'],
+};
+
+// 权重配置来源之四：JSON 文件（Observability-as-Code，与阈值配置同源思路）。
+// 把 5 个健康维度权重写成一份 JSON 配置，优先级 opts > 环境变量 > JSON文件 > 内置默认。
+// 默认路径 ~/.omnisense/monitor-weights.json，可用构造 opts.weightFile 或环境变量 OMNI_MONITOR_WEIGHTS 指向任意路径。
+const DEFAULT_WEIGHT_FILE = (() => {
+  try { return join(homedir(), '.omnisense', 'monitor-weights.json'); } catch { return null; }
+})();
+
 // 阈值配置来源之三：JSON 文件（Observability-as-Code）。
 // 借鉴 Grafana/Prometheus「阈值即配置、纳入版本控制——每次阈值变更都是一次可审查的提交」实践
 // （https://codelit.io/blog/observability-as-code · https://thegarnetwiki.com/devops/monitoring-as-code）：
@@ -92,6 +113,45 @@ function resolveThreshold(key, opts, env, fileObj) {
   if (fileObj && Object.prototype.hasOwnProperty.call(fileObj, key)) {
     const v = Number(fileObj[key]);
     if (Number.isFinite(v)) return { value: v, source: 'file' };
+  }
+  return { value: def, source: 'default' };
+}
+
+// 读取并校验健康评分权重 JSON 文件：仅保留 WEIGHT_SPEC 中定义的 key（防御：忽略未知键；
+// 权重必须是 ≥0 的有限数，否则丢弃该键，避免误配污染评分）。文件不存在/损坏静默降级。
+function loadWeightFile(path) {
+  if (!path || typeof path !== 'string') return null;
+  try {
+    if (!existsSync(path)) return null;
+    const obj = JSON.parse(readFileSync(path, 'utf8'));
+    if (!obj || typeof obj !== 'object') return null;
+    const clean = {};
+    for (const k of Object.keys(WEIGHT_SPEC)) {
+      if (Object.prototype.hasOwnProperty.call(obj, k)) {
+        const v = Number(obj[k]);
+        if (Number.isFinite(v) && v >= 0) clean[k] = v;
+      }
+    }
+    return Object.keys(clean).length ? clean : null;
+  } catch { return null; }
+}
+
+// 解析单个健康维度权重：opts 覆盖 > 环境变量 > JSON文件 > 默认；返回 { value, source }。
+// 不接受负数/NaN（权重语义为 0~任意正比，负权重会让分数越界），非法值回退默认。
+function resolveWeight(key, opts, env, fileObj) {
+  const [envKey, def] = WEIGHT_SPEC[key];
+  if (opts && Object.prototype.hasOwnProperty.call(opts, key)) {
+    const v = Number(opts[key]);
+    if (Number.isFinite(v) && v >= 0) return { value: v, source: 'opts' };
+  }
+  const raw = env ? env[envKey] : undefined;
+  if (raw != null && String(raw).trim() !== '') {
+    const v = Number(raw);
+    if (Number.isFinite(v) && v >= 0) return { value: v, source: 'env' };
+  }
+  if (fileObj && Object.prototype.hasOwnProperty.call(fileObj, key)) {
+    const v = Number(fileObj[key]);
+    if (Number.isFinite(v) && v >= 0) return { value: v, source: 'file' };
   }
   return { value: def, source: 'default' };
 }
@@ -162,13 +222,21 @@ export class Monitor {
     this.omni = omni;
     this.metricsFile = opts.metricsFile || DEFAULT_METRIC_FILE;
     this._optsThresholds = opts.thresholds || null;
+    this._optsWeights = opts.weights || null;
     // 阈值配置 JSON 文件（Observability-as-Code）：opts.thresholdFile > 环境变量 OMNI_MONITOR_CONFIG > 默认 ~/.omnisense/monitor.json
     const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
     this._thresholdFile = opts.thresholdFile || env.OMNI_MONITOR_CONFIG || DEFAULT_MONITOR_CONFIG_PATH;
     const fileObj = loadThresholdFile(this._thresholdFile);
     this._thresholdFileLoaded = !!fileObj;
+    // 健康评分维度权重 JSON 文件（Observability-as-Code）：opts.weightFile > 环境变量 OMNI_MONITOR_WEIGHTS > 默认 ~/.omnisense/monitor-weights.json
+    this._weightFile = opts.weightFile || env.OMNI_MONITOR_WEIGHTS || DEFAULT_WEIGHT_FILE;
     // 阈值配置：opts.thresholds 覆盖 > 环境变量 > JSON文件 > 内置默认；来源可经 config() 观测（诚实标注）。
     this._resolveConfig(this._optsThresholds, fileObj);
+    // 健康评分维度权重：opts.weights 覆盖 > 环境变量 OMNI_MONITOR_WEIGHT_* > JSON文件 > 内置默认；
+    // 来源可经 weights() 观测（诚实标注）。计分前归一化，使分数恒在 0-100，不受"权重之和≠1"影响。
+    const weightFileObj = loadWeightFile(this._weightFile);
+    this._weightFileLoaded = !!weightFileObj;
+    this._resolveWeights(this._optsWeights, weightFileObj);
     // 记忆增长基线：内存缓存（检测更可靠、测试无文件污染），构造时若文件已有则载入以便跨进程延续。
     const seeded = this._loadMetrics();
     this._baseline = seeded._memBaseline || null;        // 稳定基线：供 memoryHealth.growth（自首次观察起的累计增长，仅首次建立）
@@ -199,6 +267,7 @@ export class Monitor {
     this.bus.register('monitor', 'alertables', () => this.thresholdAlerts());
     this.bus.register('monitor', 'healthScore', () => this.healthScore());
     this.bus.register('monitor', 'score', () => this.healthScore());
+    this.bus.register('monitor', 'weights', () => this.weights());
   }
 
   // ── 阈值配置解析 + 观测 ──
@@ -214,6 +283,18 @@ export class Monitor {
     }
   }
 
+  // 解析健康评分维度权重并填 this._weights(原始配置权重) + this._weightSource(来源)；计分前统一归一化。
+  _resolveWeights(optsWeights, fileObj) {
+    const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
+    this._weights = {};
+    this._weightSource = {};
+    for (const key of Object.keys(WEIGHT_SPEC)) {
+      const { value, source } = resolveWeight(key, optsWeights, env, fileObj);
+      this._weights[key] = value;
+      this._weightSource[key] = source;
+    }
+  }
+
   // 运行时切换阈值配置 JSON 文件并重新解析（不做破坏性重建）：
   // 常用于 CLI `monitor --config-file=<path>` / 工作区 `omnisense-link monitor --config-file=<path>`。
   // 优先级保持 opts > env > json文件 > 默认；返回加载结果与当前生效覆盖清单。
@@ -224,6 +305,18 @@ export class Monitor {
     this._resolveConfig(this._optsThresholds, fileObj);
     const cfg = this.config();
     return { ok: true, configFile: this._thresholdFile, loaded: !!fileObj, count: cfg.count, overrides: cfg.overrides };
+  }
+
+  // 运行时切换健康评分维度权重 JSON 文件并重新解析（不做破坏性重建）：
+  // 常用于 CLI `monitor --weights-file=<path>` / 工作区 `omnisense-link monitor --weights-file=<path>`。
+  // 优先级保持 opts > env > json文件 > 默认；返回加载结果与当前生效覆盖清单。
+  loadWeightsFile(path) {
+    this._weightFile = path || null;
+    const fileObj = loadWeightFile(path);
+    this._weightFileLoaded = !!fileObj;
+    this._resolveWeights(this._optsWeights, fileObj);
+    const w = this.weights();
+    return { ok: true, weightFile: this._weightFile, loaded: !!fileObj, count: w.count, overrides: w.overrides };
   }
 
   // 返回当前生效的阈值配置（值 + 来源 default/env/opts + 环境变量名 + 说明），供 CLI/工作区/仪表盘观测。
@@ -243,6 +336,28 @@ export class Monitor {
     }
     const overrides = Object.keys(thresholds).filter(k => thresholds[k].overridden);
     return { ok: true, thresholds, overrides, count: overrides.length, metricsFile: this.metricsFile, configFile: this._thresholdFile || null, configFileLoaded: this._thresholdFileLoaded };
+  }
+
+  // 返回当前生效的健康评分维度权重（值 + 归一化值 + 来源 default/env/file/opts + 环境变量名），
+  // 供 CLI/工作区/仪表盘观测。让「综合健康分里哪个维度更重要、能怎么调」透明可查。
+  weights() {
+    const total = Object.values(this._weights).reduce((a, b) => a + b, 0);
+    const items = {};
+    for (const key of Object.keys(WEIGHT_SPEC)) {
+      const [envKey, def, desc] = WEIGHT_SPEC[key];
+      items[key] = {
+        weight: this._weights[key],
+        normalized: total > 0 ? Number((this._weights[key] / total).toFixed(4)) : 0,
+        source: this._weightSource[key],
+        envKey,
+        default: def,
+        overridden: this._weightSource[key] !== 'default',
+        desc,
+      };
+    }
+    const overrides = Object.keys(items).filter(k => items[k].overridden);
+    return { ok: true, weights: items, overrides, count: overrides.length, sum: Number(total.toFixed(4)),
+      weightFile: this._weightFile || null, weightFileLoaded: this._weightFileLoaded };
   }
 
   // ── 阈值健康（threshold health）：把"当前测量值"与生效阈值并排对比，红黄绿着色 ──
@@ -510,14 +625,17 @@ export class Monitor {
     }
 
     const dims = [
-      { key: 'liveness', label: '舰队存活', weight: 0.25, subScore: liveness, status: livenessStatus, detail: livenessDetail },
-      { key: 'reliability', label: '成功率(SLO)', weight: 0.25, subScore: reliability, status: reliabilityStatus, detail: `成功率 ${(successRate * 100).toFixed(1)}% (${completed}/${total})` },
-      { key: 'threshold', label: '阈值合规', weight: 0.20, subScore: threshold, status: thresholdStatus, detail: scored.length ? `${scored.filter(i => i.status === 'over').length} 超标 / ${scored.filter(i => i.status === 'warn').length} 关注` : '无足够数据' },
-      { key: 'anomalies', label: '异常', weight: 0.15, subScore: anomaly, status: anomalyStatus, detail: `${aErr} error / ${aWarn} warning / ${aInfo} info` },
-      { key: 'tool', label: '工具管线', weight: 0.15, subScore: tool, status: toolStatus, detail: `${thObj.openCircuits || 0} 个熔断器开启 / ${breakers.length} 个工具` },
+      { key: 'liveness', label: '舰队存活', weight: this._weights.liveness, subScore: liveness, status: livenessStatus, detail: livenessDetail },
+      { key: 'reliability', label: '成功率(SLO)', weight: this._weights.reliability, subScore: reliability, status: reliabilityStatus, detail: `成功率 ${(successRate * 100).toFixed(1)}% (${completed}/${total})` },
+      { key: 'threshold', label: '阈值合规', weight: this._weights.threshold, subScore: threshold, status: thresholdStatus, detail: scored.length ? `${scored.filter(i => i.status === 'over').length} 超标 / ${scored.filter(i => i.status === 'warn').length} 关注` : '无足够数据' },
+      { key: 'anomalies', label: '异常', weight: this._weights.anomalies, subScore: anomaly, status: anomalyStatus, detail: `${aErr} error / ${aWarn} warning / ${aInfo} info` },
+      { key: 'tool', label: '工具管线', weight: this._weights.tool, subScore: tool, status: toolStatus, detail: `${thObj.openCircuits || 0} 个熔断器开启 / ${breakers.length} 个工具` },
     ];
+    // 计分前归一化权重（wsum 可能 ≠ 1，归一化使 score 恒在 0-100，不受"权重之和≠1"影响；用户配置的权重原样展示）。
+    const wsum = dims.reduce((a, d) => a + d.weight, 0);
+    const norm = wsum > 0 ? wsum : 1;
     const eff = dims.map(d => (d.subScore == null ? 1 : d.subScore));
-    let score = Math.round(100 * dims.reduce((a, d, i) => a + d.weight * eff[i], 0));
+    let score = Math.round(100 * dims.reduce((a, d, i) => a + (d.weight / norm) * eff[i], 0));
 
     // 无运行轨迹（连 liveness/reliability 都无数据）：整体不可评分，诚实返回 unknown（score=null，绝不伪造满分）
     let status, grade;
@@ -1105,7 +1223,7 @@ export class Monitor {
       : '<div class="muted">（暂无关键问题）</div>';
     const hsHtml = `
       <div class="status" style="background:${hsColor(hs.status)};font-size:18px">综合健康评分: ${hs.score == null ? 'N/A' : hs.score + ' / 100'} · 等级 ${esc(hs.grade)} · 状态 ${esc(hs.status)}</div>
-      <div style="margin-top:12px;color:var(--muted);font-size:12px">五个加权维度（Liveness 25% / 成功率 25% / 阈值合规 20% / 异常 15% / 工具管线 15%，无数据维度标 na 不扣分，借鉴 Nobl9 Composite SLO 与 New Relic 健康分）</div>
+      <div style="margin-top:12px;color:var(--muted);font-size:12px">五个加权维度（${(hs.dimensions || []).map(d => `${esc(d.label)} ${Math.round(d.weight * 100)}%`).join(' / ')}，无数据维度标 na 不扣分，权重可经 OMNI_MONITOR_WEIGHT_* 或 JSON 文件覆盖，借鉴 Nobl9 Composite SLO 与 New Relic 健康分）</div>
       <div style="margin-top:6px">${hsRows}</div>
       <div style="margin-top:10px"><b>关键问题 (${hs.issueCount || 0})：</b></div>
       <div style="margin-top:4px">${hsIssues}</div>`;

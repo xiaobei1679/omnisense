@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear] | monitor [--config-file=<path>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear] | monitor [--config-file=<path>] [--weights-file=<path>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score|weights] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -182,10 +182,12 @@ export async function runLink(args) {
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
     const cfgFile = (rest.find(a => a.startsWith('--config-file=')) || '').split('=')[1];
     if (cfgFile) omni.monitor.loadConfigFile(cfgFile);
+    const weightFile = (rest.find(a => a.startsWith('--weights-file=')) || '').split('=')[1];
+    if (weightFile) omni.monitor.loadWeightsFile(weightFile);
     const sub = rest.find(a => !a.startsWith('--')) || 'snapshot';
     const fn = omni.monitor[sub];
     if (typeof fn !== 'function') {
-      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score）` };
+      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score/weights）` };
     }
     const callArgs = rest.filter(a => a !== sub && !a.startsWith('--config-file='));
     const r = await withTimeout(fn.apply(omni.monitor, callArgs), TIMEOUT_MS);
