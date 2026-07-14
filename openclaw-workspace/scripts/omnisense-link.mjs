@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear] | monitor [--config-file=<path>] [--weights-file=<path>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score|weights] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear|--persist-file=<path>|--persist-off|--flush|--clear-persist] | monitor [--config-file=<path>] [--weights-file=<path>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score|weights] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
       organs: listOrgans(),
     };
   }
@@ -169,10 +169,15 @@ export async function runLink(args) {
   }
   if (cmd === 'cache') {
     // 工作区侧消费身体的「工具级缓存/熔断」状态（合并后新项目：工作区能观测 agent 工具流水线的健壮性）。
-    // 复用内核同一份 breaker 基础设施（与内核同实现，无壳、可单测）。
+    // 复用内核同一份 breaker 基础设施（与内核同实现，无壳、可单测）；落盘持久化也一并桥接。
     const omni = (await import('../../src/index.mjs')).OmniSense.create();
+    const persistFile = (rest.find(a => a.startsWith('--persist-file=')) || '').split('=')[1];
+    if (persistFile) return omni.setToolCachePersistence(persistFile, { load: true });
+    if (rest.includes('--persist-off')) return omni.setToolCachePersistence(null);
+    if (rest.includes('--flush')) return omni.persistToolCache();
+    if (rest.includes('--clear-persist')) return omni.clearToolCachePersistence();
     if (rest.includes('--clear')) return omni.clearToolCache();
-    return { ok: true, cache: omni.toolCacheStats(), breakers: omni.toolBreakerStatus() };
+    return { ok: true, cache: omni.toolCacheStats(), breakers: omni.toolBreakerStatus(), persistence: omni.toolCachePersistence() };
   }
   if (cmd === 'monitor') {
     // 监控器官：工作区侧消费身体的统一状态快照 / Agent 健康 / 多种状态检测告警 / 可视化仪表盘。

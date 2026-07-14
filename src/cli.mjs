@@ -292,8 +292,15 @@ async function main() {
     }
     case 'cache': {
       // 工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时）
+      // 新增落盘持久化：--persist-file=<path> 启用并载入（副作用，可与其他动作叠加）/ --persist-off 关闭 / --flush 立即落盘 / --clear-persist 清空内存+磁盘
+      const persistFile = (rest.find(a => /^--persist-file=/.test(a)) || '').split('=')[1];
+      if (flag('--persist-off')) { result = omni.setToolCachePersistence(null); if (!jsonMode) console.log(JSON.stringify(result)); break; }
+      // --persist-file 作为副作用启用（不 break，可与 --clear/--flush/--clear-persist 叠加；单独给则落到下方默认视图展示启用结果）
+      if (persistFile) omni.setToolCachePersistence(persistFile, { load: true });
+      if (flag('--flush')) { result = omni.persistToolCache(); if (!jsonMode) console.log(JSON.stringify(result)); break; }
+      if (flag('--clear-persist')) { result = omni.clearToolCachePersistence(); if (!jsonMode) console.log(JSON.stringify(result)); break; }
       if (flag('--clear')) { result = omni.clearToolCache(); if (!jsonMode) console.log(JSON.stringify(result)); break; }
-      result = { cache: omni.toolCacheStats(), breakers: omni.toolBreakerStatus() };
+      result = { cache: omni.toolCacheStats(), breakers: omni.toolBreakerStatus(), persistence: omni.toolCachePersistence() };
       if (!jsonMode) {
         console.log('\n🔧 工具级缓存 / 熔断状态（复用 breaker 基础设施 · 扩展到 Agent 工具调用）');
         console.log('  缓存条目:', result.cache.size);
@@ -301,6 +308,8 @@ async function main() {
         const triggered = result.breakers.filter(b => b.fails > 0);
         console.log('  熔断器:', result.breakers.length ? result.breakers.map(b => `${b.name}(open=${b.open},fails=${b.fails}/${b.maxFails})`).join('  ') : '（均未触发）');
         if (triggered.length) console.log('  ⚠ 已触发熔断的工具:', triggered.map(b => b.name).join(', '));
+        const p = result.persistence;
+        console.log('  持久化:', p.enabled ? `已启用 → ${p.file}（已载入:${p.loaded} 缓存项:${p.cacheEntries} 熔断数:${p.breakerCount}）` : '未启用（设 OMNI_TOOL_CACHE_FILE 或 --persist-file=<path> 可落盘跨重启续命）');
       }
       break;
     }
@@ -390,7 +399,7 @@ const USAGE = `OmniSense 命令行
   search "<关键词>" [--topK=20] [--diversity=0]   深度语义检索记忆(BM25+时间衰减+复用权重; --diversity 0~1 开启 MMR 去冗余)
   dispatch "<目标>" [--detail]   技能匹配与自动委派：基于 Agent Card 能力卡找到最佳器官/方法并执行（纯关键词匹配，零外部依赖）；--detail 仅展示不执行
   watch [--interval=60] [--max=∞] [--think] [--out=./.omni-watch.json] [--remember] [--agent] [--agent-mode=remember|alert|digest] [--agent-cooldown=60] [--agent-goal=<模板>] [--summarize-new] [--autopilot] [--autopilot-agenda="a,b,c"]   常驻感知循环；--agent 开启"变化即行动"自主编排(差异检测+多模式)；--autopilot 升级为"常驻自驱身体"：每 tick 由身体自身能力卡自主决策并离线执行(像真人一样活着，借鉴 OpenClaw 心跳闭环/Sophia System3)；--summarize-new 对新增热点联网抓 URL 并摘要(写进 digest)
-  cache [--clear]      工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时）
+  cache [--clear|--persist-file=<path>|--persist-off|--flush|--clear-persist]   工具级缓存/熔断状态（web_fetch/summarize_url/hot_topics 命中缓存直接返回、避免重复联网；持续失败熔断防反复超时；--persist-file=<path> 启用落盘持久化并载入 / --persist-off 关闭 / --flush 立即落盘 / --clear-persist 清空内存与磁盘）
   monitor [--alerts|--health|--latency|--grid|--memory|--anomalies|--runs|--tools|--trends|--config|--threshold-health|--threshold-alerts|--score|--weights] [--config-file=<path>] [--weights-file=<path>]   监控器官：统一状态快照 / --alerts 统一告警(含异常) / --health Agent健康 / --latency P50/P95/P99 / --grid 引擎状态网格 / --memory 记忆健康 / --anomalies 异常检测 / --runs 运行时间线 / --tools 工具管线健康(缓存/熔断/工具级延迟) / --trends 随时间变化的指标趋势基线(sparkline) / --config 生效的告警阈值配置(值/来源/环境变量名/配置文件路径，可用 OMNI_MONITOR_* 或 ~/.omnisense/monitor.json 覆盖) / --threshold-health 当前测量值 vs 阈值 红黄绿着色(ok/warn/over/na) / --threshold-alerts 可直推 Alertmanager 的告警清单(labels+annotations+稳定 fingerprint) / --score 综合健康评分(0-100 + 等级 A/B/C/D/F，加权汇总 Liveness/成功率/阈值/异常/工具管线) / --weights 综合健康评分维度权重(值/归一化/来源，可用 OMNI_MONITOR_WEIGHT_* 或 ~/.omnisense/monitor-weights.json 覆盖) / --config-file=<path> 从指定 JSON 文件加载阈值(Observability-as-Code) / --weights-file=<path> 从指定 JSON 文件加载健康评分维度权重(Observability-as-Code)
   dashboard [--out=./.omni-dashboard.html]   生成零依赖可视化 HTML 仪表盘(Agent状态/记忆四层/活动/告警)，浏览器打开即看
   serve [port]         启动本地 HTTP 驱动服务(127.0.0.1)，供外部门户驱动能力(设 OMNI_TOKEN 即启用 Bearer 鉴权)

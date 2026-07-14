@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v9.0.0 — 2026-07-14 (major)
+
+- 工具级缓存/熔断落盘持久化（OMNI_TOOL_CACHE_FILE/--persist-file 启用零依赖 JSON 落盘，跨重启续命：缓存不重抓+熔断冷却续命）；setToolCachePersistence/toolCachePersistence/persistToolCache/clearToolCachePersistence 暴露至 facade+CLI+工作区桥接；新增 5 内核单测+1 跨层断言；借鉴 disk-backed TTL cache/SQLiteCache 思想
+
 ## v8.2.0 — 2026-07-14 (minor)
 
 - monitor 综合健康评分维度权重可配置化（opts>env>JSON文件>default 四源，复用 Observability-as-Code，计分前归一化恒在 0-100；新增 weights 总线方法第21个）

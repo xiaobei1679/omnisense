@@ -70,6 +70,9 @@ node scripts/omnisense-link.mjs live 1 --no-autopilot --json
 # 工具级缓存/熔断：工作区侧观测身体的 Agent 工具流水线健壮性（复用内核同一份 breaker 基础设施）
 node scripts/omnisense-link.mjs cache              # 查工具缓存条目数 + 熔断器状态
 node scripts/omnisense-link.mjs cache --clear     # 清空工具级缓存
+OMNI_TOOL_CACHE_FILE=./.omni-tool-cache.json node scripts/omnisense-link.mjs cache   # 启用落盘持久化（跨重启续命，启动时自动载入）
+node scripts/omnisense-link.mjs cache --persist-file=./.omni-tool-cache.json --flush   # 立即落盘一次
+node scripts/omnisense-link.mjs cache --clear-persist   # 清空内存与磁盘
 # 常驻自驱身体：驱动身体"脚"(watch) 持续感知 + 每 tick 自驱决策（autopilot 自驱，像真人一样持续自我驱动地活着）
 # 与 --agent 互补（变化即行动）：可同时开启（--autopilot --agent），互相叠加
 node scripts/omnisense-link.mjs watch 2 --autopilot --json

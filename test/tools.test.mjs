@@ -1,10 +1,10 @@
 // 工具执行器离线单测（node --test，不触网）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDefaultTools, executeTool, safeCalc, toolCacheStats, clearToolCache, toolBreakerStatus, resetToolBreakers } from '../src/core/tools.mjs';
+import { buildDefaultTools, executeTool, safeCalc, toolCacheStats, clearToolCache, toolBreakerStatus, resetToolBreakers, setToolCachePersistence, toolCachePersistence, persistToolCache, clearToolCachePersistence } from '../src/core/tools.mjs';
 
 const fakeOmni = { memory: { store: {}, search(q){ return Object.entries(this.store).filter(([k,v])=>k.includes(q)||String(v).includes(q)).map(([k,v])=>({key:k,value:v})); }, remember(k,v){ this.store[k]=v; return v; } } };
 
@@ -149,4 +149,95 @@ test('executeTool 未声明 cacheTtl/circuit 的默认工具行为不变（含 c
   assert.equal(r.output.result, 5);
   assert.equal(r.cached, undefined);
   assert.equal(r.circuitOpen, undefined);
+});
+
+// ───────────────────── 工具级缓存/熔断 落盘持久化（跨重启续命） ─────────────────────
+// 设计：默认不落盘；setToolCachePersistence(file) 启用并载入磁盘 JSON；每次 set/success/fail/clear/reset 自动落盘。
+const readPersist = (file) => { try { return JSON.parse(readFileSync(file, 'utf8')); } catch { return null; } };
+const freshCacheTool = () => [{ name: 'pf', description: 'x', parameters: {}, cacheTtl: 60000, run: async ({ url }) => ({ url, n: 1 }) }];
+
+test('setToolCachePersistence 启用/关闭 + status 反映', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-persist-'));
+  const file = join(dir, 'c.json');
+  let st = setToolCachePersistence(file, { load: true });
+  assert.equal(st.enabled, true);
+  assert.equal(typeof st.file, 'string');
+  assert.equal(toolCachePersistence().enabled, true);
+  st = setToolCachePersistence(null);
+  assert.equal(st.enabled, false);
+  assert.equal(toolCachePersistence().enabled, false);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('缓存写入后落盘文件含该条目（disk 留存）', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-persist-'));
+  const file = join(dir, 'c.json');
+  setToolCachePersistence(file, { load: true });
+  clearToolCache();
+  const tools = freshCacheTool();
+  await executeTool(tools, 'pf', { url: 'https://x.com/a' });
+  const data = readPersist(file);
+  assert.ok(data && data.caches.pf, '磁盘文件应含 pf 缓存');
+  assert.equal(data.caches.pf.entries.length, 1, '应落盘 1 条缓存');
+  assert.equal(data.caches.pf.entries[0][1].v.url, 'https://x.com/a');
+  clearToolCachePersistence();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('模拟重启：清空内存→重新载入→条目恢复（落盘跨重启续命）', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-persist-'));
+  const file = join(dir, 'c.json');
+  // 1) 启用 + 播种
+  setToolCachePersistence(file, { load: true });
+  clearToolCache(); resetToolBreakers();
+  const tools = freshCacheTool();
+  await executeTool(tools, 'pf', { url: 'https://x.com/a' });
+  assert.equal(toolCacheStats().size, 1, '内存应有 1 条');
+  // 2) 模拟进程重启：先关持久化（保留内存）→ 清空内存 → 再启用载入
+  setToolCachePersistence(null);
+  clearToolCache(); resetToolBreakers();
+  assert.equal(toolCacheStats().size, 0, '内存已清空');
+  setToolCachePersistence(file, { load: true });
+  // 3) 重新载入后条目应恢复
+  assert.equal(toolCacheStats().size, 1, '从磁盘重新载入应恢复 1 条');
+  assert.equal(toolCachePersistence().loaded, true, '应标记为已载入');
+  clearToolCachePersistence();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('熔断状态跨重启保留（冷却期继续短路）', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-persist-'));
+  const file = join(dir, 'b.json');
+  setToolCachePersistence(file, { load: true });
+  resetToolBreakers();
+  const tools = [{ name: 'bf', description: 'x', parameters: {}, circuit: true, run: async () => { throw new Error('boom'); } }];
+  await executeTool(tools, 'bf', {});
+  await executeTool(tools, 'bf', {});
+  await executeTool(tools, 'bf', {});
+  // 第 4 次应熔断短路
+  const r = await executeTool(tools, 'bf', {});
+  assert.equal(r.circuitOpen, true, '应已熔断');
+  // 模拟重启：关→清空→重载入
+  setToolCachePersistence(null);
+  resetToolBreakers();
+  setToolCachePersistence(file, { load: true });
+  const st = toolBreakerStatus().find(b => b.name === 'bf');
+  assert.ok(st && st.open === true, '重启后熔断仍应处于开启（冷却期续命）');
+  clearToolCachePersistence();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('clearToolCachePersistence 清空内存与磁盘', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'omni-persist-'));
+  const file = join(dir, 'c.json');
+  setToolCachePersistence(file, { load: true });
+  clearToolCache();
+  await executeTool(freshCacheTool(), 'pf', { url: 'https://x.com/a' });
+  assert.ok(readPersist(file)?.caches?.pf, '落盘前应有数据');
+  const st = clearToolCachePersistence();
+  assert.equal(toolCacheStats().size, 0, '内存已清');
+  assert.equal(st.deleted, true, '磁盘文件应被清空');
+  const afterData = readPersist(file);
+  assert.ok(afterData && Object.keys(afterData.caches || {}).length === 0, '磁盘缓存应为空');
+  rmSync(dir, { recursive: true, force: true });
 });

@@ -75,6 +75,7 @@ node "{SKILL_DIR}/src/cli.mjs" trace --export=spans.otlp.json --export-format=ot
 
 ## 🔧 工具级缓存 / 熔断（复用 breaker 扩展到 Agent 工具调用）
 `agent`/`multiagent` 每步经 `executeTool()` 调工具。联网工具 `web_fetch`/`summarize_url`/`hot_topics` 声明了 `cacheTtl`（60s/300s/60s），同一目标在 TTL 内直接命中缓存、不重复联网；声明 `circuit:true` 的工具连续失败达阈值（默认 3）后熔断、后续调用直接短路返回 `circuitOpen:true`，避免反复超时拖垮 agent 流水线。声明式、零侵入——未声明的默认工具行为完全不变。`node "{SKILL_DIR}/src/cli.mjs" cache` 查状态，`cache --clear` 清空；工作区侧 `node openclaw-workspace/scripts/omnisense-link.mjs cache` 同源复用内核实现（借鉴 LangChain LLM/工具调用缓存 + AutoGen per-tool circuit breaker 生产实践）。
+**落盘持久化（跨重启续命）**：默认缓存/熔断只在内存，进程一重启清零。设 `OMNI_TOOL_CACHE_FILE=./.omni-tool-cache.json`（或 `cli cache --persist-file=<path>`）即把缓存条目 + 熔断状态写进零依赖 JSON，每次 set/success/fail/clear/reset 自动落盘、进程启动自动载入——重启后刚抓过的内容不重抓、刚熔断的源继续短路冷却（借鉴 disk-backed TTL cache / SQLiteCache 思想）。`cli cache --flush` 立即落盘、`--clear-persist` 清空内存+磁盘、`--persist-off` 关闭。
 
 ## 🤖 自主循环（autopilot · 身体自己决定做什么，借鉴 BabyAGI）
 

@@ -12,7 +12,7 @@ import { Perception } from './modules/perception.mjs';
 import { Monitor } from './modules/monitor.mjs';
 import { runWatch, runWatchTick } from './core/watch.mjs';
 import { runAgent } from './core/agent.mjs';
-import { toolCacheStats, clearToolCache, toolBreakerStatus } from './core/tools.mjs';
+import { toolCacheStats, clearToolCache, toolBreakerStatus, setToolCachePersistence, toolCachePersistence, persistToolCache, clearToolCachePersistence } from './core/tools.mjs';
 import { runMultiAgent } from './core/agents.mjs';
 import { Body } from './body.mjs';
 import { log } from './core/logger.mjs';
@@ -104,6 +104,11 @@ export class OmniSense {
   toolCacheStats() { return toolCacheStats(); }
   clearToolCache() { return clearToolCache(); }
   toolBreakerStatus() { return toolBreakerStatus(); }
+  // 缓存/熔断持久化（落盘，跨重启续命）：opt-in 启用，默认不动
+  toolCachePersistence() { return toolCachePersistence(); }
+  setToolCachePersistence(file) { return setToolCachePersistence(file); }
+  persistToolCache() { return persistToolCache(); }
+  clearToolCachePersistence() { return clearToolCachePersistence(); }
 
   // —— 身体：像真人一样的七器官 ——
   // 七器官：眼 eye / 耳 ear / 嘴 mouth / 脑 brain / 手 hand / 感知 perceive / 脚 foot

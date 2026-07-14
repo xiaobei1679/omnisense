@@ -123,7 +123,7 @@ console.log(JSON.parse(out));
 > `dispatch <目标>`（**能力发现闭环**：自动匹配最合适的技能并委派），
 > 以及 `list` / `hand` / `goal`。`route` 复用本层 `runOrgan`，对七器官通用。
 > `dispatch` 复用 `body.skillDispatch`，基于关键词匹配自动选择最佳技能。
-> 另：`omnisense-link.mjs cache [--clear]` 让工作区侧观测身体的「工具级缓存/熔断」状态（复用内核同一份 breaker 基础设施，覆盖 web_fetch/summarize_url/hot_topics 的命中缓存与持续失败熔断）。
+> 另：`omnisense-link.mjs cache [--clear|--persist-file=<path>|--persist-off|--flush|--clear-persist]` 让工作区侧观测身体的「工具级缓存/熔断」状态（复用内核同一份 breaker 基础设施，覆盖 web_fetch/summarize_url/hot_topics 的命中缓存与持续失败熔断；`--persist-file=<path>` 启用**落盘持久化**（跨重启续命，与内核 `OMNI_TOOL_CACHE_FILE` / `cli cache` 同一份实现）、`--flush` 立即落盘、`--clear-persist` 清空内存与磁盘）。
 > 另：`omnisense-link.mjs monitor [--config-file=<path>] [--weights-file=<path>] [snapshot|health|alerts|dashboard|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score|weights]` 让工作区侧观测「身体是否健康」（第 8 器官 monitor，复用内核同一份 monitor 总线契约）：`toolHealth` 给出工具管线健康（缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警），`trendAnomalies` 给出 OLS 趋势异常，`config` 给出可调告警阈值（值/来源 default·env·file·opts/环境变量名，`OMNI_MONITOR_*` 或 `~/.omnisense/monitor.json` 可覆盖，`--config-file` 支持 Observability-as-Code 的 JSON 配置），`thresholdHealth` 给出当前测量值 vs 阈值 红黄绿着色（ok/warn/over/na，一眼看出哪项告警阈值被踩），`thresholdAlerts` 把超标/关注项转成 Alertmanager 形状的可推送告警清单（labels+annotations+稳定 fingerprint，离线不发送，供对接方 POST 到 Alertmanager），`healthScore`/`score` 把分散观测信号加权成 0-100 综合健康分 + 等级 A/B/C/D/F（Liveness/可靠性/阈值/异常/工具管线 5 维度，借鉴 Nobl9 Composite SLO 与 New Relic 健康分），`weights` 给出 5 维度权重的当前值/归一化值/来源（可用 `OMNI_MONITOR_WEIGHT_*` 或 `--weights-file` 指向的 `~/.omnisense/monitor-weights.json` 覆盖，复用 v7.0.0 Observability-as-Code 思路，计分前自动归一化使分数恒在 0-100），三层（内核 `node src/cli.mjs monitor` / 桥接 `omni-body.mjs` / 工作区）一致。
 
 ## 设计要点（诚实说明）

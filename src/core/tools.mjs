@@ -6,7 +6,7 @@
 //   4) 统一契约：每个工具 { name, description, parameters, run(args, ctx) -> any }。
 //      executeTool 统一捕获异常，返回 { ok, output | error }，绝不因单工具失败打断整条流水线。
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { httpGet } from './http.mjs';
@@ -38,6 +38,112 @@ function toolCacheKey(name, args) {
   // 仅做最大长度保护，避免极端长参数占内存。
   const s = JSON.stringify(args ?? {});
   return name + '::' + (s.length > 512 ? s.slice(0, 512) : s);
+}
+
+// ───────────────────────── 工具级缓存/熔断 持久化（落盘） ─────────────────────────
+// 问题：前面这套 breaker 基础设施（TTL 缓存 + 熔断）完全在内存，进程一重启就清零——
+// 于是「避免重复联网」的目标在重启后会失效，刚重启的热搜/抓取又得重新联网、刚熔断的源也重新探活。
+// 解法：把缓存条目 + 熔断状态写进一个零依赖的 JSON 文件（默认不落盘，opt-in 开启），
+// 进程启动时 --persist-file=<path> 或设 OMNI_TOOL_CACHE_FILE 即自动从磁盘载入，实现「跨重启续命」。
+// 设计取舍：
+//   · 仅落盘「声明了 cacheTtl / circuit 的工具」在用的缓存与熔断（其余工具本就不声明、无需持久）；
+//   · 熔断的 openUntil 一并保存 → 重启后若仍在冷却期，继续短路而非立刻重试（符合熔断语义）；
+//   · 写入是 best-effort：文件不可写/序列化失败一律静默降级，绝不拖垮工具执行；
+//   · 与监控器官的「阈值/权重 JSON 文件」同属 Observability-as-Code 思路（配置可版本化、可溯源），
+//     但此处落的是「运行时状态」而非「配置」，解决的是「重启后状态不丢」而非「配置可变」。
+// 借鉴（思想/模式，非代码）：SQLiteCache / disk-backed TTL cache（缓存放磁盘、重启不丢，
+//   常见于抓取/爬虫/LLM 调用缓存，如 langchain 的 SQLiteCache、redis 持久化语义）。
+let PERSIST_FILE = null;     // 当前启用的持久化文件路径（null = 未启用）
+let PERSIST_LOADED = false;  // 是否曾从磁盘成功载入过
+function _injectCache(name, ttl, entries) {
+  const c = new TtlCache(ttl || 60000);
+  for (const [k, e] of entries || []) {
+    if (e && typeof e.t === 'number' && 'v' in e) c.m.set(k, e);
+  }
+  toolCaches.set(name, c);
+}
+function _injectBreaker(name, b) {
+  const br = new CircuitBreaker(Number(b.maxFails) || 3, Number(b.cooldown) || 5 * 60 * 1000);
+  br.fails = Number(b.fails) || 0;
+  br.openUntil = Number(b.openUntil) || 0;
+  toolBreakers.set(name, br);
+}
+function _loadPersistence(file) {
+  let raw;
+  try { raw = readFileSync(file, 'utf8'); } catch { return { loaded: false, reason: 'missing' }; }
+  let data;
+  try { data = JSON.parse(raw); } catch { return { loaded: false, reason: 'corrupt' }; }
+  if (data && data.caches) {
+    for (const [name, obj] of Object.entries(data.caches)) {
+      if (obj && Array.isArray(obj.entries)) _injectCache(name, obj.ttl, obj.entries);
+    }
+  }
+  if (data && data.breakers) {
+    for (const [name, b] of Object.entries(data.breakers)) {
+      if (b && typeof b === 'object') _injectBreaker(name, b);
+    }
+  }
+  return { loaded: true };
+}
+function _persistNow() {
+  if (!PERSIST_FILE) return false;
+  const data = { version: 1, savedAt: Date.now(), caches: {}, breakers: {} };
+  for (const [name, c] of toolCaches) {
+    const entries = [];
+    for (const [k, e] of c.m) entries.push([k, e]);
+    if (entries.length) data.caches[name] = { ttl: c.ttl, entries };
+  }
+  for (const [name, b] of toolBreakers) {
+    if (b.fails > 0 || b.openUntil > Date.now()) {
+      data.breakers[name] = { fails: b.fails, openUntil: b.openUntil, maxFails: b.maxFails, cooldown: b.cooldown };
+    }
+  }
+  try {
+    mkdirSync(dirname(PERSIST_FILE), { recursive: true });
+    writeFileSync(PERSIST_FILE, JSON.stringify(data));
+    return true;
+  } catch { return false; }
+}
+
+// 启用/关闭持久化：file 为真 → 启用以 file 为落盘路径并尝试从磁盘载入；file 为假(null/undefined/false) → 关闭。
+export function setToolCachePersistence(file, { load = true } = {}) {
+  if (!file) {
+    const prev = PERSIST_FILE;
+    PERSIST_FILE = null; PERSIST_LOADED = false;
+    return { ok: true, enabled: false, prevFile: prev };
+  }
+  const path = String(file);
+  PERSIST_FILE = path;
+  let loaded = { loaded: false, reason: 'skipped' };
+  if (load) loaded = _loadPersistence(path);
+  PERSIST_LOADED = loaded.loaded;
+  return { ok: true, enabled: true, file: path, loaded: PERSIST_LOADED, reason: loaded.reason || null };
+}
+// 当前持久化状态（CLI `cache` 与工作区 `omnisense-link cache` 复用）。
+export function toolCachePersistence() {
+  return {
+    enabled: !!PERSIST_FILE,
+    file: PERSIST_FILE,
+    loaded: PERSIST_LOADED,
+    cacheEntries: [...toolCaches.values()].reduce((s, c) => s + c.m.size, 0),
+    breakerCount: toolBreakers.size,
+  };
+}
+// 立即落盘一次（best-effort）。
+export function persistToolCache() {
+  const ok = _persistNow();
+  return { ok, file: PERSIST_FILE, enabled: !!PERSIST_FILE };
+}
+// 清空持久化：内存与磁盘双双清空（disk 用写空对象而非 rm，规避 safe-delete shim）。
+export function clearToolCachePersistence() {
+  for (const c of toolCaches.values()) c.clear();
+  toolBreakers.clear();
+  let deleted = false;
+  if (PERSIST_FILE) {
+    try { writeFileSync(PERSIST_FILE, JSON.stringify({ version: 1, caches: {}, breakers: {} })); deleted = true; } catch {}
+  }
+  PERSIST_LOADED = false;
+  return { ok: true, deleted, file: PERSIST_FILE };
 }
 
 // ───────────────────────── 安全算术求值（递归下降） ─────────────────────────
@@ -184,6 +290,13 @@ const DISCOVERED_TOOLS = await (async () => {
   const extra = process.env.OMNI_PLUGINS_DIR ? await loadPluginsFrom(process.env.OMNI_PLUGINS_DIR) : [];
   return [...builtin, ...extra];
 })();
+
+// 零配置持久化：设了 OMNI_TOOL_CACHE_FILE 即自动启用并载入（best-effort 失败静默降级）。
+// 不设置则完全不动（与历史行为一致，零风险）。CLI `--persist-file=<path>` / 工作区 `--persist-file=<path>` 亦可随时开启。
+if (process.env.OMNI_TOOL_CACHE_FILE) {
+  try { setToolCachePersistence(process.env.OMNI_TOOL_CACHE_FILE, { load: true }); }
+  catch { /* 落盘不可用时静默不启用，绝不拖垮启动 */ }
+}
 
 // 构建默认工具集。omni 用于注入 memory / seeHotAll / summarizeWebsite。
 export function buildDefaultTools(omni, { allowShell = false } = {}) {
@@ -334,11 +447,11 @@ export async function executeTool(tools, name, args, { allowShell = false } = {}
   }
   try {
     const output = await t.run(args || {}, { allowShell });
-    if (cacheable && key != null) getToolCache(name, t.cacheTtl).set(key, output);
-    if (useCircuit) getToolBreaker(name).success();
+    if (cacheable && key != null) { getToolCache(name, t.cacheTtl).set(key, output); if (PERSIST_FILE) _persistNow(); }
+    if (useCircuit) { getToolBreaker(name).success(); if (PERSIST_FILE) _persistNow(); }
     return { ok: true, output };
   } catch (e) {
-    if (useCircuit) getToolBreaker(name).fail();
+    if (useCircuit) { getToolBreaker(name).fail(); if (PERSIST_FILE) _persistNow(); }
     return { ok: false, error: e?.message || String(e) };
   }
 }
@@ -354,7 +467,8 @@ export function toolCacheStats() {
 }
 export function clearToolCache() {
   for (const c of toolCaches.values()) c.clear();
-  return { ok: true, cleared: toolCaches.size };
+  if (PERSIST_FILE) _persistNow();
+  return { ok: true, cleared: toolCaches.size, persisted: !!PERSIST_FILE };
 }
 export function toolBreakerStatus() {
   // 只报告被触发的熔断器（有失败记录），无则空数组
@@ -364,7 +478,8 @@ export function toolBreakerStatus() {
 }
 export function resetToolBreakers() {
   toolBreakers.clear();
-  return { ok: true, reset: true };
+  if (PERSIST_FILE) _persistNow();
+  return { ok: true, reset: true, persisted: !!PERSIST_FILE };
 }
 
 // 给 LLM 用的工具清单（JSON Schema 子集）

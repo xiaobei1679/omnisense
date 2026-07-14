@@ -215,5 +215,12 @@
     "date": "2026-07-14T22:13:18.886Z",
     "tag": "v8.2.0",
     "notes": "monitor 综合健康评分维度权重可配置化（opts>env>JSON文件>default 四源，复用 Observability-as-Code，计分前归一化恒在 0-100；新增 weights 总线方法第21个）"
+  },
+  {
+    "version": "9.0.0",
+    "type": "major",
+    "date": "2026-07-14T23:21:11.409Z",
+    "tag": "v9.0.0",
+    "notes": "工具级缓存/熔断落盘持久化（OMNI_TOOL_CACHE_FILE/--persist-file 启用零依赖 JSON 落盘，跨重启续命：缓存不重抓+熔断冷却续命）；setToolCachePersistence/toolCachePersistence/persistToolCache/clearToolCachePersistence 暴露至 facade+CLI+工作区桥接；新增 5 内核单测+1 跨层断言；借鉴 disk-backed TTL cache/SQLiteCache 思想"
   }
 ]

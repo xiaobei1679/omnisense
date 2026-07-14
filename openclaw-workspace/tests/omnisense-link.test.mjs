@@ -416,6 +416,25 @@ it('runLink cache --clear 清空工具缓存（跨层）', async () => {
   const after = await runLink(['cache']);
   assert.equal(after.cache.size, 0, '清空后缓存条目应为 0');
 });
+
+it('runLink cache --persist-file 启用落盘持久化 + --clear-persist 清空（跨层：工作区->桥->身体）', async () => {
+  // 证明合并后工作区能驱动身体的"缓存/熔断 落盘持久化"，与内核同一份实现（三层同源一致）。
+  const pfile = join(_td, 'omni-tool-cache.json');
+  const on = await runLink(['cache', '--persist-file=' + pfile]);
+  assert.equal(on.enabled, true, '应启用持久化');
+  assert.equal(on.file, pfile, '应返回落盘路径');
+  const status = await runLink(['cache']);
+  assert.equal(status.persistence.enabled, true, '默认 cache 视图应反映持久化已启用');
+  const off = await runLink(['cache', '--clear-persist']);
+  assert.equal(off.ok, true);
+  assert.equal(off.deleted, true, '应清空磁盘持久化文件');
+  const off2 = await runLink(['cache']);
+  assert.equal(off2.persistence.enabled, true, '--clear-persist 仅清数据不关闭持久化');
+  // 关闭持久化，避免影响后续跨层测试（保持全局默认=未启用）
+  await runLink(['cache', '--persist-off']);
+  const off3 = await runLink(['cache']);
+  assert.equal(off3.persistence.enabled, false, '应已关闭持久化');
+});
 it('runLink watch --autopilot 跑常驻自驱身体（跨层：工作区->桥->身体，stub 网络离线）', async () => {
   // watch 的 seeHotAll 是联网叶子；此处 stub 为离线 fixture，避免挂起测试套件（核心既有特性：
   // CLI 由 process.exit 兜底；这里用替换 OmniSense.create 的 seeHotAll 叶节点，注入同模块实例后
