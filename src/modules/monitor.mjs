@@ -117,6 +117,21 @@ function sparkline(values, w = 260, h = 46, color = '#5b8cff') {
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="vertical-align:middle"><polyline fill="none" stroke="${color}" stroke-width="2" points="${pts}"/></svg>`;
 }
 
+// 简单 OLS 线性回归斜率（x=index, y=value），用于趋势异常检测与阈值"当前值"对比。
+function linRegSlope(values) {
+  if (!Array.isArray(values) || values.length < 2) return 0;
+  const n = values.length;
+  const meanX = (n - 1) / 2;
+  const meanY = values.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = i - meanX;
+    num += dx * (values[i] - meanY);
+    den += dx * dx;
+  }
+  return den === 0 ? 0 : num / den;
+}
+
 export class Monitor {
   constructor(bus, omni, opts = {}) {
     this.bus = bus;
@@ -155,6 +170,7 @@ export class Monitor {
     this.bus.register('monitor', 'trends', p => this.trends(p || {}));
     this.bus.register('monitor', 'trendAnomalies', () => this._detectTrendAnomalies());
     this.bus.register('monitor', 'config', () => this.config());
+    this.bus.register('monitor', 'thresholdHealth', () => this.thresholdHealth());
   }
 
   // ── 阈值配置解析 + 观测 ──
@@ -199,6 +215,155 @@ export class Monitor {
     }
     const overrides = Object.keys(thresholds).filter(k => thresholds[k].overridden);
     return { ok: true, thresholds, overrides, count: overrides.length, metricsFile: this.metricsFile, configFile: this._thresholdFile || null, configFileLoaded: this._thresholdFileLoaded };
+  }
+
+  // ── 阈值健康（threshold health）：把"当前测量值"与生效阈值并排对比，红黄绿着色 ──
+  // 借鉴 Grafana 阈值的"红黄绿"状态着色（Base=green / warning=yellow / critical=red，
+  // https://grafana.com/docs/grafana/latest/visualizations/panels-visualizations/configure-thresholds/）——
+  // 不只告诉运维"阈值是多少"，更直观显示"现在离阈值有多近、是否已超标"，一眼看出身体在退化还是健康。
+  // 全部带保护、读优先（绝不因观测改动状态/基线）：无数据时对应维度标 na(灰)，绝不伪造读数。
+  _measureCurrent() {
+    const runs = this._tracerRuns();
+    const now = Date.now();
+    const la = lastActiveAt(runs);
+    const idleMs = la ? now - la : null;          // 距上次活动(ms)，对比 inactiveMs
+
+    // 引擎存活：所有引擎中"最久未活跃"的那一个（liveness 最坏情况），对比 liveness*Ms
+    let maxEngineIdleMs = null;
+    try {
+      const grid = this.statusGrid(runs).grid;
+      for (const g of grid) if (g.ageHours != null && g.ageHours >= 0) {
+        const ms = g.ageHours * 3600000;
+        if (maxEngineIdleMs == null || ms > maxEngineIdleMs) maxEngineIdleMs = ms;
+      }
+    } catch { /* noop */ }
+
+    // 记忆最陈旧记录的年龄(ms)，对比 memStaleMs
+    let maxMemAgeMs = null;
+    try {
+      const mem = this.omni && this.omni.memory;
+      if (mem) {
+        const ages = [].concat(
+          (mem.notes || []).map(n => n.t).filter(Boolean),
+          (mem.knowledge || []).map(k => k.at).filter(Boolean),
+          (mem.skills || []).map(s => s.at).filter(Boolean),
+        ).map(t => now - t);
+        if (ages.length) maxMemAgeMs = Math.max(...ages);
+      }
+    } catch { /* noop */ }
+
+    // 记忆增长(自上次异常检查基线)，对比 memBulk（读 _anomalyBase，不改动它）
+    let memGrowth = null;
+    if (this._anomalyBase) {
+      const cur = this._currentLayers();
+      memGrowth = Math.max(0, ...['memory', 'rule', 'skill', 'knowledge'].map(k => cur[k] - (this._anomalyBase[k] || 0)));
+    }
+
+    // 突增倍数：近 10 次 P95 / 基线 P95，或近 5 次失败率 / 基线失败率，对比 spikeFactor
+    let spikeRatio = null;
+    if (runs.length >= 20) {
+      const baseRuns = runs.slice(0, -10).map(r => r.durationMs).filter(d => typeof d === 'number' && d > 0).sort((a, b) => a - b);
+      const recent = runs.slice(-10).map(r => r.durationMs).filter(d => typeof d === 'number' && d > 0).sort((a, b) => a - b);
+      if (baseRuns.length && recent.length) {
+        const p95a = percentile(baseRuns, 95), p95r = percentile(recent, 95);
+        if (p95a) spikeRatio = p95r / p95a;
+      }
+    }
+    if (spikeRatio == null && runs.length >= 5) {
+      const total = runs.length, baseRate = (total - completedCount(runs)) / total;
+      const recent = runs.slice(-5);
+      const recentRate = (recent.length - completedCount(recent)) / recent.length;
+      if (baseRate > 0) spikeRatio = recentRate / baseRate;
+    }
+
+    // 趋势斜率：当前 P95/成功率/记忆/舰队 的 OLS 斜率，对比各 trendSlope* 阈值
+    const pts = this._trendPoints;
+    let trendP95 = null, trendSuccess = null, trendMem = null, trendFleet = null;
+    if (pts.length >= 4) {
+      const p95s = pts.map(p => p.p95).filter(v => v != null);
+      const srs = pts.map(p => p.successRate).filter(v => v != null);
+      const mems = pts.map(p => p.memTotal).filter(v => v != null);
+      const fleets = pts.map(p => p.fleetHealthy).filter(v => v != null);
+      if (p95s.length >= 4) trendP95 = linRegSlope(p95s);
+      if (srs.length >= 4) trendSuccess = linRegSlope(srs);
+      if (mems.length >= 4) trendMem = linRegSlope(mems);
+      if (fleets.length >= 4) trendFleet = linRegSlope(fleets);
+    }
+
+    return { idleMs, maxEngineIdleMs, maxMemAgeMs, memGrowth, spikeRatio, trendP95, trendSuccess, trendMem, trendFleet };
+  }
+
+  // 返回每个阈值的"当前测量值 + 状态(ok/warn/over/na) + 阈值来源"，供 CLI/工作区/仪表盘做红黄绿着色。
+  // status 语义（对齐 Grafana 红黄绿）：ok=绿(在阈值内/健康) · warn=黄(接近或轻度超标，关注) · over=红(超标) · na=灰(无数据)。
+  thresholdHealth() {
+    const cur = this._measureCurrent();
+    const cfg = this.config().thresholds;
+    const items = [];
+    const add = (key, current, status, unit) => items.push({
+      key,
+      description: cfg[key].desc,
+      unit,
+      threshold: { value: cfg[key].value, source: cfg[key].source, envKey: cfg[key].envKey },
+      current: current == null ? null : current,
+      status,
+    });
+    // 无活动 = na（既不报"健康"也不报"超标"，避免伪造读数）
+    {
+      const t = cfg.inactiveMs.value;
+      const st = cur.idleMs == null ? 'na' : (cur.idleMs > t ? 'over' : 'ok');
+      add('inactiveMs', cur.idleMs, st, 'ms');
+    }
+    {
+      const t = cfg.spikeFactor.value;
+      const st = cur.spikeRatio == null ? 'na' : (cur.spikeRatio > t ? 'over' : 'ok');
+      add('spikeFactor', cur.spikeRatio == null ? null : Number(cur.spikeRatio.toFixed(2)), st, 'x');
+    }
+    {
+      const t = cfg.memStaleMs.value;
+      const st = cur.maxMemAgeMs == null ? 'na' : (cur.maxMemAgeMs > t ? 'warn' : 'ok');
+      add('memStaleMs', cur.maxMemAgeMs, st, 'ms');
+    }
+    {
+      const t = cfg.memBulk.value;
+      const st = cur.memGrowth == null ? 'na' : (cur.memGrowth >= t ? 'warn' : 'ok');
+      add('memBulk', cur.memGrowth, st, '条');
+    }
+    {
+      const idle = cur.maxEngineIdleMs;
+      const th = cfg.livenessHealthyMs.value, td = cfg.livenessDegradedMs.value;
+      const stH = idle == null ? 'na' : (idle > th ? (idle > td ? 'over' : 'warn') : 'ok');
+      const stD = idle == null ? 'na' : (idle > td ? 'over' : 'ok');
+      add('livenessHealthyMs', idle, stH, 'ms');
+      add('livenessDegradedMs', idle, stD, 'ms');
+    }
+    {
+      const t = cfg.trendSlopeP95.value;
+      const st = cur.trendP95 == null ? 'na' : (cur.trendP95 > t ? 'warn' : 'ok');
+      add('trendSlopeP95', cur.trendP95 == null ? null : Number(cur.trendP95.toFixed(1)), st, 'ms/点');
+    }
+    {
+      const t = cfg.trendSlopeSuccess.value;
+      const st = cur.trendSuccess == null ? 'na' : (cur.trendSuccess < -t ? 'warn' : 'ok');
+      add('trendSlopeSuccess', cur.trendSuccess == null ? null : Number(cur.trendSuccess.toFixed(3)), st, '/点');
+    }
+    {
+      const t = cfg.trendSlopeMemGrow.value;
+      const st = cur.trendMem == null ? 'na' : (cur.trendMem > t ? 'warn' : 'ok');
+      add('trendSlopeMemGrow', cur.trendMem == null ? null : Number(cur.trendMem.toFixed(1)), st, '条/点');
+    }
+    {
+      const t = cfg.trendSlopeMemIdle.value;
+      const st = cur.trendMem == null ? 'na' : (this._trendPoints.length >= 6 && Math.abs(cur.trendMem) < t ? 'warn' : 'ok');
+      add('trendSlopeMemIdle', cur.trendMem == null ? null : Number(cur.trendMem.toFixed(1)), st, '条/点');
+    }
+    {
+      const t = cfg.trendSlopeFleet.value;
+      const st = cur.trendFleet == null ? 'na' : (cur.trendFleet < -t ? 'warn' : 'ok');
+      add('trendSlopeFleet', cur.trendFleet == null ? null : Number(cur.trendFleet.toFixed(2)), st, '/点');
+    }
+    const summary = { total: items.length, ok: 0, warn: 0, over: 0, na: 0 };
+    for (const it of items) summary[it.status]++;
+    return { ok: true, items, summary };
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -364,21 +529,7 @@ export class Monitor {
     const pts = this._trendPoints;
     if (pts.length < 4) return []; // 最少 4 个趋势点才能看出趋势
 
-    // 线性回归斜率 (简单 OLS，x=index, y=value)
-    const linRegSlope = (values) => {
-      if (values.length < 2) return 0;
-      const n = values.length;
-      const meanX = (n - 1) / 2;
-      const meanY = values.reduce((a, b) => a + b, 0) / n;
-      let num = 0, den = 0;
-      for (let i = 0; i < n; i++) {
-        const dx = i - meanX;
-        num += dx * (values[i] - meanY);
-        den += dx * dx;
-      }
-      return den === 0 ? 0 : num / den;
-    };
-
+    // 线性回归斜率 (简单 OLS，x=index, y=value) —— 复用模块级 linRegSlope
     const alerts = [];
 
     // 1. P95 延迟趋势回归检测：延迟持续上升 → trend_regression
@@ -863,18 +1014,34 @@ export class Monitor {
       <div style="margin-top:8px">${t.sparkline.memTotal} <span class="muted">记忆总量趋势</span></div>
       <div class="muted" style="margin-top:8px">采样点: ${t.count}（每次快照自动落盘轻量指标点，跨进程延续；环形缓冲上限 ${MAX_TREND_POINTS}）</div>`;
 
-    // 阈值配置（可调）：让"告警为什么触发、能怎么调"透明可查（避免硬编码阈值反模式）。
+    // 阈值配置（可调）+ 阈值健康着色：把"当前测量值 vs 阈值"红黄绿并排展示（借鉴 Grafana 阈值状态着色）。
+    // 不只告诉运维"阈值是多少"，更直观显示"现在离阈值多近、是否已超标"——可观测仪表盘的眼睛。
     const cfg = this.config();
-    const cfgRows = Object.entries(cfg.thresholds).map(([k, v]) => {
-      const col = v.overridden ? '#d29922' : 'var(--muted)';
-      return `<div class="row"><span class="lbl">${esc(k)}</span><span class="val" style="color:${col}">${esc(v.value)}</span>
-        <span class="muted">${esc(v.desc)} · 来源 <b style="color:${col}">${esc(v.source)}</b> · <code>${esc(v.envKey)}</code></span></div>`;
+    const thHealth = this.thresholdHealth();
+    const statusColorOf = (st) => st === 'ok' ? '#3fb950' : st === 'warn' ? '#d29922' : st === 'over' ? '#f85149' : 'var(--muted)';
+    const statusLabelOf = (st) => st === 'ok' ? '正常' : st === 'warn' ? '关注' : st === 'over' ? '超标' : '无数据';
+    const fmtTh = (val, unit) => {
+      if (val == null) return '—';
+      if (unit === 'ms') { const a = Math.abs(val); if (a >= 3600000) return (val / 3600000).toFixed(1) + 'h'; if (a >= 60000) return (val / 60000).toFixed(0) + 'm'; if (a >= 1000) return (val / 1000).toFixed(0) + 's'; return Math.round(val) + 'ms'; }
+      if (unit === 'x') return val.toFixed(1) + 'x';
+      if (unit === '条') return Math.round(val) + ' 条';
+      if (unit === 'ms/点') return val.toFixed(0) + 'ms/点';
+      if (unit === '/点') return val.toFixed(3) + '/点';
+      return String(val);
+    };
+    const cfgRows = thHealth.items.map(it => {
+      const col = statusColorOf(it.status);
+      return `<div class="row"><span class="lbl"><span class="th-dot" style="background:${col}"></span>${esc(it.key)}</span>
+        <span class="val" style="color:${col}">${esc(fmtTh(it.current, it.unit))}</span>
+        <span class="thr" style="color:${col}">/ ${esc(fmtTh(it.threshold.value, it.unit))}</span>
+        <span class="muted">${statusLabelOf(it.status)} · ${esc(it.description)} · 来源 <b style="color:${col}">${esc(it.threshold.source)}</b> · <code>${esc(it.threshold.envKey)}</code></span></div>`;
     }).join('');
     const cfgFileNote = cfg.configFile
       ? `<div class="muted" style="margin-bottom:6px">配置来源文件: <code>${esc(cfg.configFile)}</code>${cfg.configFileLoaded ? '' : '（未找到，已用默认/环境变量）'}</div>`
       : '';
+    const worst = thHealth.summary.over ? 'over' : (thHealth.summary.warn ? 'warn' : 'ok');
     const cfgHtml = `
-      <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项（可用对应环境变量 / JSON 配置 / 构造 opts.thresholds 覆盖）</div>
+      <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项 · 阈值健康 <b style="color:${statusColorOf(worst)}">${thHealth.summary.ok}正常 / ${thHealth.summary.warn}关注 / ${thHealth.summary.over}超标 / ${thHealth.summary.na}无数据</b>（当前值 vs 阈值，红黄绿着色）</div>
       ${cfgFileNote}
       ${cfgRows}`;
 
@@ -904,6 +1071,8 @@ export class Monitor {
   .row{display:flex;align-items:center;gap:10px;padding:5px 0;}
   .row .lbl{width:150px;color:var(--muted);font-size:12px;}
   .row .val{width:46px;text-align:right;font-weight:700;}
+  .th-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+  .row .thr{width:auto;text-align:left;color:var(--muted);font-weight:400;margin-left:2px;font-size:12px;}
   .row .bar{flex:1;height:8px;background:var(--line);border-radius:6px;overflow:hidden;}
   .row .bar>span{display:block;height:100%;background:var(--accent);}
   .chip{display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:12px;}
@@ -947,7 +1116,7 @@ export class Monitor {
 
   <section><h2>趋势 / Trends（随时间变化的指标基线 · sparkline）</h2>${trendHtml}</section>
 
-  <section><h2>阈值配置 / Thresholds（可调告警阈值 · 来源可溯源）</h2>${cfgHtml}</section>
+  <section><h2>阈值配置 / Thresholds（可调告警阈值 · 来源可溯源 · 当前值 vs 阈值 红黄绿着色）</h2>${cfgHtml}</section>
 
   <section><h2>记忆状态 / Memory Health（四层 + 记忆专属指标）</h2>${memHtml}</section>
 

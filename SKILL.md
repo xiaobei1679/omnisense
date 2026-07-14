@@ -109,11 +109,13 @@ node "{SKILL_DIR}/src/cli.mjs" monitor --anomalies  # 异常检测(含熔断开�
 node "{SKILL_DIR}/src/cli.mjs" monitor --config     # 查看/校验当前告警阈值(值/来源/环境变量名)
 OMNI_MONITOR_SPIKE_FACTOR=3 node "{SKILL_DIR}/src/cli.mjs" monitor --config  # 环境变量覆盖延迟突增阈值
 node "{SKILL_DIR}/src/cli.mjs" monitor --config-file=./my-monitor.json  # 从 JSON 文件加载阈值(Observability-as-Code)
+node "{SKILL_DIR}/src/cli.mjs" monitor --threshold-health  # 当前测量值 vs 阈值 红黄绿着色(ok/warn/over/na)
 node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML 仪表盘(含阈值配置区块)
 # 工作区侧跨层复用同一份实现：
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
 node openclaw-workspace/scripts/omnisense-link.mjs monitor config
 node openclaw-workspace/scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json config  # 跨层从 JSON 文件加载阈值
+node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdHealth  # 跨层当前值 vs 阈值 红黄绿着色
 ```
 
 ```bash

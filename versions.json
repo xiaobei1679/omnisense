@@ -173,5 +173,12 @@
     "date": "2026-07-14T16:33:54.075Z",
     "tag": "v7.0.0",
     "notes": "monitor 阈值配置支持 JSON 文件（Observability-as-Code）：新增 loadThresholdFile + 扩展 resolveThreshold 第四来源 file + 构造器自动加载 OMNI_MONITOR_CONFIG 或默认 ~/.omnisense/monitor.json + 新增 loadConfigFile + 内核 CLI --config-file 与工作区 omnisense-link 桥接；新增 5 项内核单测 + 1 项跨层；借鉴 Grafana/Prometheus Observability-as-Code"
+  },
+  {
+    "version": "7.1.0",
+    "type": "minor",
+    "date": "2026-07-14T17:43:06.383Z",
+    "tag": "v7.1.0",
+    "notes": "monitor 第16总线方法 thresholdHealth：实时测 11 项当前值 vs THRESHOLD_SPEC 阈值，输出 ok/warn/over/na 红黄绿着色(dashboard 当前值vs阈值着色)；CLI --threshold-health + 工作区 omnisense-link monitor thresholdHealth 跨层复用(借鉴 Grafana 阈值阶梯着色)"
   }
 ]

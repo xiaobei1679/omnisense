@@ -581,12 +581,14 @@ node src/cli.mjs monitor --grid              # 引擎状态网格（颜色化）
 node src/cli.mjs monitor --config            # 生效的告警阈值（值/来源/环境变量名，可用 OMNI_MONITOR_* 覆盖）
 OMNI_MONITOR_SPIKE_FACTOR=3 node src/cli.mjs monitor --config   # 环境变量覆盖示例（source 变 env）
 node src/cli.mjs monitor --config-file=./my-monitor.json   # 从 JSON 配置加载阈值（Observability-as-Code，优先级 opts>env>file>default）
-node src/cli.mjs dashboard                    # 生成零依赖静态 HTML 仪表盘（含「阈值配置」区块，展示配置文件路径）
+node src/cli.mjs monitor --threshold-health   # 当前测量值 vs 阈值 红黄绿着色（ok/warn/over/na，一眼看出哪项告警阈值被踩）
+node src/cli.mjs dashboard                    # 生成零依赖静态 HTML 仪表盘（含「阈值配置」区块，展示配置文件路径与当前值 vs 阈值着色）
 # 工作区侧跨层复用同一份实现（合并后新项目：工作区能真正观测身体）
 node openclaw-workspace/scripts/omnisense-link.mjs monitor snapshot
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
 node openclaw-workspace/scripts/omnisense-link.mjs monitor config     # 跨层查询生效告警阈值
 node openclaw-workspace/scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json config  # 跨层从 JSON 文件加载阈值
+node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdHealth  # 跨层当前值 vs 阈值 红黄绿着色
 ```
 
 > 诚实边界：monitor 只读采集（tracer / memory / toolBreaker），任何采集失败均静默降级、绝不阻断主流程；`circuitOpen` 等告警是"诚实降级"的自然延伸——工具真的不可用时明确报告，绝不假装成功。

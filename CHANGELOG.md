@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v7.1.0 — 2026-07-14 (minor)
+
+- monitor 第16总线方法 thresholdHealth：实时测 11 项当前值 vs THRESHOLD_SPEC 阈值，输出 ok/warn/over/na 红黄绿着色(dashboard 当前值vs阈值着色)；CLI --threshold-health + 工作区 omnisense-link monitor thresholdHealth 跨层复用(借鉴 Grafana 阈值阶梯着色)
+
 ## v7.0.0 — 2026-07-14 (major)
 
 - monitor 阈值配置支持 JSON 文件（Observability-as-Code）：新增 loadThresholdFile + 扩展 resolveThreshold 第四来源 file + 构造器自动加载 OMNI_MONITOR_CONFIG 或默认 ~/.omnisense/monitor.json + 新增 loadConfigFile + 内核 CLI --config-file 与工作区 omnisense-link 桥接；新增 5 项内核单测 + 1 项跨层；借鉴 Grafana/Prometheus Observability-as-Code

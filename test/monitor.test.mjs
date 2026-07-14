@@ -53,13 +53,13 @@ function mkMon(runs = [], memory) {
   return new Monitor(omni.bus, omni, { metricsFile: join(TD, `m-${Math.random().toString(36).slice(2)}.json`) });
 }
 
-test('Monitor 构造并注册 15 个总线方法(核心 6 + 新增 9)', () => {
+test('Monitor 构造并注册 16 个总线方法(核心 6 + 新增 10)', () => {
   const reg = {};
   const bus = { register: (o, m) => { reg[`${o}.${m}`] = true; } };
   const omni = { bus, memory: fakeMemory(), tracer: makeTracer(), body: fakeBody() };
   new Monitor(bus, omni, { metricsFile: join(TD, 'reg.json') });
   for (const m of ['snapshot', 'health', 'alerts', 'dashboard', 'recordMetric', 'checkAlerts',
-    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config']) {
+    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth']) {
     assert.ok(reg[`monitor.${m}`], `应注册 monitor.${m}`);
   }
 });
@@ -500,6 +500,71 @@ test('dashboard 含阈值配置区块', () => {
   const html = mkMon([]).renderDashboard();
   assert.ok(html.includes('阈值配置'), '仪表盘应含阈值配置区块');
   assert.ok(html.includes('OMNI_MONITOR_SPIKE_FACTOR'), '应展示环境变量名');
+});
+
+test('thresholdHealth: 返回 11 项阈值 + 当前测量值 + 状态(ok/na) + 汇总', () => {
+  const m = mkMon([]);
+  const th = m.thresholdHealth();
+  assert.equal(th.ok, true);
+  assert.equal(th.items.length, 11, '应覆盖 11 个阈值 key');
+  assert.ok(th.summary && typeof th.summary === 'object', '应有 summary');
+  // 无运行/记忆数据时：idle/mem/liveness/趋势维度应为 na（灰），绝不伪造读数
+  const byKey = Object.fromEntries(th.items.map(i => [i.key, i]));
+  assert.equal(byKey.inactiveMs.status, 'na', '无活动数据应 na');
+  assert.equal(byKey.spikeFactor.status, 'na', '无数据应 na');
+  assert.equal(byKey.trendSlopeP95.status, 'na', '无趋势点应 na');
+  assert.equal(byKey.livenessHealthyMs.status, 'na', '无引擎应 na');
+  assert.ok(th.summary.na >= 6, '多数无数据维度应计为 na');
+  // 每项应含 threshold(值/来源/envKey) + unit + current + status
+  for (const it of th.items) {
+    assert.ok('value' in it.threshold && 'source' in it.threshold && 'envKey' in it.threshold, 'threshold 应含值/来源/envKey');
+    assert.ok(['ms', 'x', '条', 'ms/点', '/点', '条/点'].includes(it.unit), '应有单位');
+    assert.ok(['ok', 'warn', 'over', 'na'].includes(it.status), 'status 应在合法集合');
+  }
+});
+
+test('thresholdHealth: 长期无活动 -> inactiveMs 状态 over(红)，引擎存活降级 -> warn/over', () => {
+  const old = Date.now() - 49 * 3600 * 1000; // 49h 前，超过默认 inactiveMs(48h)
+  const runs = [
+    { runId: 'o1', engine: 'llm', completed: true, startedAt: old, finishedAt: old + 500, steps: [] },
+    { runId: 'o2', engine: 'autopilot', completed: true, startedAt: old, finishedAt: old + 500, steps: [] },
+  ];
+  const m = mkMon(runs);
+  const th = m.thresholdHealth();
+  const byKey = Object.fromEntries(th.items.map(i => [i.key, i]));
+  assert.equal(byKey.inactiveMs.status, 'over', '超 48h 无活动应 over(红)');
+  // 引擎最久未活跃 49h：> livenessDegradedMs(24h) → over；> livenessHealthyMs(1h) → over
+  assert.equal(byKey.livenessHealthyMs.status, 'over', '引擎 49h 未活跃应 over');
+  assert.equal(byKey.livenessDegradedMs.status, 'over', '引擎 49h 未活跃应 over');
+  assert.ok(byKey.inactiveMs.current != null && byKey.inactiveMs.current > 48 * 3600 * 1000, 'current 应超过 48h 阈值(驱动 over)');
+});
+
+test('thresholdHealth: 刚活跃数据 -> 相关维度 ok(绿)，且状态与阈值服从来源', () => {
+  const now = Date.now();
+  const runs = [
+    { runId: 'r1', engine: 'llm', completed: true, startedAt: now, finishedAt: now + 100, durationMs: 100, steps: [] },
+    { runId: 'r2', engine: 'autopilot', completed: true, startedAt: now, finishedAt: now + 100, durationMs: 50, steps: [] },
+  ];
+  const m = mkMon(runs);
+  const th = m.thresholdHealth();
+  const byKey = Object.fromEntries(th.items.map(i => [i.key, i]));
+  assert.equal(byKey.inactiveMs.status, 'ok', '刚活跃应 ok(绿)');
+  assert.equal(byKey.livenessHealthyMs.status, 'ok', '刚活跃引擎应 ok');
+  assert.equal(byKey.livenessDegradedMs.status, 'ok', '刚活跃引擎应 ok');
+  assert.equal(byKey.spikeFactor.status, 'na', '数据不足(<5 运行)时 spikeFactor 应为 na，绝不伪造读数');
+});
+
+test('dashboard 阈值区块含当前值 vs 阈值 + 红黄绿着色(状态点/状态标签)', () => {
+  const old = Date.now() - 49 * 3600 * 1000;
+  const runs = [
+    { runId: 'o1', engine: 'llm', completed: true, startedAt: old, finishedAt: old + 500, steps: [] },
+    { runId: 'o2', engine: 'autopilot', completed: true, startedAt: old, finishedAt: old + 500, steps: [] },
+  ];
+  const html = mkMon(runs).renderDashboard();
+  assert.ok(html.includes('当前值 vs 阈值'), '仪表盘阈值区块应说明当前值 vs 阈值');
+  assert.ok(html.includes('超标'), '超标状态标签应出现在仪表盘');
+  assert.ok(html.includes('th-dot'), '应渲染红黄绿状态点');
+  assert.ok(html.includes('阈值健康'), '应展示阈值健康汇总');
 });
 
 test('Body.monitor 委托到 omni.monitor（第 8 器官接线正确）', () => {
