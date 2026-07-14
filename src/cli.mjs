@@ -320,8 +320,10 @@ async function main() {
       const asTrends = flag('--trends');
       const asConfig = flag('--config');
       const asThresholdHealth = flag('--threshold-health');
+      const asThresholdAlerts = flag('--threshold-alerts');
       if (asConfig) { result = omni.monitor.config(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asThresholdHealth) { result = omni.monitor.thresholdHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asThresholdAlerts) { result = omni.monitor.thresholdAlerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asAlerts) { result = omni.monitor.alerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asTools) { result = omni.monitor.toolHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asTrends) { result = omni.monitor.trends(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }

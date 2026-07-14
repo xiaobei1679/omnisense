@@ -157,6 +157,27 @@ it('runLink monitor thresholdHealth 跨层消费阈值健康(当前值 vs 阈值
   assert.ok(sf && sf.threshold && typeof sf.threshold.value === 'number', 'spikeFactor 应含阈值数值');
   assert.ok(['ok', 'warn', 'over', 'na'].includes(sf.status), 'status 应在合法集合');
   assert.ok('current' in sf && 'unit' in sf, '每项应含 current 当前测量值与单位');
+  // 跨层：每项应含 severity(对齐 Alertmanager)
+  for (const it of r.items) {
+    assert.ok(['critical', 'warning', 'none'].includes(it.severity), `${it.key} 应含 severity`);
+  }
+});
+
+it('runLink monitor thresholdAlerts 跨层产出 Alertmanager 形状告警(可直推外部告警系统)', async () => {
+  // 合并后新项目：工作区能消费身体的"可推送告警清单"——把超标/关注的阈值项转成
+  // fingerprint+labels+annotations 的 Alertmanager payload（复用内核同一份 monitor.thresholdAlerts()）。
+  const r = await runLink(['monitor', 'thresholdAlerts']);
+  assert.equal(r.ok, true);
+  assert.ok('count' in r && 'critical' in r && 'warning' in r, '应含 count/critical/warning 汇总');
+  assert.ok(Array.isArray(r.alerts), 'alerts 应为数组');
+  assert.equal(r.count, r.critical + r.warning, 'count = critical + warning');
+  for (const a of r.alerts) {
+    assert.ok(['critical', 'warning'].includes(a.severity), '告警 severity 仅 critical/warning');
+    assert.ok(typeof a.fingerprint === 'string' && /^[0-9a-f]{16}$/.test(a.fingerprint), '应有稳定 16 位 fingerprint');
+    assert.equal(a.labels.alertname, `omnisense_threshold_${a.labels.key}`, 'labels.alertname 应为 omnisense_threshold_<key>');
+    assert.equal(a.labels.monitor, 'omnisense');
+    assert.ok(a.annotations && a.annotations.summary, 'annotations 应含 summary');
+  }
 });
 
 it('runLink monitor --config-file 跨层从 JSON 文件加载阈值(Observability-as-Code)', async () => {

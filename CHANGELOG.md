@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v7.3.0 — 2026-07-14 (minor)
+
+- monitor 新增可推送告警清单 thresholdAlerts/alertables（Alertmanager 形状 fingerprint+labels{severity}+annotations，over→critical/warn→warning 对齐 severity 标签），CLI --threshold-alerts 与 工作区 monitor thresholdAlerts 跨层复用同一份实现；dashboard 阈值区块附可推送告警清单子块；借鉴 Prometheus Alertmanager 告警数据模型
+
 ## v7.2.0 — 2026-07-14 (minor)
 
 - 修复内核真实 bug + 真实本地 LLM(Ollama) E2E：resolveModel() 支持 gateway.json 显式 model 引脚(优先级 OMNI_MODEL>gateway.model>探测首模型>openclaw) 避免盲取不可用模型静默回退离线；chat() 主模型连接失败时自动回退探测到的其他可用模型(仅连接错误重试)；附 examples/gateway.ollama.example.json 零 env 接 Ollama；补 2 项内核单测

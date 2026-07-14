@@ -185,7 +185,7 @@ export async function runLink(args) {
     const sub = rest.find(a => !a.startsWith('--')) || 'snapshot';
     const fn = omni.monitor[sub];
     if (typeof fn !== 'function') {
-      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth）` };
+      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables）` };
     }
     const callArgs = rest.filter(a => a !== sub && !a.startsWith('--config-file='));
     const r = await withTimeout(fn.apply(omni.monitor, callArgs), TIMEOUT_MS);

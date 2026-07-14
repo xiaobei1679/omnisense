@@ -124,7 +124,7 @@ console.log(JSON.parse(out));
 > 以及 `list` / `hand` / `goal`。`route` 复用本层 `runOrgan`，对七器官通用。
 > `dispatch` 复用 `body.skillDispatch`，基于关键词匹配自动选择最佳技能。
 > 另：`omnisense-link.mjs cache [--clear]` 让工作区侧观测身体的「工具级缓存/熔断」状态（复用内核同一份 breaker 基础设施，覆盖 web_fetch/summarize_url/hot_topics 的命中缓存与持续失败熔断）。
-> 另：`omnisense-link.mjs monitor [--config-file=<path>] [snapshot|health|alerts|dashboard|toolHealth|trends|trendAnomalies|config|thresholdHealth]` 让工作区侧观测「身体是否健康」（第 8 器官 monitor，复用内核同一份 monitor 总线契约）：`toolHealth` 给出工具管线健康（缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警），`trendAnomalies` 给出 OLS 趋势异常，`config` 给出可调告警阈值（值/来源 default·env·file·opts/环境变量名，`OMNI_MONITOR_*` 或 `~/.omnisense/monitor.json` 可覆盖，`--config-file` 支持 Observability-as-Code 的 JSON 配置），`thresholdHealth` 给出当前测量值 vs 阈值 红黄绿着色（ok/warn/over/na，一眼看出哪项告警阈值被踩），三层（内核 `node src/cli.mjs monitor` / 桥接 `omni-body.mjs` / 工作区）一致。
+> 另：`omnisense-link.mjs monitor [--config-file=<path>] [snapshot|health|alerts|dashboard|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables]` 让工作区侧观测「身体是否健康」（第 8 器官 monitor，复用内核同一份 monitor 总线契约）：`toolHealth` 给出工具管线健康（缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警），`trendAnomalies` 给出 OLS 趋势异常，`config` 给出可调告警阈值（值/来源 default·env·file·opts/环境变量名，`OMNI_MONITOR_*` 或 `~/.omnisense/monitor.json` 可覆盖，`--config-file` 支持 Observability-as-Code 的 JSON 配置），`thresholdHealth` 给出当前测量值 vs 阈值 红黄绿着色（ok/warn/over/na，一眼看出哪项告警阈值被踩），`thresholdAlerts` 把超标/关注项转成 Alertmanager 形状的可推送告警清单（labels+annotations+稳定 fingerprint，离线不发送，供对接方 POST 到 Alertmanager），三层（内核 `node src/cli.mjs monitor` / 桥接 `omni-body.mjs` / 工作区）一致。
 
 ## 设计要点（诚实说明）
 

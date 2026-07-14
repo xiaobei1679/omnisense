@@ -18,6 +18,7 @@
 import { writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { EVENTS } from '../core/bus.mjs';
 import { log } from '../core/logger.mjs';
 
@@ -132,6 +133,23 @@ function linRegSlope(values) {
   return den === 0 ? 0 : num / den;
 }
 
+// 把 thresholdHealth 的着色状态(status ∈ ok/warn/over/na)映射为 Prometheus Alertmanager 的 severity 标签：
+//   over → critical（红·严重，需立即处理）· warn → warning（黄·关注）· ok/na → none（无需告警）。
+// Alertmanager 用 severity 标签做路由/静默/分组（severity="critical" 通常进电话/钉钉，warning 进工单），
+// 故我们把"看板上的红黄绿"与"告警系统的严重度"对齐，让同一份健康数据既能可视化又能直推告警（离线不发送，
+// 仅产出 Alertmanager 形状的 payload，对接方自行 POST /api/v2/alerts 即可，见 thresholdAlerts()）。
+function severityOf(status) {
+  if (status === 'over') return 'critical';
+  if (status === 'warn') return 'warning';
+  return 'none';
+}
+
+// 稳定的告警指纹：Alertmanager 用 fingerprint 做告警去重/聚合（同一 alertname+key 的多次采样视为同一告警）。
+// 用内置 crypto 做确定性 sha1（非外部依赖），无需真随机/时间因子，保证同一阈值项的 fingerprint 跨运行稳定。
+function fingerprint(str) {
+  return createHash('sha1').update(String(str)).digest('hex').slice(0, 16);
+}
+
 export class Monitor {
   constructor(bus, omni, opts = {}) {
     this.bus = bus;
@@ -171,6 +189,8 @@ export class Monitor {
     this.bus.register('monitor', 'trendAnomalies', () => this._detectTrendAnomalies());
     this.bus.register('monitor', 'config', () => this.config());
     this.bus.register('monitor', 'thresholdHealth', () => this.thresholdHealth());
+    this.bus.register('monitor', 'thresholdAlerts', () => this.thresholdAlerts());
+    this.bus.register('monitor', 'alertables', () => this.thresholdAlerts());
   }
 
   // ── 阈值配置解析 + 观测 ──
@@ -306,6 +326,7 @@ export class Monitor {
       threshold: { value: cfg[key].value, source: cfg[key].source, envKey: cfg[key].envKey },
       current: current == null ? null : current,
       status,
+      severity: severityOf(status), // 对齐 Prometheus Alertmanager severity 标签（over→critical / warn→warning / 其余→none）
     });
     // 无活动 = na（既不报"健康"也不报"超标"，避免伪造读数）
     {
@@ -364,6 +385,51 @@ export class Monitor {
     const summary = { total: items.length, ok: 0, warn: 0, over: 0, na: 0 };
     for (const it of items) summary[it.status]++;
     return { ok: true, items, summary };
+  }
+
+  // ── 阈值告警清单（Alertmanager-ready）：把"超标/关注"的阈值项转成可直接提交给 Prometheus Alertmanager
+  //     的告警 payload（labels + annotations + 稳定 fingerprint），让看板上的红黄绿能"直推"外部告警系统。
+  // 借鉴 Prometheus Alertmanager 的告警数据模型（https://prometheus.io/docs/alerting/latest/alertmanager/、
+  // https://michele.incuda.com/2022/07/14/introduction-to-prometheus-alertmanager/）：
+  //   - labels：标识告警身份（alertname/severity/monitor/key/status），severity ∈ {critical, warning} 用于路由/静默/分组
+  //   - annotations：人类可读的上下文（summary/description/当前值/阈值/来源），对应 Alertmanager annotations
+  //   - fingerprint：同一 alertname+key 的稳定哈希，用于告警去重聚合（对齐 Alertmanager fingerprint 语义）
+  // 诚实边界：本框架离线运行、不主动外发；这里只产出"与 Alertmanager API 形状一致"的 payload，
+  //   接入方可把 alerts[] 直接 POST 到 Alertmanager `POST /api/v2/alerts`（或经 webhook），无需格式转换。
+  // 全部零依赖（仅用内置 crypto 生成 fingerprint）；none 状态（ok/na）不产出告警，绝不伪造告警。
+  thresholdAlerts() {
+    const th = this.thresholdHealth();
+    const alerts = th.items
+      .filter(it => it.severity !== 'none')
+      .map(it => {
+        const alertname = `omnisense_threshold_${it.key}`;
+        const fp = fingerprint(`${alertname}|${it.key}`);
+        const isOver = it.status === 'over';
+        return {
+          fingerprint: fp,
+          status: it.status,
+          severity: it.severity,
+          labels: {
+            alertname,
+            severity: it.severity,    // critical | warning（Alertmanager 路由/静默依据）
+            monitor: 'omnisense',
+            key: it.key,
+            status: it.status,
+          },
+          annotations: {
+            summary: `${it.key} ${isOver ? '超标' : '关注'}（${isOver ? 'critical' : 'warning'}）`,
+            description: it.description,
+            current: it.current == null ? 'na' : String(it.current),
+            threshold: `${it.threshold.value}（来源 ${it.threshold.source}）`,
+            envKey: it.threshold.envKey,
+            source: it.threshold.source,
+          },
+          generatedAt: new Date().toISOString(),
+        };
+      });
+    const critical = alerts.filter(a => a.severity === 'critical').length;
+    const warning = alerts.filter(a => a.severity === 'warning').length;
+    return { ok: true, count: alerts.length, critical, warning, alerts };
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -1036,6 +1102,20 @@ export class Monitor {
         <span class="thr" style="color:${col}">/ ${esc(fmtTh(it.threshold.value, it.unit))}</span>
         <span class="muted">${statusLabelOf(it.status)} · ${esc(it.description)} · 来源 <b style="color:${col}">${esc(it.threshold.source)}</b> · <code>${esc(it.threshold.envKey)}</code></span></div>`;
     }).join('');
+    // 可推送告警清单（Alertmanager 形状）：把"超标/关注"项转成 fingerprint+labels+annotations 的 payload，
+    // 离线不发送，仅供对接方直接 POST 到 Alertmanager（见 thresholdAlerts()）。
+    const ta = this.thresholdAlerts();
+    const taRows = ta.alerts.length
+      ? ta.alerts.map(a => {
+        const col = a.severity === 'critical' ? '#f85149' : '#d29922';
+        return `<div class="row"><span class="lbl"><span class="th-dot" style="background:${col}"></span>${esc(a.labels.key)}</span>
+          <span class="val" style="color:${col}">${esc(a.severity)}</span>
+          <span class="muted">${esc(a.annotations.summary)} · 当前 ${esc(a.annotations.current)} / 阈值 ${esc(a.annotations.threshold)} · fp:${esc(a.fingerprint)}</span></div>`;
+      }).join('')
+      : '<div class="muted">（无超标/关注项，阈值健康，暂无告警可推送）</div>';
+    const taHtml = `
+      <div style="margin-top:12px;color:var(--muted);font-size:12px">可推送告警清单（Alertmanager-ready · <code>labels{alertname,severity,monitor,key,status}</code> + <code>annotations</code> + 稳定 <code>fingerprint</code>，离线不发送，仅供对接方 POST 到 Alertmanager）</div>
+      <div style="margin-top:6px">${taRows}</div>`;
     const cfgFileNote = cfg.configFile
       ? `<div class="muted" style="margin-bottom:6px">配置来源文件: <code>${esc(cfg.configFile)}</code>${cfg.configFileLoaded ? '' : '（未找到，已用默认/环境变量）'}</div>`
       : '';
@@ -1043,7 +1123,8 @@ export class Monitor {
     const cfgHtml = `
       <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项 · 阈值健康 <b style="color:${statusColorOf(worst)}">${thHealth.summary.ok}正常 / ${thHealth.summary.warn}关注 / ${thHealth.summary.over}超标 / ${thHealth.summary.na}无数据</b>（当前值 vs 阈值，红黄绿着色）</div>
       ${cfgFileNote}
-      ${cfgRows}`;
+      ${cfgRows}
+      ${taHtml}`;
 
     return `<!doctype html>
 <html lang="zh-CN">
