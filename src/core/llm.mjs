@@ -33,8 +33,13 @@ function resolveToken() {
 
 // 模型：优先 OMNI_MODEL 环境变量；网关可用时取网关返回的首个模型；否则回退 'openclaw'(兼容既有网关)。
 let _defaultModel = null;
+let _modelList = [];
 function resolveModel() {
   if (process.env.OMNI_MODEL) return process.env.OMNI_MODEL;
+  try {
+    const d = readGatewayConfig();
+    if (d?.gateway?.model) return d.gateway.model; // 网关配置文件可显式引脚模型
+  } catch {}
   return _defaultModel || 'openclaw';
 }
 
@@ -78,7 +83,7 @@ async function ensureRuntime() {
   }
   const ms = await probeGateway();
   _runtime = ms ? 'gateway' : 'driver';
-  if (ms && !_defaultModel) _defaultModel = ms[0];
+  if (ms && ms.length) { _modelList = ms; if (!_defaultModel) _defaultModel = ms[0]; }
   return _runtime;
 }
 
@@ -153,20 +158,8 @@ export class BuiltinLLM {
    * 调用框架自带在线大模型（免 key）。
    * agent 模式下不连网关，直接抛出 AGENT_DRIVE，交由上层(运行体/agent)驱动大脑与嘴巴。
    */
-  async chat(messages, { json = false, temperature = 0.7, image = null, timeoutMs = 90000, model = null } = {}) {
-    const rt = await ensureRuntime();
-    if (rt === 'driver') {
-      const e = new Error('AGENT_DRIVE');
-      e.code = 'AGENT_DRIVE';
-      e.messages = messages; e.opts = { json, temperature, image };
-      throw e;
-    }
-    if (_unavailable) {
-      const e = new Error('BUILTIN_UNAVAILABLE');
-      e.code = 'BUILTIN_UNAVAILABLE';
-      throw e;
-    }
-    const mdl = model || this.model;
+  // 单次补全（不含多模型回退）；连接错误由 chat() 捕获后换新模型重试。
+  async _chatOnce(messages, { json = false, temperature = 0.7, image = null, timeoutMs = 90000, model: mdl }) {
     const last = messages[messages.length - 1];
     const text = (last && typeof last.content === 'string') ? last.content : '请描述这张图。';
     const userMsg = image
@@ -175,26 +168,18 @@ export class BuiltinLLM {
           { type: 'image_url', image_url: { url: image } },
         ] }
       : last;
-
     const body = {
       model: mdl,
       messages: image ? [...messages.slice(0, -1), userMsg] : messages,
       temperature,
       stream: true, // 网关必须流式；非流式会挂起超时
     };
-
-    let r;
-    try {
-      r = await fetch(`${this.base}/chat/completions`, {
-        method: 'POST',
-        headers: await this._headers(),
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch (e) {
-      if (isConnError(e)) { _unavailable = true; e.code = 'BUILTIN_UNAVAILABLE'; }
-      throw e;
-    }
+    const r = await fetch(`${this.base}/chat/completions`, {
+      method: 'POST',
+      headers: await this._headers(),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
     if (!r.ok) {
       const errBody = await r.text().catch(() => '');
       if (r.status === 401 || r.status === 403 || /auth_error|9002|暂不可|Unauthorized/i.test(errBody)) {
@@ -208,6 +193,41 @@ export class BuiltinLLM {
     const raw = await readSSE(r);
     return json ? extractJson(raw) : raw;
   }
+
+  async chat(messages, { json = false, temperature = 0.7, image = null, timeoutMs = 90000, model = null } = {}) {
+    const rt = await ensureRuntime();
+    if (rt === 'driver') {
+      const e = new Error('AGENT_DRIVE');
+      e.code = 'AGENT_DRIVE';
+      e.messages = messages; e.opts = { json, temperature, image };
+      throw e;
+    }
+    if (_unavailable) {
+      const e = new Error('BUILTIN_UNAVAILABLE');
+      e.code = 'BUILTIN_UNAVAILABLE';
+      throw e;
+    }
+    const explicit = !!model;
+    const requested = model || this.model;
+    const seen = new Set();
+    // 显式指定模型时只试它（尊重意图）；否则按 [默认模型, 探测到的其他模型] 顺序回退
+    const candidates = explicit
+      ? [requested]
+      : [requested, ..._modelList].filter((m) => m && !seen.has(m) && seen.add(m));
+    let lastErr;
+    for (const mdl of candidates) {
+      try {
+        return await this._chatOnce(messages, { json, temperature, image, timeoutMs, model: mdl });
+      } catch (e) {
+        lastErr = e;
+        if (isConnError(e)) continue; // 主模型连不上 → 试探测到的下一个可用模型
+        throw e; // 非连接错误（鉴权/格式）→ 不重试，直接抛
+      }
+    }
+    _unavailable = true;
+    if (lastErr && !lastErr.code) lastErr.code = 'BUILTIN_UNAVAILABLE';
+    throw lastErr;
+  }
 }
 
 export const builtin = new BuiltinLLM();
@@ -215,4 +235,4 @@ export const builtin = new BuiltinLLM();
 // 同步读取当前可用性（基于最近一次探测缓存）
 export function isBuiltinAvailable() { return !_unavailable; }
 // 重置缓存（如用户中途启动了本地模型网关）
-export function resetBuiltin() { _baseCache = null; _unavailable = false; _runtime = null; _defaultModel = null; }
+export function resetBuiltin() { _baseCache = null; _unavailable = false; _runtime = null; _defaultModel = null; _modelList = []; }

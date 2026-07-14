@@ -53,8 +53,11 @@
 - **反过度工程原则（anti-over-engineering）**（文档级，零风险）：`AGENTS.md`「硬规则」之后新增「Anti-over-engineering principles（设计哲学）」中英双语段（也呼应本自动化的自我约束）。直接落 Anthropic《Building Effective Agents》**第一原则**「能用单次 LLM 调用解决就别上 workflow、能 workflow 就别上 agent」，并固化为可操作规则：① 不为"别人有"而加特性，仅当复杂度**显著改善**开箱即用结果才加；② 零依赖 Node ESM 是**硬约束非风格偏好**（clone-and-run 基石）；③ 新代码必须可验证（纯函数 + `node --test` + 质量门入口），无测试不入库；④ 优先复用 `lib/common.js`；⑤ **自动化工位在框架达高成熟度（质量门全绿、Next 仅剩文档/研究级）时主动暂停**，避免堆改动加重人工每日 review 负担（文档级打磨可，堆特性不可）。来源：Anthropic 第一原则 + 2026《When Not to Build AI Agents》playbook + 本仓库 `docs/research/2026-07-09-external-research.md` 1.1 候选 #6
 - **命令参考文档 `docs/COMMANDS.md`（文档级，零依赖）**：新增中英双语命令参考，汇总全部 ~23 个开发命令（质量门禁 / 智能体运行时 / 角色技能 / 框架演化 / 发布 / LLM 工具 / 权限 / 安装 / 每日复盘 / 帮助），含说明、关键参数/环境变量表与「绝不 git push / 零依赖 / 入口等价」铁律说明；`docs/README.md` 文档清单补链。补上「框架已极成熟但命令可发现性仍散」的最后一小块文档缺口（呼应 anti-over-engineering 的「文档级打磨可」）
 
+- **真实本地 LLM 端到端验证（E2E，零依赖）**：Ollama 在线（`qwen2.5-coder:3b` + `Qwen3.5-4B`）已落地验证——① 工作区 LLM Adapter 层 `createClient({provider:'ollama'})` 直连活体 Ollama `/v1/chat/completions` 真实补全成功（返回 "42"，~55s）；② **OmniSense 内核**经网关 `OMNI_GATEWAY_BASE=http://127.0.0.1:11434/v1 OMNI_MODEL=qwen2.5-coder:3b OMNI_RUNTIME=gateway` 跑通真实 `think`（蓬莱阁真实洞察）；③ 纯靠 `~/.omnisense/gateway.json`（`{gateway:{port:11434,model:"qwen2.5-coder:3b"}}`）零 env 自动探测，亦跑通真实 `think`。两层均证「adapter→本地模型」与「内核 brain→本地模型」通路可用；内核附 `examples/gateway.ollama.example.json` 零 env 即可接 Ollama。
+  - **验证中暴露并修复内核真实 bug**：`resolveModel()` 盲取 `/v1/models` 首个模型——此环境为 `Qwen3.5-4B:latest`，在 Ollama 聊天端点 `http=000` 不可用——导致零配置 `think` 静默回退离线符号推理（"在线模型暂不可用"）。修复：`resolveModel()` 支持 `gateway.json` 显式 `model` 引脚（优先级 OMNI_MODEL > gateway.model > 探测首模型 > openclaw）；`chat()` 主模型连接失败时自动回退到探测到的其他可用模型（仅连接错误重试，鉴权/格式错误不重试）。补 2 项内核单测（模型引脚 + 多模型回退）；验证后**全内核 266/266、子包 276/276 通过**。至此「真实本地 LLM 端到端」从 In progress 收口。
+
 ## In progress 🚧
-- End-to-end verification of the local agent with a **real** local LLM (Ollama `qwen2.5-coder:3b`)
+- (无 —— 真实本地 LLM E2E 已验证，见上方 Done ✅)
 
 ## Next 🔜 (high value, low risk)
 - **可选：接入真实中立采集源**：把每日中立创作素材分析（`AI创作日报/`）设为一次性 `OPENCLAW_INSIGHTS_DIR` 来源，经 `make evolve` 蒸馏为框架提案；只提取框架级改进、绝不写入项目内容（中立原则）

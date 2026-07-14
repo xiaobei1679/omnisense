@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v7.2.0 — 2026-07-14 (minor)
+
+- 修复内核真实 bug + 真实本地 LLM(Ollama) E2E：resolveModel() 支持 gateway.json 显式 model 引脚(优先级 OMNI_MODEL>gateway.model>探测首模型>openclaw) 避免盲取不可用模型静默回退离线；chat() 主模型连接失败时自动回退探测到的其他可用模型(仅连接错误重试)；附 examples/gateway.ollama.example.json 零 env 接 Ollama；补 2 项内核单测
+
 ## v7.1.0 — 2026-07-14 (minor)
 
 - monitor 第16总线方法 thresholdHealth：实时测 11 项当前值 vs THRESHOLD_SPEC 阈值，输出 ok/warn/over/na 红黄绿着色(dashboard 当前值vs阈值着色)；CLI --threshold-health + 工作区 omnisense-link monitor thresholdHealth 跨层复用(借鉴 Grafana 阈值阶梯着色)
