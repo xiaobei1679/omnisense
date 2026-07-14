@@ -87,6 +87,29 @@ node "{SKILL_DIR}/src/cli.mjs" trace --export=spans.otlp.json --export-format=ot
 每步 trace 带 `agendaWeights` 快照可观测"权重如何随结果变化"；自定义议程默认尊重用户顺序（除非显式 `dynamic:true`），
 `--no-dynamic` 可关闭重排。全程零网络、零挂起。
 
+## 🔭 监控器官（monitor · 第 8 器官，统一观测身体是否健康）
+
+合并后的「新项目」把 Agent 状态观测升格为内核一等公民。监控器官 `monitor` 统一聚合"身体是否健康、哪里在退化"：
+
+- **统一状态快照 `monitor`**：整体状态 + 七器官数 + 四层记忆 + 活动(总运行/成功率/引擎分布/最近自驱轨迹) + 告警。
+- **Agent 健康 `monitor --health`**：基于 tracer 运行轨迹的错误率 → healthy/degraded/critical。
+- **可观测三支柱（借鉴 LangSmith/Langfuse/CloudWatch GenAI）**：指标（延迟 P50/P95/P99 按引擎 + 工具级延迟分布 `monitor --latency`/`--tools`）+ 追踪（复用 tracer）+ 日志（结构化告警）。
+- **状态网格/舰队健康 `monitor --grid`**：每个引擎颜色化 healthy/degraded/down（借鉴 ClawHub 舰队健康）。
+- **记忆健康 `monitor --memory`**：技能利用率/平均信任分/低信任/陈旧/增长（借鉴 perfecxion）。
+- **异常检测 `monitor --anomalies`**：延迟突增/吞吐骤降/记忆批量注入/**熔断开启(circuit_open)** 四类信号（熔断开启直接反映 agent 工具流水线降级，借鉴 OpenLIT「工具可靠性是 agent 延迟的暗物质」）。
+- **工具管线健康 `monitor --tools`（本轮新增常驻迭代能力）**：工具缓存命中条目 + 每工具熔断器状态(开启/正常) + 工具级 P50/P95/P99 延迟分布（从 tracer 工具步聚合）——补齐"工具失败但 monitor 不报"盲区。
+- **可视化仪表盘 `dashboard`**：零依赖静态 HTML（驾驶舱风格），含器官/舰队健康/延迟 sparkline/记忆健康/工具管线健康/活动/告警/运行时间线。
+
+```bash
+node "{SKILL_DIR}/src/cli.mjs" monitor --summary    # 统一状态快照
+node "{SKILL_DIR}/src/cli.mjs" monitor --tools      # 工具管线健康：缓存/熔断/工具级 P50-P95-P99
+node "{SKILL_DIR}/src/cli.mjs" monitor --grid       # 引擎状态网格(颜色化)
+node "{SKILL_DIR}/src/cli.mjs" monitor --anomalies  # 异常检测(含熔断开启)
+node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML 仪表盘
+# 工作区侧跨层复用同一份实现：
+node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
+```
+
 ```bash
 node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=3                # 身体自驱决策（默认动态议程：结果驱动重排）
 node "{SKILL_DIR}/src/cli.mjs" autopilot --ticks=3 --no-dynamic   # 关闭动态重排、尊重默认顺序

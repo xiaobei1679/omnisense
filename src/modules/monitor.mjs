@@ -11,6 +11,10 @@
 //   - ClawHub greenhelix / OpenClaw Dashboard 的"舰队健康总览"：每个 agent 颜色化状态网格(green/yellow/red)。
 //   - perfecxion.ai 的"记忆专属指标"：信任分分布、检索命中、陈旧记录、批量注入检测。
 //   - 心跳/存活(heartbeat)模式：进程活着≠在干活；用"最后活跃"推导 degraded/down 状态。
+//   - 工具管线健康(tool pipeline health)：每个工具的 P50/P95/P99 延迟分布与熔断状态——"工具可靠性是
+//     agent 延迟的暗物质"(OpenLIT + VictoriaMetrics，https://openlit.io/blogs/victoriametrics-openlit-agents-observability)；
+//     a 2% 工具错误率经 10 次工具调用会放大成高得多的 workflow 失败率。熔断开启(circuit_open)即 agent
+//     流水线降级信号(借鉴 dev.to 的 AgentCircuitBreaker 思想：https://dev.to/pockit_tools/llm-observability-deep-dive-how-to-monitor-trace-and-debug-ai-agents-in-production-2mob)。
 import { writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs';
 import { EVENTS } from '../core/bus.mjs';
 import { log } from '../core/logger.mjs';
@@ -70,6 +74,7 @@ export class Monitor {
     this.bus.register('monitor', 'memoryHealth', () => this.memoryHealth());
     this.bus.register('monitor', 'anomalies', () => this.detectAnomalies());
     this.bus.register('monitor', 'recentRuns', p => this.recentRuns(p && p.limit));
+    this.bus.register('monitor', 'toolHealth', () => this.toolHealth());
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -145,6 +150,24 @@ export class Monitor {
     return { grid, fleet };
   }
 
+  // ── ⑤ 工具管线健康（tool pipeline health）：缓存命中 + 熔断状态 + 每工具延迟分布 ──
+  // 借鉴 OpenLIT「工具可靠性是 agent 延迟的暗物质」：把工具级缓存/熔断/延迟并到可观测面板。
+  // 全部带保护：缺 tool* 函数即降级为空，绝不因观测逻辑影响主流程。
+  toolHealth() {
+    let cache = { size: 0, keys: [] };
+    try {
+      const c = this.omni && this.omni.toolCacheStats ? this.omni.toolCacheStats() : null;
+      if (c) cache = { size: c.size || 0, keys: Array.isArray(c.keys) ? c.keys : [] };
+    } catch { /* 观测不影响主流程 */ }
+    let breakers = [];
+    try {
+      const b = this.omni && this.omni.toolBreakerStatus ? this.omni.toolBreakerStatus() : null;
+      if (Array.isArray(b)) breakers = b;
+    } catch { /* 观测不影响主流程 */ }
+    const openCircuits = breakers.filter(x => x && x.open).length;
+    return { ok: true, cache, breakers, openCircuits, toolLatency: this._toolLatency() };
+  }
+
   // ── ③ 记忆健康（借鉴 perfecxion 的"记忆专属指标"）──
   memoryHealth() {
     const mem = this.omni && this.omni.memory;
@@ -176,6 +199,21 @@ export class Monitor {
   detectAnomalies() {
     const runs = this._tracerRuns();
     const alerts = [];
+    // 熔断开启：任何工具 breaker 处于 open 状态 → agent 流水线降级（诚实降级信号，借鉴 AgentCircuitBreaker 思想）
+    try {
+      const breakers = this.omni && this.omni.toolBreakerStatus ? this.omni.toolBreakerStatus() : null;
+      if (Array.isArray(breakers)) {
+        for (const b of breakers) {
+          if (b && b.open) {
+            alerts.push({
+              level: 'warning', type: 'circuit_open',
+              message: `工具 ${b.name} 熔断器开启（连续失败 ${b.fails || 0} 次），agent 工具流水线可能降级`,
+              agent: 'tool:' + (b.name || 'unknown'),
+            });
+          }
+        }
+      }
+    } catch { /* 观测不影响主流程 */ }
     // 延迟突增：近 10 次 P95 > 基线(排除近 10 次) P95 的 2x
     if (runs.length >= 20) {
       const baseRuns = runs.slice(0, -10).map(r => r.durationMs).filter(d => typeof d === 'number' && d > 0).sort((a, b) => a - b);
@@ -253,6 +291,7 @@ export class Monitor {
       latency: lat,
       statusGrid: grid,
       memoryHealth: memHealth,
+      toolHealth: this.toolHealth(),
       anomalies: anoms,
       recentRuns: this.recentRuns(12),
       alerts,
@@ -263,6 +302,31 @@ export class Monitor {
     const m = {};
     for (const r of runs) m[r.engine] = (m[r.engine] || 0) + 1;
     return m;
+  }
+
+  // ── 工具级延迟分布（借鉴"工具可靠性是 agent 延迟的暗物质"：按工具聚合 P50/P95/P99）──
+  _toolLatency(runs = this._tracerRuns()) {
+    const byTool = {};
+    for (const r of runs) {
+      const steps = r && r.steps;
+      if (!Array.isArray(steps)) continue;
+      for (const s of steps) {
+        const name = s && s.action;
+        const d = s && typeof s.durationMs === 'number' ? s.durationMs : null;
+        if (typeof name !== 'string' || !name || d == null || d <= 0) continue;
+        (byTool[name] = byTool[name] || []).push(d);
+      }
+    }
+    const out = {};
+    for (const k of Object.keys(byTool)) {
+      const arr = byTool[k].slice().sort((a, b) => a - b);
+      out[k] = {
+        count: arr.length,
+        p50: percentile(arr, 50), p95: percentile(arr, 95), p99: percentile(arr, 99),
+        avg: Math.round(arr.reduce((a, b) => a + b, 0) / arr.length),
+      };
+    }
+    return out;
   }
 
   // ── Agent 健康（基于 tracer 运行轨迹；向下兼容）──
@@ -446,6 +510,28 @@ export class Monitor {
       <div class="kv"><span>陈旧记录(&gt;${mh.staleWindowDays || 7}d)</span><b>${mh.staleCount != null ? mh.staleCount : '—'}</b></div>
       <div style="margin-top:8px">增长(自上次检查): ${growHtml}</div>`;
 
+    const th = s.toolHealth || {};
+    const thCache = (th.cache && th.cache.size) || 0;
+    const thOpen = th.openCircuits || 0;
+    const thBreakers = Array.isArray(th.breakers) ? th.breakers : [];
+    const thLat = th.toolLatency || {};
+    const thLatRows = Object.keys(thLat).map(k => {
+      const v = thLat[k];
+      return `<div class="row"><span class="lbl">${esc(k)}</span><span class="val">${v.count}</span>
+        <span class="muted">P50 ${v.p50 == null ? '—' : v.p50} · P95 ${v.p95 == null ? '—' : v.p95} · P99 ${v.p99 == null ? '—' : v.p99}ms</span></div>`;
+    }).join('') || '<div class="muted">（暂无工具调用轨迹）</div>';
+    const thBreakerHtml = thBreakers.length ? thBreakers.map(b => {
+      const st = b.open ? '#f85149' : '#3fb950';
+      const label = b.open ? '开启(降级)' : '正常';
+      return `<span class="chip" style="border-color:${st};color:${st}">${esc(b.name)}: ${label}${b.open ? ` (${b.fails}/${b.maxFails} 失败)` : ''}</span>`;
+    }).join(' ') : '<span class="chip">（无熔断记录）</span>';
+    const toolHtml = `
+      <div class="kv"><span>工具缓存条目</span><b>${thCache}</b></div>
+      <div class="kv"><span>开启的熔断器</span><b style="color:${thOpen ? '#f85149' : '#3fb950'}">${thOpen}</b></div>
+      <div style="margin-top:8px">熔断状态: ${thBreakerHtml}</div>
+      <div style="margin-top:10px;color:var(--muted);font-size:12px">工具级延迟分布(P50/P95/P99):</div>
+      <div style="margin-top:6px">${thLatRows}</div>`;
+
     const act = s.activity || {};
     const engHtml = Object.entries(act.engineBreakdown || {}).map(([k, v]) =>
       `<span class="chip">${esc(k)}: ${v}</span>`).join(' ') || '<span class="chip">（无）</span>';
@@ -538,6 +624,8 @@ export class Monitor {
 
   <section><h2>记忆状态 / Memory Health（四层 + 记忆专属指标）</h2>${memHtml}</section>
 
+  <section><h2>工具管线健康 / Tool Pipeline Health（缓存 + 熔断 + 工具级延迟）</h2>${toolHtml}</section>
+
   <section><h2>器官状态 / Organs</h2><ul>${organHtml}</ul></section>
 
   <section><h2>活动 / Activity</h2>
@@ -552,7 +640,7 @@ export class Monitor {
 
   <section><h2>运行时间线 / Recent Runs</h2><ul>${runHtml}</ul></section>
 
-  <footer>由监控器官 monitor 生成 · 复用 tracer(运行轨迹/延迟) + memory(四层/记忆健康) + 心跳式存活判定 + 异常检测；借鉴 LangSmith/Langfuse/CloudWatch GenAI 可观测三支柱、ClawHub 舰队健康、perfecxion 记忆专属指标。</footer>
+  <footer>由监控器官 monitor 生成 · 复用 tracer(运行轨迹/延迟/工具级延迟) + memory(四层/记忆健康) + toolHealth(缓存/熔断) + 心跳式存活判定 + 异常检测；借鉴 LangSmith/Langfuse/CloudWatch GenAI 可观测三支柱、ClawHub 舰队健康、perfecxion 记忆专属指标、OpenLIT 工具可靠性(工具级 P50/P95/P99 与熔断开启监测)。</footer>
 </div></body></html>`;
   }
 

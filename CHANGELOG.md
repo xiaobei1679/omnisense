@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v5.0.0 — 2026-07-14 (major)
+
+- 监控器官 monitor 新增工具管线健康维度（toolHealth：缓存命中分布/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警），CLI --tools 与 工作区 omnisense-link monitor toolHealth 跨层复用内核同一份 monitor；修复运行时产物 .omni-health-metrics.json 未 gitignore 的污染 gap
+
 ## v4.5.0 — 2026-07-13 (minor)
 
 - 监控器官 monitor 修复两处真实缺陷(基于种子化演示验证)：①记忆批量注入检测失效——原 memoryHealth() 每次调用都覆盖共享基线，导致 snapshot() 内 detectAnomalies() 永远看到 baseline==current 而 memory_bulk_injection 永不触发；改为分离『稳定基线(供 growth 展示,仅首次建立)』与『滑动基线(供批量注入检测,每次检查后更新)』。②snapshot() 重复调用 detectAnomalies()(经 allAlerts + 直接调用)使首次调用吞掉批量注入告警；改为单次计算复用。模块测试 17/17,核心 244/244,lint 52 文件全过。另附种子化演示仪表盘(omni-dashboard-demo.html)展示舰队健康/延迟P95/记忆健康/异常检测全能力。

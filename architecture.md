@@ -119,6 +119,14 @@
 6. 借鉴 OpenClaw「心跳闭环 / Heartbeat Loop」（周期性感知→决策→行动的自驱循环，https://www.aigcopen.com/content/omni-channel/39278.html）与 Sophia「System 3 持久自驱层」（https://arxiv.org/abs/2512.18202：智能体可独立发起内驱任务）的离线启发式实现——零网络零 key 即可让身体在常驻循环里持续自驱。
 7. **可观测性闭环（可观测性闭环）**：`--autopilot` 开启时，每 tick 自驱决策**默认**经同一份 tracer 落盘为 `engine='autopilot'` 的 run（`--no-trace` 关闭，`autopilotRecordTrace` 默认跟随 `autopilot`），让常驻自驱身体"活着"的行为同样可追溯/可回放/可防退化（可接 `trace --find="autopilot:"` / `--diff` / `--regression`）；工作区侧复用内核同一份 tracer，跨层一致。
 
+## 监控器官（monitor · 第 8 器官：统一观测身体是否健康）
+
+`tracer` 回答"身体**做了什么**"，而 `monitor` 回答"身体**现在健康吗**"——这是 Agent 可观测性的第二支柱（Industry 三支柱：Traces / Metrics / Evaluations，对齐 LangSmith / Langfuse / Helicone / Arize / CloudWatch GenAI）。`monitor` 经 `bus.register('monitor', method, fn)` 暴露 **12 个总线方法**（核心 6：snapshot/alerts/dashboard/statusGrid/memoryHealth/anomalies；新增 6：recentRuns/latency/toolHealth/recordMetric/checkAlerts/collect），把身体各子系统（眼/耳/脑/手/感知/脚 + 记忆 + 工具管线）的健康聚合为一份零依赖 HTML 仪表盘（`monitor dashboard`），CLI `monitor --summary/--tools/--anomalies/--grid` 取结构化数据、serve `GET /monitor` 暴露。
+
+- **工具管线健康（toolHealth，v4.5.0 新增）**：把"工具可靠性是 agent 延迟的暗物质"（OpenLIT / VictoriaMetrics 思想）落为可观测信号——`toolCacheStats()` 缓存命中分布 + `toolBreakerStatus()` 熔断器状态（任一 `open` 即 `circuit_open` 告警）+ 每工具 P50/P95/P99/avg 延迟分布（取自 `tracer` 每步 `action`/`durationMs`）。借鉴 dev.to AgentCircuitBreaker 的「circuit-open 即一等健康信号」思路。
+- **异常检测（detectAnomalies）**：覆盖 circuit_open（熔断开启）、记忆健康劣化、引擎延迟突增、`run` 失败率超标等规则，命中即发 warning 告警，可接 `monitor --anomalies` / `checkAlerts`。
+- 工作区侧经 `openclaw-workspace/scripts/omnisense-link.mjs monitor [snapshot|health|alerts|dashboard|toolHealth]` 跨层复用内核同一份 monitor（同源 bus 契约），三层（内核 `node src/cli.mjs monitor` / 桥接 `omni-body.mjs` / 工作区）一致。
+
 ## 目录结构
 
 ```
@@ -148,7 +156,8 @@ src/
     mouth.mjs        嘴巴：意见/对话/出声
     brain.mjs        大脑：思考/决策/规划/行动(act) + synthesize()
     perception.mjs   感知：环境模型聚合
-test/                 node:test 离线单测（bus/breaker/config/logger/brain/server/providers/llm/eyes/memory/tools/agent/watch）
+    monitor.mjs       监控器官（第 8 器官）：统一观测身体是否健康（snapshot/alerts/dashboard + 12 个总线方法，含 toolHealth 工具管线健康：缓存命中/熔断状态/工具级 P50-P95-P99 延迟分布 + circuit_open 熔断开启告警；借鉴 LangSmith/Langfuse/Helicone/Arize/CloudWatch GenAI 三支柱 + OpenLIT「工具可靠性是 agent 延迟的暗物质」+ dev.to AgentCircuitBreaker）
+  test/                 node:test 离线单测（bus/breaker/config/logger/brain/server/providers/llm/eyes/memory/tools/agent/watch/monitor）
 .github/workflows/    Node 18/20/22 CI（语法检查 + 单测）
 ```
 

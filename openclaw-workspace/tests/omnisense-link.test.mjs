@@ -103,6 +103,17 @@ it('runLink monitor dashboard 跨层生成可视化 HTML 仪表盘', async () =>
   assert.ok(html.includes('监控仪表盘') && html.includes('记忆状态'), '应含器官/记忆/告警可视化区块');
 });
 
+it('runLink monitor toolHealth 跨层消费工具管线健康(缓存/熔断/工具级延迟)', async () => {
+  // 合并后新项目：工作区能观测身体的 Agent 工具流水线健壮性（tool pipeline health）。
+  // 复用内核同一份 breaker 基础设施与 tracer 工具步延迟，跨层一致。
+  const r = await runLink(['monitor', 'toolHealth']);
+  assert.equal(r.ok, true, '应返回工具管线健康');
+  assert.ok('cache' in r && Array.isArray(r.cache.keys), '应含 cache 状态');
+  assert.ok(Array.isArray(r.breakers), '应含 breakers 状态数组');
+  assert.ok('openCircuits' in r, '应含开启熔断器计数');
+  assert.ok(r.toolLatency && typeof r.toolLatency === 'object', '应含工具级延迟分布');
+});
+
 it('runLink route --list 列出全部能力（与 card skills 数一致）', async () => {
   const r = await runLink(['route', '--list']);
   assert.equal(r.ok, true);
