@@ -26,6 +26,7 @@ const MEM_STALE_MS = 7 * 86400000;       // 记忆记录 >7d 视为"陈旧"
 const MEM_BULK_THRESHOLD = 20;           // 单次检查记忆层增长 ≥20 条 → 疑似批量注入
 const LIVENESS_HEALTHY_MS = 3600000;     // <1h 视为活跃(healthy)
 const LIVENESS_DEGRADED_MS = 86400000;   // 1h~24h 降级(degraded)，>24h 失联(down)
+const MAX_TREND_POINTS = 120;            // 趋势点环形缓冲上限（约 120 次快照，足够观察曲线形态）
 
 function completedCount(runs) {
   return runs.filter(r => r.completed).length;
@@ -58,6 +59,7 @@ export class Monitor {
     const seeded = this._loadMetrics();
     this._baseline = seeded._memBaseline || null;        // 稳定基线：供 memoryHealth.growth（自首次观察起的累计增长，仅首次建立）
     this._anomalyBase = seeded._anomalyBaseline || null; // 滑动基线：供 detectAnomalies 批量注入检测（每次检查后更新）
+    this._trendPoints = Array.isArray(seeded._trend) ? seeded._trend : []; // 趋势点：供 trends() 时间序列（跨进程延续）
     this._wire();
   }
 
@@ -75,6 +77,8 @@ export class Monitor {
     this.bus.register('monitor', 'anomalies', () => this.detectAnomalies());
     this.bus.register('monitor', 'recentRuns', p => this.recentRuns(p && p.limit));
     this.bus.register('monitor', 'toolHealth', () => this.toolHealth());
+    this.bus.register('monitor', 'trends', p => this.trends(p || {}));
+    this.bus.register('monitor', 'trendAnomalies', () => this._detectTrendAnomalies());
   }
 
   // ── 数据来源（全部带保护，缺失即降级为空）──
@@ -168,6 +172,158 @@ export class Monitor {
     return { ok: true, cache, breakers, openCircuits, toolLatency: this._toolLatency() };
   }
 
+  // ── ⑥ 趋势基线（trend baseline）：把每次快照的关键指标落盘为时间序列，画随"时间"变化的 sparkline。
+  // 借鉴 Prometheus/Grafana 的时序面板思想（histogram_quantile(p95)[5m]、周环比回归 TTFTRegression 等）：
+  // 单点数值看不到"在变好还是在变坏"，必须看趋势。零依赖、离线、落盘跨进程延续。
+  _trendSeries(win) {
+    const series = (key) => win.map(p => (p && typeof p[key] === 'number' ? p[key] : null));
+    return {
+      p95: series('p95'), p50: series('p50'), successRate: series('successRate'),
+      memTotal: series('memTotal'), openCircuits: series('openCircuits'),
+      fleetHealthy: series('fleetHealthy'), fleetDown: series('fleetDown'),
+    };
+  }
+
+  // 每次 snapshot 落盘一个轻量趋势点（持久化到指标文件，跨进程延续）。
+  _appendTrend(s) {
+    const pt = {
+      t: s.generatedAt,
+      p95: s.latency && s.latency.p95 != null ? s.latency.p95 : null,
+      p50: s.latency && s.latency.p50 != null ? s.latency.p50 : null,
+      successRate: s.activity && typeof s.activity.successRate === 'number' ? s.activity.successRate : null,
+      totalRuns: s.activity ? s.activity.totalRuns : null,
+      memTotal: s.memoryHealth && s.memoryHealth.layers
+        ? (s.memoryHealth.layers.memory + s.memoryHealth.layers.rule + s.memoryHealth.layers.skill + s.memoryHealth.layers.knowledge)
+        : null,
+      openCircuits: s.toolHealth ? s.toolHealth.openCircuits : null,
+      fleetHealthy: s.statusGrid && s.statusGrid.fleet ? (s.statusGrid.fleet.healthy || 0) : null,
+      fleetDown: s.statusGrid && s.statusGrid.fleet ? (s.statusGrid.fleet.down || 0) : null,
+    };
+    this._trendPoints.push(pt);
+    if (this._trendPoints.length > MAX_TREND_POINTS) this._trendPoints = this._trendPoints.slice(-MAX_TREND_POINTS);
+    try {
+      const all = this._loadMetrics();
+      all._trend = this._trendPoints;
+      this._saveJson(this.metricsFile, all);
+    } catch { /* 静默：观测不应影响主流程 */ }
+  }
+
+  // 返回时间序列趋势（可选 limit 只看最近 N 个点）：原始点 + 各指标 series + sparkline SVG。
+  trends(opts = {}) {
+    const pts = this._trendPoints;
+    const limit = opts && opts.limit && opts.limit > 0 ? opts.limit : pts.length;
+    const win = pts.slice(-limit);
+    const series = this._trendSeries(win);
+    const spark = (key, color) => sparkline(series[key].filter(v => v != null), 260, 46, color);
+    return {
+      count: pts.length,
+      points: win,
+      series,
+      sparkline: {
+        p95: spark('p95', '#f85149'),
+        successRate: spark('successRate', '#3fb950'),
+        memTotal: spark('memTotal', '#5b8cff'),
+      },
+      last: pts.length ? pts[pts.length - 1] : null,
+    };
+  }
+
+  // snapshot 内嵌的精简趋势（JSON 干净，不含 sparkline SVG）。
+  _trendSummary() {
+    const pts = this._trendPoints;
+    return { count: pts.length, last: pts.length ? pts[pts.length - 1] : null, series: this._trendSeries(pts) };
+  }
+
+  // ── 趋势异常检测（trend-based anomaly detection）：随时间变化的渐进式退化
+  // 借鉴业界最佳实践（OpenObserve/AIOps 2026 + Drift Detection 思想 + LangSmith 时序评估框架）：
+  //   逐新的退化(gradual degradation)比突发尖峰更难抓——"慢煮青蛙"式 P95 爬坡(→regression)、
+  //   成功率缓慢下降(→drift)、记忆增长停滞(→可能空转)都需要趋势回归法检测。
+  // 零依赖：仅基于 _trendPoints 的时序列做简单线性回归 + 符号判定。
+  // 设计原则：宁可误报也不漏报（info 级告警用于 pre-warning，warning 级用于退化）。
+  _detectTrendAnomalies() {
+    const pts = this._trendPoints;
+    if (pts.length < 4) return []; // 最少 4 个趋势点才能看出趋势
+
+    // 线性回归斜率 (简单 OLS，x=index, y=value)
+    const linRegSlope = (values) => {
+      if (values.length < 2) return 0;
+      const n = values.length;
+      const meanX = (n - 1) / 2;
+      const meanY = values.reduce((a, b) => a + b, 0) / n;
+      let num = 0, den = 0;
+      for (let i = 0; i < n; i++) {
+        const dx = i - meanX;
+        num += dx * (values[i] - meanY);
+        den += dx * dx;
+      }
+      return den === 0 ? 0 : num / den;
+    };
+
+    const alerts = [];
+
+    // 1. P95 延迟趋势回归检测：延迟持续上升 → trend_regression
+    const p95s = pts.map(p => p.p95).filter(v => v != null);
+    if (p95s.length >= 4) {
+      const slope = linRegSlope(p95s);
+      if (slope > 50) { // 每趋势点爬升 >50ms
+        const recent = p95s.slice(-3);
+        alerts.push({
+          level: 'warning', type: 'trend_regression',
+          message: `P95 延迟持续上升（斜率 ${slope.toFixed(0)}ms/点，最近 3 次均值 ${Math.round(recent.reduce((a, b) => a + b, 0) / recent.length)}ms，初始 ${Math.round(p95s[0])}ms）——"慢煮青蛙"式退化`,
+          agent: 'latency',
+        });
+      }
+    }
+
+    // 2. 成功率趋势漂移检测：成功率持续下降 → trend_drift
+    const srs = pts.map(p => p.successRate).filter(v => v != null);
+    if (srs.length >= 4) {
+      const slope = linRegSlope(srs);
+      if (slope < -0.02) { // 每趋势点下降 >2%
+        alerts.push({
+          level: 'warning', type: 'trend_drift',
+          message: `成功率持续下降（斜率 ${(slope * 100).toFixed(1)}%/点，最近 3 次均值 ${(srs.slice(-3).reduce((a, b) => a + b, 0) / 3 * 100).toFixed(0)}%，初始 ${(srs[0] * 100).toFixed(0)}%）——Agent 行为漂移`,
+          agent: 'quality',
+        });
+      }
+    }
+
+    // 3. 记忆增长趋势异常：快速增长（≈写入风暴）/ 增长停滞（≈空转）
+    const mems = pts.map(p => p.memTotal).filter(v => v != null);
+    if (mems.length >= 4) {
+      const slope = linRegSlope(mems);
+      if (slope > 10) {
+        alerts.push({
+          level: 'info', type: 'trend_pre_warning',
+          message: `记忆快速增长（斜率 ${slope.toFixed(1)}条/点，最近 3 次均值 ${Math.round(mems.slice(-3).reduce((a, b) => a + b, 0) / 3)} 条，初始 ${Math.round(mems[0])} 条）——可能的记忆写入风暴`,
+          agent: 'memory',
+        });
+      }
+      if (Math.abs(slope) < 0.5 && mems.length >= 6) {
+        alerts.push({
+          level: 'info', type: 'trend_pre_warning',
+          message: `记忆增长近乎停滞（斜率 ${slope.toFixed(1)}条/点），身体可能处于"空转"状态，不记新东西`,
+          agent: 'memory',
+        });
+      }
+    }
+
+    // 4. 舰队健康退化趋势：健康引擎数持续下降
+    const fleets = pts.map(p => p.fleetHealthy).filter(v => v != null);
+    if (fleets.length >= 4) {
+      const slope = linRegSlope(fleets);
+      if (slope < -0.5) {
+        alerts.push({
+          level: 'warning', type: 'trend_regression',
+          message: `健康引擎数持续下降（斜率 ${slope.toFixed(2)}/点），舰队多个引擎可能正在逐步退化`,
+          agent: 'fleet',
+        });
+      }
+    }
+
+    return alerts;
+  }
+
   // ── ③ 记忆健康（借鉴 perfecxion 的"记忆专属指标"）──
   memoryHealth() {
     const mem = this.omni && this.omni.memory;
@@ -195,7 +351,7 @@ export class Monitor {
     };
   }
 
-  // ── ④ 异常检测（延迟突增 / 吞吐骤降 / 记忆批量注入 + 核心 4 信号在 checkAlerts）──
+  // ── ④ 异常检测（延迟突增 / 吞吐骤降 / 记忆批量注入 / 熔断开启 + 趋势退化检测）──
   detectAnomalies() {
     const runs = this._tracerRuns();
     const alerts = [];
@@ -246,7 +402,18 @@ export class Monitor {
     }
     this._anomalyBase = this._currentLayers();
     this._saveAnomalyBaseline(this._anomalyBase);
-    return alerts;
+    // 趋势退化检测（渐进退化比突发尖峰更难抓：P95 爬坡/成功率漂移/记忆空转）
+    for (const ta of this._detectTrendAnomalies()) alerts.push(ta);
+    // 去重：相同 type+agent 的告警只保留一条（防趋势检测叠在点异常上产生噪声）
+    const seen = new Set();
+    const deduped = [];
+    for (const a of alerts) {
+      const k = a.type + ':' + a.agent;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      deduped.push(a);
+    }
+    return deduped;
   }
 
   // ── 统一告警 = 核心 4 信号 + 异常检测 ──
@@ -271,7 +438,7 @@ export class Monitor {
     const grid = this.statusGrid(runs);
     const lat = this.latencyStats(runs);
     const memHealth = this.memoryHealth();
-    return {
+    const s = {
       generatedAt: new Date().toISOString(),
       status: alerts.some(a => a.level === 'error') ? 'degraded'
             : alerts.some(a => a.level === 'warning') ? 'warning' : 'healthy',
@@ -296,6 +463,9 @@ export class Monitor {
       recentRuns: this.recentRuns(12),
       alerts,
     };
+    this._appendTrend(s);            // 落盘趋势点（每次快照累积时间序列，供 trends() 画随时间变化曲线）
+    s.trend = this._trendSummary();  // 内嵌精简趋势，dashboard/JSON 直接可用
+    return s;
   }
 
   _engineBreakdown(runs) {
@@ -555,6 +725,21 @@ export class Monitor {
       <span class="chip" style="border-color:#f85149;color:#f85149">失联 ${fleet.down || 0}</span>
       <span class="chip">未知 ${fleet.unknown || 0}</span>`;
 
+    // 趋势（trend baseline）：随时间变化的 sparkline（借鉴 Prometheus/Grafana 时序面板）
+    const t = this.trends();
+    const tLast = t.last || {};
+    const tSr = tLast.successRate != null ? (tLast.successRate * 100).toFixed(0) + '%' : '—';
+    const trendHtml = `
+      <div class="cards3">
+        <div class="mini"><div class="v">${ms(tLast.p95)}</div><div class="l">P95 延迟(最新)</div></div>
+        <div class="mini"><div class="v">${tSr}</div><div class="l">成功率(最新)</div></div>
+        <div class="mini"><div class="v">${tLast.memTotal == null ? '—' : tLast.memTotal}</div><div class="l">记忆总量(最新)</div></div>
+      </div>
+      <div style="margin-top:10px">${t.sparkline.p95} <span class="muted">P95 延迟趋势</span></div>
+      <div style="margin-top:8px">${t.sparkline.successRate} <span class="muted">成功率趋势</span></div>
+      <div style="margin-top:8px">${t.sparkline.memTotal} <span class="muted">记忆总量趋势</span></div>
+      <div class="muted" style="margin-top:8px">采样点: ${t.count}（每次快照自动落盘轻量指标点，跨进程延续；环形缓冲上限 ${MAX_TREND_POINTS}）</div>`;
+
     return `<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -622,6 +807,8 @@ export class Monitor {
 
   <section><h2>延迟指标 / Latency（P50/P95/P99）</h2>${latHtml}</section>
 
+  <section><h2>趋势 / Trends（随时间变化的指标基线 · sparkline）</h2>${trendHtml}</section>
+
   <section><h2>记忆状态 / Memory Health（四层 + 记忆专属指标）</h2>${memHtml}</section>
 
   <section><h2>工具管线健康 / Tool Pipeline Health（缓存 + 熔断 + 工具级延迟）</h2>${toolHtml}</section>
@@ -640,7 +827,7 @@ export class Monitor {
 
   <section><h2>运行时间线 / Recent Runs</h2><ul>${runHtml}</ul></section>
 
-  <footer>由监控器官 monitor 生成 · 复用 tracer(运行轨迹/延迟/工具级延迟) + memory(四层/记忆健康) + toolHealth(缓存/熔断) + 心跳式存活判定 + 异常检测；借鉴 LangSmith/Langfuse/CloudWatch GenAI 可观测三支柱、ClawHub 舰队健康、perfecxion 记忆专属指标、OpenLIT 工具可靠性(工具级 P50/P95/P99 与熔断开启监测)。</footer>
+  <footer>由监控器官 monitor 生成 · 复用 tracer(运行轨迹/延迟/工具级延迟) + memory(四层/记忆健康) + toolHealth(缓存/熔断) + 心跳式存活判定 + 异常检测 + 趋势基线(每次快照落盘轻量指标点，画随时间变化的 sparkline)；借鉴 LangSmith/Langfuse/CloudWatch GenAI 可观测三支柱、ClawHub 舰队健康、perfecxion 记忆专属指标、OpenLIT 工具可靠性(P50/P95/P99 与熔断开启)、Prometheus/Grafana 时序面板(histogram_quantile(p95) over time / 周环比回归)。</footer>
 </div></body></html>`;
   }
 
@@ -649,6 +836,7 @@ export class Monitor {
   health() { return this.agentHealth(); }
   alerts(agent) { return this.allAlerts(agent); }
   dashboard(snap) { return this.renderDashboard(snap); }
+  trendAnomalies() { return this._detectTrendAnomalies(); }
 }
 
 export { INACTIVE_MS, SPIKE_FACTOR };

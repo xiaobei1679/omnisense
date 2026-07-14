@@ -181,7 +181,7 @@ export async function runLink(args) {
     const sub = rest[0] || 'snapshot';
     const fn = omni.monitor[sub];
     if (typeof fn !== 'function') {
-      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth）` };
+      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies）` };
     }
     const r = await withTimeout(fn.apply(omni.monitor, rest.slice(1)), TIMEOUT_MS);
     return r;
