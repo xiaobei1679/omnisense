@@ -306,8 +306,8 @@ export class Monitor {
     this.bus.register('monitor', 'thresholdHealth', () => this.thresholdHealth());
     this.bus.register('monitor', 'thresholdAlerts', () => this.thresholdAlerts());
     this.bus.register('monitor', 'alertables', () => this.thresholdAlerts());
-    this.bus.register('monitor', 'healthScore', () => this.healthScore());
-    this.bus.register('monitor', 'score', () => this.healthScore());
+    this.bus.register('monitor', 'healthScore', p => this.healthScore(p && p.scope));
+    this.bus.register('monitor', 'score', p => this.healthScore(p && p.scope));
     this.bus.register('monitor', 'weights', () => this.weights());
     this.bus.register('monitor', 'learnings', () => this.learnings());
   }
@@ -663,8 +663,19 @@ export class Monitor {
   // 五个正交维度（权重可溯源、互不翻倍计分）：舰队存活 0.25 / 成功率(SLO error budget) 0.25 / 阈值合规 0.20 /
   //   异常 0.15 / 工具管线 0.15。每个维度 subScore∈[0,1]；无数据维度标 unknown 且不计惩罚（诚实：不为无证据扣分/伪造读数）。
   // score = round(100 * Σ weight·subScore)；等级 A≥90 / B≥75 / C≥60 / D≥40 / F<40；status 由分数映射。
-  healthScore() {
-    const runs = this._tracerRuns();
+  healthScore(scope) {
+    let runs = this._tracerRuns();
+    let engineScope = false;
+    // 多舰队差异化阈值：若 scope 是已知引擎名(llm/autopilot/local/...)，评分仅限该引擎的 runs；
+    // 若 scope 是环境 profile(如 prod/staging)，则保持全局 but 应用差异化阈值覆盖。
+    // 复用 _measureCurrent 的 scope→engineScope 判定逻辑，避免重复造轮。
+    if (scope) {
+      try {
+        const grid = this.statusGrid(runs).grid;
+        const engines = new Set(grid.map(g => g.engine));
+        if (engines.has(scope)) { runs = runs.filter(r => (r.engine || 'unknown') === scope); engineScope = true; }
+      } catch { /* noop */ }
+    }
     const total = runs.length;
     const completed = completedCount(runs);
     const successRate = total ? completed / total : 0;
@@ -689,7 +700,8 @@ export class Monitor {
     }
 
     // 维度 3：阈值合规（排除 liveness*Ms 两项，避免与维度1翻倍；over→0、warn→0.5、ok→1；na 不扣分）
-    const th = this.thresholdHealth();
+    // 多舰队差异化阈值：传 scope 使阈值项按引擎/环境 profile 差异化对比（EngineScope=过滤测量，ProfileScope=仅阈值覆盖）
+    const th = this.thresholdHealth(scope);
     let threshold = null, thresholdStatus = 'unknown';
     const scored = th.items.filter(i => i.status !== 'na' && !i.key.startsWith('liveness'));
     if (scored.length) {
@@ -765,6 +777,7 @@ export class Monitor {
       ok: true, score, grade, status, generatedAt: new Date().toISOString(),
       dimensions: dims.map(d => ({ ...d, subScore: d.subScore == null ? null : Number(d.subScore.toFixed(3)) })),
       issues: top, issueCount: issues.length,
+      ...(engineScope ? { scope } : {}),
     };
   }
 
@@ -1305,7 +1318,7 @@ export class Monitor {
     const ms = (n) => (n == null ? '—' : n + 'ms');
     const statusColor = (st) => (st === 'healthy' ? '#3fb950' : (st === 'critical' || st === 'down') ? '#f85149' : '#d29922');
     // 综合健康评分（composite health score）：把分散信号聚成一个 0-100 分 + 等级，一眼看清整体健康。
-    const hs = this.healthScore();
+    const hs = this.healthScore(scope);
     const hsColor = (st) => (st === 'healthy' ? '#3fb950' : (st === 'critical' || st === 'down') ? '#f85149' :
       (st === 'warning' || st === 'degraded') ? '#d29922' : 'var(--muted)');
     const hsRows = (hs.dimensions || []).map(d => {

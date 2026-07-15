@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 基于**实际变更规模**而非时间判定 major/minor（详见 `scripts/release.mjs` 头部说明）。
 
+## v9.4.0 — 2026-07-15 (minor)
+
+- 轻量心跳: 学习+硬骨头变更汇总
+
 ## v9.3.0 — 2026-07-15 (minor)
 
 - 轻量心跳: 学习+硬骨头变更汇总

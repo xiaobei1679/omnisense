@@ -197,7 +197,7 @@ export async function runLink(args) {
     if (typeof fn !== 'function') {
       return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score/weights/learnings，可加 --scope=<引擎/环境> 查差异化阈值）` };
     }
-    const scopedSubs = new Set(['config', 'thresholdHealth', 'thresholdAlerts', 'alertables']);
+    const scopedSubs = new Set(['config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score']);
     const callArgs = rest.filter(a => a !== sub && !a.startsWith('--config-file=') && !a.startsWith('--weights-file=') && !a.startsWith('--scope='));
     if (scope && scopedSubs.has(sub)) callArgs.unshift(scope);
     const r = await withTimeout(fn.apply(omni.monitor, callArgs), TIMEOUT_MS);
