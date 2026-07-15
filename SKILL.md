@@ -242,7 +242,7 @@ curl -s            http://127.0.0.1:8787/health
 
 用 `scripts/release.mjs` 做本地版本管理 + 自动回退，心跳自动化每小时迭代：
 
-- 每小时 minor（`MAJOR.MINOR+1.0`）；每 3 小时 major（`MAJOR+1.0.0`，minor 归零）。
+- 版本号基于**实际变更规模**判定：日常增量 iteration → minor；架构级变更（新器官/跨三层重构/≥500行或≥15文件/BREAKING）→ major。`scripts/release.mjs auto` 自动按 git diff 统计 + --notes 关键词决策（需 major 时加 `cor:major` 或 `--force-major`）。
 - 每次发布写 `VERSION`+`package.json`、追加 `CHANGELOG.md`/`versions.json`、打 git tag、本地 commit。**绝不推送**。
 - `node scripts/release.mjs list` 看版本；`node scripts/release.mjs rollback vX.Y.Z` 非破坏式回退（历史保留）。
 

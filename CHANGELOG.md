@@ -2,7 +2,11 @@
 
 所有版本均为**本地提交 + git tag**，**未推送**（推送需用户明确下令）。
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
-版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
+版本规则: 基于**实际变更规模**而非时间判定 major/minor（详见 `scripts/release.mjs` 头部说明）。
+
+## v9.3.0 — 2026-07-15 (minor)
+
+- 轻量心跳: 学习+硬骨头变更汇总
 
 ## v9.2.0 — 2026-07-15 (minor)
 
