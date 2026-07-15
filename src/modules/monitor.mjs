@@ -266,8 +266,22 @@ export class Monitor {
     this._resolveWeights(this._optsWeights, weightFileObj);
     // 记忆增长基线：内存缓存（检测更可靠、测试无文件污染），构造时若文件已有则载入以便跨进程延续。
     const seeded = this._loadMetrics();
-    this._baseline = seeded._memBaseline || null;        // 稳定基线：供 memoryHealth.growth（自首次观察起的累计增长，仅首次建立）
-    this._anomalyBase = seeded._anomalyBaseline || null; // 滑动基线：供 detectAnomalies 批量注入检测（每次检查后更新）
+    // ╔══════════════════════════════════════════════════════════╗
+    // ║  ⚠️ 双基线 · 历史踩坑（v4.5.0 修复，后人勿改）        ║
+    // ╠══════════════════════════════════════════════════════════╣
+    // ║  _baseline（字段 1）:                                    ║
+    // ║    稳定基线 → 仅首次 memoryHealth() 时建立，永不覆盖。   ║
+    // ║    用途：memoryHealth.growth 展示"自首次观察累计增长"。  ║
+    // ║                                                          ║
+    // ║  _anomalyBase（字段 2）:                                 ║
+    // ║    滑动基线 → 每次 detectAnomalies() 后覆盖。           ║
+    // ║    用途：memory_bulk_injection 检测，对比 current        ║
+    // ║          vs 上次异常检查时的层大小。                     ║
+    // ╚══════════════════════════════════════════════════════════╝
+    // 若误把 _anomalyBase 当 _baseline 用（或每次覆盖 _baseline），
+    // 会导致 growth 恒为 0 / 批量注入检测永不触发（v4.5.0 已踩坑修复）。
+    this._baseline = seeded._memBaseline || null;        // [稳定] 保存不动
+    this._anomalyBase = seeded._anomalyBaseline || null; // [滑动] 每次检测后更新
     this._trendPoints = Array.isArray(seeded._trend) ? seeded._trend : []; // 趋势点：供 trends() 时间序列（跨进程延续）
     this._wire();
   }
@@ -295,6 +309,7 @@ export class Monitor {
     this.bus.register('monitor', 'healthScore', () => this.healthScore());
     this.bus.register('monitor', 'score', () => this.healthScore());
     this.bus.register('monitor', 'weights', () => this.weights());
+    this.bus.register('monitor', 'learnings', () => this.learnings());
   }
 
   // ── 阈值配置解析 + 观测 ──
@@ -395,6 +410,40 @@ export class Monitor {
     const overrides = Object.keys(items).filter(k => items[k].overridden);
     return { ok: true, weights: items, overrides, count: overrides.length, sum: Number(total.toFixed(4)),
       weightFile: this._weightFile || null, weightFileLoaded: this._weightFileLoaded };
+  }
+
+  // ── 学习子系统观测（learnings）：读取 learning/memory.json 展示当前技法积累状态 ──
+  // 把学习/子系统（原「知微」多模态感知原型）纳入 monitor 可观测范围，使"身体从外部项目学了什么"
+  // 能一眼看到。这是"可观测三支柱"中反馈回路（feedback loop）的体现——学习不应是独立活动，
+  // 而应纳入身体的可观测性体系，让运维/用户知道"身体在持续成长什么"（借鉴 2026 Agent 可观测性
+  // 最佳实践中"feedback loops — signal back into the system"思想：arihai.ai/blog/ai-agent-observability）。
+  // 学习文件路径通过环境变量 ZW_MEMORY_FILE 可配，默认指向 learning/memory.json。
+  learnings() {
+    const learnFile = process.env.ZW_MEMORY_FILE
+      || join(process.cwd(), 'learning', 'memory.json');
+    let count = 0, learnings = [], sourceBreakdown = {}, topicBreakdown = {}, lastLearned = null;
+    try {
+      if (existsSync(learnFile)) {
+        const raw = JSON.parse(readFileSync(learnFile, 'utf8'));
+        learnings = Array.isArray(raw.learnings) ? raw.learnings : [];
+        count = learnings.length;
+        // 按来源分解（preset / git-clone / local-sources）
+        for (const l of learnings) {
+          const src = l.source || 'unknown';
+          sourceBreakdown[src] = (sourceBreakdown[src] || 0) + 1;
+          const tp = l.topic || 'untitled';
+          topicBreakdown[tp] = (topicBreakdown[tp] || 0) + 1;
+          const ft = l.fetchedAt;
+          if (ft && (!lastLearned || ft > lastLearned)) lastLearned = ft;
+        }
+        // 累计实体/边/信念数（memory.json 的整体统计）
+        const triples = Array.isArray(raw.triples) ? raw.triples : [];
+        const beliefs = Array.isArray(raw.beliefs) ? raw.beliefs : [];
+        const entities = Array.isArray(raw.entities) ? raw.entities : [];
+        return { ok: true, count, learnFile, lastLearned, sourceBreakdown, topicBreakdown, triples: triples.length, beliefs: beliefs.length, entities: entities.length, learnings: learnings.map(l => ({ repo: l.repo, topic: l.topic, source: l.source, fetchedAt: l.fetchedAt })) };
+      }
+    } catch { /* 文件损坏/不存在静默降级 */ }
+    return { ok: true, count: 0, learnFile, lastLearned: null, sourceBreakdown: {}, topicBreakdown: {}, triples: 0, beliefs: 0, entities: 0, learnings: [] };
   }
 
   // ── 阈值健康（threshold health）：把"当前测量值"与生效阈值并排对比，红黄绿着色 ──
@@ -969,7 +1018,7 @@ export class Monitor {
     const base = this._readBaseline();
     const growth = {};
     for (const k of ['memory', 'rule', 'skill', 'knowledge']) growth[k] = base ? (layers[k] - (base[k] || 0)) : 0;
-    if (!this._baseline) this._saveBaseline(layers); // 仅首次建立稳定基线（不每次覆盖，否则 growth 恒为 0）
+    if (!this._baseline) this._saveBaseline(layers); // 稳定基线：仅首次建立（绝不覆盖，否则 growth 恒为 0，v4.5.0 已踩坑）
     return {
       layers, skillUtilization: Number(skillUtil.toFixed(2)), avgConfidence: avgConf,
       lowConfidence: lowConf, staleCount: stale, staleWindowDays: Math.round(staleMs / 86400000), growth, baseline: base,
@@ -1026,7 +1075,7 @@ export class Monitor {
       }
     }
     this._anomalyBase = this._currentLayers();
-    this._saveAnomalyBaseline(this._anomalyBase);
+    this._saveAnomalyBaseline(this._anomalyBase); // 滑动基线：每次检测后覆盖（正常行为），不同于 _baseline（稳定不覆盖）
     // 趋势退化检测（渐进退化比突发尖峰更难抓：P95 爬坡/成功率漂移/记忆空转）
     for (const ta of this._detectTrendAnomalies()) alerts.push(ta);
     // 去重：相同 type+agent 的告警只保留一条（防趋势检测叠在点异常上产生噪声）

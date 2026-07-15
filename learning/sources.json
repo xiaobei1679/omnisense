@@ -44,5 +44,15 @@
     "topic": "真正去语音识别 ASR（耳/听：参考实现，与 whisper.cpp 互补）",
     "repo": "https://github.com/openai/whisper",
     "mapsTo": "listen"
+  },
+  {
+    "topic": "真正去基于执行轨迹做行为回归门禁（脑/思：trace→regression→报警，反馈闭环）",
+    "repo": "https://github.com/sauravvenkat/forkline",
+    "mapsTo": "think"
+  },
+  {
+    "topic": "真正去构建 Agent 可观测性反馈回路（脑/思：trace→eval→alert→improve 闭环，学习回路与可观测三支柱的反馈机制）",
+    "repo": "https://github.com/BrainTrust-foundation/braintrust",
+    "mapsTo": "think"
   }
 ]

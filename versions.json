@@ -229,5 +229,12 @@
     "date": "2026-07-15T00:30:35.659Z",
     "tag": "v9.1.0",
     "notes": "monitor 多舰队差异化阈值(scoped thresholds): 阈值配置 JSON 文件支持 scopes 按引擎/环境 profile 分组覆盖；config/thresholdHealth/thresholdAlerts 支持 --scope（引擎 scope 仅测该引擎 runs、环境 profile scope 仅覆盖阈值，不改测量对象）；优先级 opts>env>scope>file>default，来源诚实标注 source:'scope'；config 回显当前 scope 并列出 availableScopes，dashboard 展示当前 scope 与可用 scope 列表。内核 monitor.mjs+cli.mjs / 桥接 omnisense-link.mjs 三层一致。学习子系统 learner.mjs 新增 observability 本地学习源（身体从自身监控器官蒸馏多舰队可观测性模式，离线可用），满足三层同迭代。借鉴 100+ Agent per-Agent-type 差异化阈值 / kaxo.io per-agent 可观测 / Prometheus 按环境 tier 分级告警。"
+  },
+  {
+    "version": "9.2.0",
+    "type": "minor",
+    "date": "2026-07-15T01:28:36.630Z",
+    "tag": "v9.2.0",
+    "notes": "monitor 新增学习子系统观测 learnings（第22个总线方法）+ CLI learn 命令触发学习循环 + workspace 桥接 learnings/learn 同步 + learning 新增 forkline/braintrust 来源（trace→regression 反馈闭环 + 可观测反馈回路）+ 三层同迭代（内核 monitor+cli / workspace omnisense-link / learning 心跳+源扩展）。借鉴2026 Agent 可观测性 feedback loop 思想(arahi.ai/blog/ai-agent-observability)，补齐可观测三支柱中的反馈回路支柱。"
   }
 ]

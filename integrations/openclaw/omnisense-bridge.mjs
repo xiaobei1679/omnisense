@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 
 // 执行一个目标：先感知环境、再思考、最后用手把结果落盘（默认记到长期记忆）。
 // 离线可跑、确定性、不触网（除非目标本身要求联网，如 web_fetch）。
-export async function runGoal(goal, { useLLM = false, remember = true, allowShell = false } = {}) {
+export async function runGoal(goal, { useLLM = false, remember = true } = {}) {
   const omni = OmniSense.create();
   const body = omni.body;
   const trace = {};
@@ -36,8 +36,7 @@ async function main() {
   const useLLM = argv.includes('--llm');
   const goal = argv.filter(a => !a.startsWith('--')).join(' ').trim();
   if (!goal) {
-    process.stdout.write(JSON.stringify({ ok: false, error: '缺少目标参数' }) + '\n');
-    process.exit(1);
+    process.stdout.write(JSON.stringify({ ok: false, error: '缺少目标参数' }) + '\n', () => process.exit(1));
   }
   try {
     const out = await runGoal(goal, { useLLM });

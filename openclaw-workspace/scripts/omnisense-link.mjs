@@ -74,7 +74,7 @@ export async function runLink(args) {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     return {
       ok: true,
-      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear|--persist-file=<path>|--persist-off|--flush|--clear-persist] | monitor [--config-file=<path>] [--weights-file=<path>] [--scope=<name>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score|weights] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear]',
+      usage: 'omnisense-link <organ> <args...> | goal "<text>" | list | describe | card | route <organ.method> [args...] | dispatch "<target>" | autopilot [ticks] [--no-dynamic|--dynamic] [--trace|--no-trace] | live [ticks] [--no-autopilot|--no-dynamic|--dynamic] [--trace|--no-trace] | watch [ticks] [--autopilot|--no-autopilot|--no-dynamic|--dynamic|--remember|--think|--agent] [--trace|--no-trace] | cache [--clear|--persist-file=<path>|--persist-off|--flush|--clear-persist] | monitor [--config-file=<path>] [--weights-file=<path>] [--scope=<name>] [snapshot|health|alerts|dashboard|recordMetric|checkAlerts|toolHealth|trends|trendAnomalies|config|thresholdHealth|thresholdAlerts|alertables|healthScore|score|weights|learnings] | trace [--summary|--list|--get=<id>|--diff=<a>,<b>|--find="<goal>"|--export=<file|--export-format=json|jsonl|otlp>|--baseline=<id>|--regression|--clear] | learn',
       organs: listOrgans(),
     };
   }
@@ -195,13 +195,32 @@ export async function runLink(args) {
     const sub = rest.find(a => !a.startsWith('--')) || 'snapshot';
     const fn = omni.monitor[sub];
     if (typeof fn !== 'function') {
-      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score/weights，可加 --scope=<引擎/环境> 查差异化阈值）` };
+      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score/weights/learnings，可加 --scope=<引擎/环境> 查差异化阈值）` };
     }
     const scopedSubs = new Set(['config', 'thresholdHealth', 'thresholdAlerts', 'alertables']);
     const callArgs = rest.filter(a => a !== sub && !a.startsWith('--config-file=') && !a.startsWith('--weights-file=') && !a.startsWith('--scope='));
     if (scope && scopedSubs.has(sub)) callArgs.unshift(scope);
     const r = await withTimeout(fn.apply(omni.monitor, callArgs), TIMEOUT_MS);
     return r;
+  }
+  if (cmd === 'learn') {
+    // 触发学习子系统一轮学习循环（跑 learning/src/heartbeat-cron.mjs），
+    // 工作区侧驱动身体的"学习"能力，沉淀技法到 learning/memory.json。
+    // 可通过 omnisense-link monitor learnings 观测学习成果。
+    const learnDir = join(resolve(import.meta.url ? '' : process.cwd()), '..', '..', 'learning');
+    const cronPath = join(learnDir, 'src', 'heartbeat-cron.mjs');
+    try {
+      const { execFileSync } = await import('node:child_process');
+      const out = execFileSync(process.execPath, [cronPath], {
+        cwd: learnDir,
+        encoding: 'utf8',
+        timeout: 120000,
+        maxBuffer: 1024 * 1024,
+      });
+      return { ok: true, output: out.trim() };
+    } catch (e) {
+      return { ok: false, error: e.message, stderr: e.stderr ? String(e.stderr).trim() : '' };
+    }
   }
   // 其余默认当作器官调用：omnisense-link hand calc '{"expression":"2+2"}'
   const organ = cmd;

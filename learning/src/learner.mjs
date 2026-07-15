@@ -7,11 +7,12 @@
 //   3) 本地回退：读取本地已存在的项目目录（如已安装的 skill、本地框架仓库）→ 真·读真·蒸馏
 //   4) 都失败 → 抛错，由心跳优雅降级（不阻断主闭环）
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
 const CACHE = '.learn_cache';
+const HOME = homedir();
 
 // 策展：四个能力 → 可公开克隆的开源项目（无 API Key）。真实部署时心跳会真去 clone。
 export const CURATED = [
@@ -22,14 +23,13 @@ export const CURATED = [
   // 本轮常驻迭代（monitor 多舰队差异化阈值）的诚实延伸：身体从自身监控器官蒸馏 observability 模式，
   // 让"学习子系统"也能离线消费 OmniSense 的监控最佳实践（含多 fleet 差异化阈值/红黄绿着色/Alertmanager 告警）。
   // 读 OmniSense 仓库根的 README/SKILL（已在 monitor 章节记录上述能力），无需联网即可真蒸馏。
-  { topic: '可观测性 / 多舰队差异化监控（身体从自身监控器官蒸馏 observability 模式）', repo: 'omnisense-monitor', localDir: resolve(process.env.ZW_OMNI_DIR || 'C:/Users/Administrator/Desktop/OmniSense'), mapsTo: 'observe' },
+  { topic: '可观测性 / 多舰队差异化监控（身体从自身监控器官蒸馏 observability 模式）', repo: 'omnisense-monitor', localDir: resolve(process.env.ZW_OMNI_DIR || join(HOME, 'Desktop', 'OmniSense')), mapsTo: 'observe' },
 ];
 
 // 本地回退源：沙箱网络受限时的真实学习材料（都是本地已存在的真实项目，可读可蒸馏）。
 // 路径可经环境变量 ZW_LOCAL_DIR 覆盖，避免硬编码导致他机"静默失败"。
-const HOME = homedir();
 const LOCAL_DIR = process.env.ZW_LOCAL_DIR
-  || 'C:/Users/Administrator/Desktop/QClaw-GitHub-Repo_20260708';
+  || join(HOME, 'Desktop', 'QClaw-GitHub-Repo_20260708');
 export const LOCAL_FALLBACK = [
   {
     topic: '多智能体框架本身的感知-推理-行动架构（脑/嘴/系统）',
@@ -59,7 +59,20 @@ export function allSources() {
 }
 
 // 抽取"技法表述"的特征词（真实方法/技术描述，而非标题或客套）
-const TECH_RE = /(stage|阶段|RIA|提取|验证|框架|原则|案例|反例|术语|蒸馏|reason|infer|extract|detect|recogni[sz]e|cluster|classif|tokeni[sz]e|embed|ontology|discourse|dialogue|conversation|percept|memory|belief|method|approach|technique|we (use|propose|adopt|leverage|introduce))/i;
+const TECH_RE = /(stage|阶段|RIA|提取|验证|框架|原则|案例|反例|术语|蒸馏|reason|infer|detect|recogni[sz]e|cluster|classif|tokeni[sz]e|embed|ontology|discourse|dialogue|conversation|percept|memory|belief|method|approach|technique|we (use|propose|adopt|leverage|introduce)|supports|features|capable|provides|enables|allows|using (to|for)|based on|built on|wraps|integrates|generat|synthesi[sz]|transcri[bd]|encode|decode|segment|normaliz[ei]|extract|augment|fine-?tun|pre-?train|inferenc|pipelines|models|architecture|vocabulary|language model|endpoint|REST|API|async|streaming|callback|queue|batch|parallel|chunk|split|merge|filter|mapper|reducer|pipeline|middleware|plugin|extension|interface|protocol|schema|serializ|deserializ|configur|template|scaffold|boilerplate|hybrid|cluster)/
+function extractCodeExamples(corpus) {
+  const examples = [];
+  const re = /```(?:js|javascript|python|ts|typescript|bash|shell|json|yaml|go|rust|mjs)?\s*\n([\s\S]*?)```/g;
+  let m;
+  while ((m = re.exec(corpus)) !== null) {
+    const first = m[1].split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('//') && !l.startsWith('#') && !l.startsWith('/*'))[0];
+    if (first && first.length > 5 && first.length < 200) {
+      examples.push(`代码示例: ${first.slice(0, 160)}`);
+      if (examples.length >= 4) break;
+    }
+  }
+  return examples;
+}
 
 function stripNoise(text) {
   return text
@@ -69,31 +82,59 @@ function stripNoise(text) {
     .replace(/https?:\/\/\S+/g, '');            // 删除裸 URL
 }
 
-// 从一组文档文本里抽取"像技法"的实质性表述行
+// 从一组文档文本里抽取"像技法"的实质性表述行 + 代码示例
 function distillTechniques(corpus) {
   const clean = stripNoise(corpus);
-  return [...new Set(
+  const codeExamples = extractCodeExamples(corpus);
+  // 抽取含技术特征的实质行（保留特征列表行，仅排除标题和引用）
+  const lines = [...new Set(
     clean.split('\n').map((l) => l.trim())
       .filter((l) => {
-        if (l.length < 22 || l.length > 160) return false;
-        if (/^\s*[-*#>\d]/.test(l)) return false;       // 列表/标题符号噪音
+        if (l.length < 22 || l.length > 180) return false;
+        if (/^\s*#/.test(l)) return false;                  // 仅排除标题行（# heading），保留 - /* 特征列表
+        if (/^>/.test(l)) return false;                     // 排除引用块
         if (/shields\.io|badge|license|copyright|project gutenberg/i.test(l)) return false;
         return TECH_RE.test(l);
       })
-  )].slice(0, 6);
+      .map((l) => l.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '')) // 清除列表标记
+  )].slice(0, 8);
+  return [...lines, ...codeExamples].slice(0, 10);
 }
 
-// 读取一个目录里的候选文档
+// 读取一个目录里的候选文档（广度扫描：README/SKILL + docs/ + examples/ + 深层文档）
 function readDocs(dir) {
   const docs = [];
   const candidates = [
     'README.md', 'readme.md', 'README.rst', 'SKILL.md', 'skill.md',
     'doc/README.md', 'docs/README.md', 'methodology/00-overview.md',
     'ROADMAP.md', 'docs/LLM_RESILIENCE.md',
+    'GETTING_STARTED.md', 'CONTRIBUTING.md', 'EXAMPLES.md',
   ];
   for (const f of candidates) {
     const p = join(dir, f);
     if (existsSync(p)) docs.push(readFileSync(p, 'utf8'));
+  }
+  // 扫描 docs/ 下全部 .md 文件（非递归，避免海量噪音）
+  const docsDir = join(dir, 'docs');
+  if (existsSync(docsDir)) {
+    try {
+      for (const f of readdirSync(docsDir)) {
+        if (f.endsWith('.md') && docsDir.length + f.length < 200) {
+          try { docs.push(readFileSync(join(docsDir, f), 'utf8')); } catch { /* 跳过不可读 */ }
+        }
+      }
+    } catch { /* 扫描失败静默 */ }
+  }
+  // 扫描 examples/ 下文档（常用于展示框架用法）
+  const exDir = join(dir, 'examples');
+  if (existsSync(exDir)) {
+    try {
+      for (const f of readdirSync(exDir)) {
+        if (f.endsWith('.md') || f.includes('.example.')) {
+          try { docs.push(readFileSync(join(exDir, f), 'utf8')); } catch { /* 跳过不可读 */ }
+        }
+      }
+    } catch { /* 扫描失败静默 */ }
   }
   return docs;
 }

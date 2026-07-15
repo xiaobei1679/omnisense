@@ -1,0 +1,17 @@
+{
+  "name": "omnisense-learning",
+  "version": "0.1.0",
+  "description": "OmniSense 学习子系统——多模态感知技法持续蒸馏（每小时从开源项目学新技法，零 API Key）",
+  "type": "module",
+  "main": "src/heartbeat-cron.mjs",
+  "scripts": {
+    "start": "node src/heartbeat-cron.mjs",
+    "learn": "node src/heartbeat-cron.mjs",
+    "demo": "node src/index.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["omnisense", "learning", "distillation", "multimodal", "heartbeat"],
+  "license": "MIT"
+}
