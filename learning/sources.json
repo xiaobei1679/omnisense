@@ -1,0 +1,48 @@
+[
+  {
+    "topic": "OmniSense 感知系统本体（眼/耳/嘴/脑/感知五模块架构 + 免 key 框架网关机制）",
+    "repo": "",
+    "localDir": "C:/Users/Administrator/.qclaw/workspace/skills/omni-sense",
+    "mapsTo": "think"
+  },
+  {
+    "topic": "真正去下载视频并抽帧（眼/视频感知）",
+    "repo": "https://github.com/yt-dlp/yt-dlp",
+    "mapsTo": "see"
+  },
+  {
+    "topic": "真正去提取网页正文（眼/真实看网站）",
+    "repo": "https://github.com/mozilla/readability",
+    "mapsTo": "see"
+  },
+  {
+    "topic": "真正去本地语音转写（耳/听，omni-sense 诚实边界指定的本地引擎）",
+    "repo": "https://github.com/ggerganov/whisper.cpp",
+    "mapsTo": "listen"
+  },
+  {
+    "topic": "真正去编排自主思考/推理循环（脑/思）",
+    "repo": "https://github.com/yoheinakajima/babyagi",
+    "mapsTo": "think"
+  },
+  {
+    "topic": "真正去本地语音合成/说（嘴/说：填补当前空白模态，XTTS 多语种 TTS 引擎）",
+    "repo": "https://github.com/coqui-ai/TTS",
+    "mapsTo": "talk"
+  },
+  {
+    "topic": "真正去构建 AI 记忆层（感知系统记忆中枢/回想/遗忘）",
+    "repo": "https://github.com/mem0ai/mem0",
+    "mapsTo": "think"
+  },
+  {
+    "topic": "真正去图片 OCR 抽取文字（眼/看图识字）",
+    "repo": "https://github.com/naptha/tesseract.js",
+    "mapsTo": "see"
+  },
+  {
+    "topic": "真正去语音识别 ASR（耳/听：参考实现，与 whisper.cpp 互补）",
+    "repo": "https://github.com/openai/whisper",
+    "mapsTo": "listen"
+  }
+]

@@ -41,3 +41,9 @@ Thumbs.db
 .vscode/
 dashboard.html
 .omni-dashboard.html
+
+# ── 学习子系统运行时态（知微 ZhiWei 原型：克隆缓存/记忆/样例媒体，不进仓库）──
+learning/.learn_cache/
+learning/memory.json
+learning/sample.png
+learning/sample.wav

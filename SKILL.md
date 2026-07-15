@@ -112,8 +112,11 @@ node "{SKILL_DIR}/src/cli.mjs" monitor --anomalies  # 异常检测(含熔断开�
 node "{SKILL_DIR}/src/cli.mjs" monitor --config     # 查看/校验当前告警阈值(值/来源/环境变量名)
 OMNI_MONITOR_SPIKE_FACTOR=3 node "{SKILL_DIR}/src/cli.mjs" monitor --config  # 环境变量覆盖延迟突增阈值
 node "{SKILL_DIR}/src/cli.mjs" monitor --config-file=./my-monitor.json  # 从 JSON 文件加载阈值(Observability-as-Code)
+node "{SKILL_DIR}/src/cli.mjs" monitor --config-file=./my-monitor.json --scope=prod --config  # 多舰队差异化阈值(按 prod profile 查询，来源标 scope)
 node "{SKILL_DIR}/src/cli.mjs" monitor --threshold-health  # 当前测量值 vs 阈值 红黄绿着色(ok/warn/over/na)
+node "{SKILL_DIR}/src/cli.mjs" monitor --scope=llm --threshold-health  # 按引擎 scope 过滤测量+差异化阈值(engineScope)
 node "{SKILL_DIR}/src/cli.mjs" monitor --threshold-alerts  # 可推送告警清单(Alertmanager 形状: fingerprint+labels{severity}+annotations)
+node "{SKILL_DIR}/src/cli.mjs" monitor --scope=prod --threshold-alerts  # 多舰队差异化告警(按 prod profile 产出)
 node "{SKILL_DIR}/src/cli.mjs" monitor --score            # 综合健康评分(0-100 加权 5 维度 + 等级 A/B/C/D/F)
 node "{SKILL_DIR}/src/cli.mjs" monitor --weights          # 综合健康评分维度权重(值/归一化/来源，可用 OMNI_MONITOR_WEIGHT_* 或 JSON 文件覆盖)
 node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML 仪表盘(含阈值配置/健康评分区块)
@@ -121,8 +124,11 @@ node "{SKILL_DIR}/src/cli.mjs" dashboard            # 生成零依赖静态 HTML
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
 node openclaw-workspace/scripts/omnisense-link.mjs monitor config
 node openclaw-workspace/scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json config  # 跨层从 JSON 文件加载阈值
+node openclaw-workspace/scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json --scope=prod config  # 跨层多舰队差异化阈值(按 prod profile)
 node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdHealth  # 跨层当前值 vs 阈值 红黄绿着色
+node openclaw-workspace/scripts/omnisense-link.mjs monitor --scope=llm thresholdHealth  # 跨层按引擎 scope 过滤测量+差异化阈值
 node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdAlerts  # 跨层产出 Alertmanager 形状告警(可直推外部告警系统)
+node openclaw-workspace/scripts/omnisense-link.mjs monitor --scope=prod thresholdAlerts  # 跨层多舰队差异化告警
 node openclaw-workspace/scripts/omnisense-link.mjs monitor healthScore     # 跨层综合健康评分(score/grade/status/dimensions)
 node openclaw-workspace/scripts/omnisense-link.mjs monitor score           # 别名: 跨层综合健康评分
 node openclaw-workspace/scripts/omnisense-link.mjs monitor weights          # 跨层查询综合健康评分维度权重(值/归一化/来源)

@@ -580,6 +580,7 @@ node openclaw-workspace/scripts/omnisense-link.mjs cache --clear
 - **可视化仪表盘 `dashboard`**：零依赖静态 HTML（驾驶舱风格），含器官/舰队健康/延迟趋势 sparkline/记忆健康/**工具管线健康**/活动/告警/运行时间线/阈值配置（当前值 vs 阈值 红黄绿 + **可推送告警清单**）＋ **综合健康评分区块（0-100 分 + 等级 A/B/C/D/F + 状态色 + Top 问题清单；5 维度权重可经 `OMNI_MONITOR_WEIGHT_*` 或 JSON 文件覆盖）**。
 - **可推送告警清单 `monitor --threshold-alerts`（Alertmanager-ready）**：把"超标/关注"的阈值项转成可直接提交 Prometheus Alertmanager 的告警 payload——`labels{alertname,severity,monitor,key,status}` + `annotations{summary,description,current,threshold,source}` + 稳定 `fingerprint`（同一 key 跨运行稳定，用于告警去重聚合）；状态映射 `over→critical`、`warn→warning`、`ok/na→none`。离线不主动外发，仅产出形状一致的 payload，接入方直接 `POST /api/v2/alerts` 即可（借鉴 Prometheus Alertmanager 告警数据模型）。
 - **综合健康评分 `monitor --score` / `monitor --health-score`（本轮新增常驻迭代能力）**：把分散的观测信号聚合成**一个 0-100 综合健康分 + 等级(A/B/C/D/F)**，一眼看清"整体健康度"——5 个加权维度：**Liveness 存活(0.25)**（是否有近期活跃运行）＋ **Reliability 可靠性(0.25)**（SLO 成功率，取自 tracer 运行轨迹）＋ **Threshold 阈值合规(0.20)**（当前值 vs 阈值，不含 liveness*Ms 避免双重计数）＋ **Anomalies 异常(0.15)**（异常数/严重度）＋ **Tool 工具管线(0.15)**（缓存命中/熔断状态/工具延迟分布，任一熔断开启即 0）。`score = round(100 × Σ weight·subScore)`，等级 A≥90/B≥75/C≥60/D≥40/F<40，状态 ok/warning/degraded/critical 映射，并聚合 Top 问题清单（按严重度排序，最多 12 条，na/未知维度绝不伪造读数）；无运行轨迹时 `score=null` + 等级 `N/A` + 状态 `unknown`（诚实降级）。借鉴 Nobl9 **Composite SLOs**（加权 rollup、非等权重：https://www.nobl9.com/features/composite-service-level-objectives · https://docs.nobl9.com/guides/slo-guides/composite-slos-use-cases）与 New Relic/Vortex IQ **Operational Health Score**（0-100 加权：Apdex/错误率/事件数/SLO 合规度：https://www.newrelic.com/blog/nerdlog/operational-health-score）以及 dev.to **Output Quality Score**（Agent 质量加权 + green/yellow/red + 可配权重）。
+- **多舰队差异化阈值 `--scope`（本轮新增常驻迭代能力）**：同一份监控要为不同「引擎(llm/autopilot/local/…)」或不同「环境 profile(prod/staging/…)」用**不同告警阈值**——阈值配置 JSON 文件可携带 `scopes` 映射（`{ prod: { inactiveMs: 1000 }, llm: { inactiveMs: 1000 } }`），按 scope 分组覆盖。`config` / `thresholdHealth` / `thresholdAlerts` 均接受 `--scope=<name>`：`scope` 是已知引擎名时测量**仅限该引擎的 runs**（engineScope=true，实现"按引擎分组"的延迟/存活差异化观测）；`scope` 是环境 profile 时测量保持全局、仅应用该 scope 的阈值覆盖（profile 只改变"用什么阈值判"，不改变"谁来测"）。优先级 **opts > env > scope > file > default**，来源诚实标注 `source:'scope'`；`config()` 回显当前 `scope` 并列出 `availableScopes`（便于"同一份监控、不同 fleet 不同告警阈值"）。`--scope` 同享可推送告警清单与红黄绿着色；`dashboard` 展示当前 scope 与可用 scope 列表。
 
 设计借鉴（思想/模式，非代码，诚实可溯源）：
 - LangSmith / Langfuse / CloudWatch GenAI 可观测三支柱（指标+追踪+日志）：https://docs.smith.langchain.com/ · https://langfuse.com/docs
@@ -591,6 +592,7 @@ node openclaw-workspace/scripts/omnisense-link.mjs cache --clear
 - Nobl9 Composite SLOs（加权 rollup、非等权重，多 SLO 合成单一健康度）：https://www.nobl9.com/features/composite-service-level-objectives · https://docs.nobl9.com/guides/slo-guides/composite-slos-use-cases
 - New Relic / Vortex IQ Operational Health Score（0-100 加权健康分：Apdex/错误率/事件数/SLO 合规度）：https://www.newrelic.com/blog/nerdlog/operational-health-score
 - dev.to Output Quality Score（Agent 输出质量加权 + green/yellow/red + 可配权重）：https://dev.to/going_gitizen/building-an-ai-agent-quality-score-for-better-observability-53ac
+- **多舰队差异化阈值（per-engine / per-profile 分组）**：100+ Agent 生产中不同 Agent 类型需要不同 P95 延迟阈值（per-Agent-type 阈值，而非全局一刀切：https://www.askmarvin.ai/blog/monitoring-100-agents）；kaxo.io 的 per-agent 可观测性（每个 agent 独立阈值/仪表盘：https://www.kaxo.io/）；Prometheus/Grafana 告警分级（critical/warning 按环境 tier 区分：https://prometheus.io/docs/alerting/latest/notification_examples/）。阈值按 fleet/profile 分组即"Observability-as-Code 的多舰队实例化"——同一套监控配置，不同 fleet 用不同阈值，且每个阈值变更都是一次可追溯的 PR（https://grafana.com/docs/grafana/next/alerting/set-up/provision-alerting-resources/file-provisioning/）。
 
 ```bash
 node src/cli.mjs monitor --summary           # 统一状态快照
@@ -600,8 +602,11 @@ node src/cli.mjs monitor --grid              # 引擎状态网格（颜色化）
 node src/cli.mjs monitor --config            # 生效的告警阈值（值/来源/环境变量名，可用 OMNI_MONITOR_* 覆盖）
 OMNI_MONITOR_SPIKE_FACTOR=3 node src/cli.mjs monitor --config   # 环境变量覆盖示例（source 变 env）
 node src/cli.mjs monitor --config-file=./my-monitor.json   # 从 JSON 配置加载阈值（Observability-as-Code，优先级 opts>env>file>default）
+node src/cli.mjs monitor --config-file=./my-monitor.json --scope=prod --config   # 多舰队差异化阈值：按 prod profile 查询生效阈值（来源标 scope）
 node src/cli.mjs monitor --threshold-health   # 当前测量值 vs 阈值 红黄绿着色（ok/warn/over/na，一眼看出哪项告警阈值被踩）
+node src/cli.mjs monitor --scope=llm --threshold-health   # 按引擎 scope 过滤测量（仅 llm 引擎）+ 应用 llm scope 差异化阈值
 node src/cli.mjs monitor --threshold-alerts   # 可推送告警清单（Alertmanager 形状：fingerprint+labels{severity}+annotations）
+node src/cli.mjs monitor --scope=prod --threshold-alerts   # 多舰队差异化告警：按 prod profile 产出该舰队的可推送告警
 node src/cli.mjs monitor --score              # 综合健康评分（0-100 加权汇总 Liveness/成功率/阈值/异常/工具管线 5 维度 + 等级 A/B/C/D/F）
 node src/cli.mjs monitor --weights            # 综合健康评分维度权重（值/归一化/来源，可用 OMNI_MONITOR_WEIGHT_* 或 ~/.omnisense/monitor-weights.json 覆盖）
 OMNI_MONITOR_WEIGHT_TOOL=0.4 node src/cli.mjs monitor --weights   # 环境变量覆盖维度权重示例（source 变 env）
@@ -612,8 +617,11 @@ node openclaw-workspace/scripts/omnisense-link.mjs monitor snapshot
 node openclaw-workspace/scripts/omnisense-link.mjs monitor toolHealth
 node openclaw-workspace/scripts/omnisense-link.mjs monitor config     # 跨层查询生效告警阈值
 node openclaw-workspace/scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json config  # 跨层从 JSON 文件加载阈值
+node openclaw-workspace/scripts/omnisense-link.mjs monitor --config-file=./my-monitor.json --scope=prod config  # 跨层多舰队差异化阈值（按 prod profile）
 node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdHealth  # 跨层当前值 vs 阈值 红黄绿着色
+node openclaw-workspace/scripts/omnisense-link.mjs monitor --scope=llm thresholdHealth  # 跨层按引擎 scope 过滤测量 + 差异化阈值
 node openclaw-workspace/scripts/omnisense-link.mjs monitor thresholdAlerts  # 跨层产出 Alertmanager 形状告警（可直推外部告警系统）
+node openclaw-workspace/scripts/omnisense-link.mjs monitor --scope=prod thresholdAlerts  # 跨层多舰队差异化告警
 node openclaw-workspace/scripts/omnisense-link.mjs monitor healthScore  # 跨层综合健康评分（同内核 healthScore：score/grade/status/dimensions）
 node openclaw-workspace/scripts/omnisense-link.mjs monitor score        # 别名：跨层综合健康评分
 node openclaw-workspace/scripts/omnisense-link.mjs monitor weights     # 跨层查询综合健康评分维度权重

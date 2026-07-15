@@ -321,6 +321,8 @@ async function main() {
       // --weights-file=<path>：从 JSON 文件加载健康评分维度权重（Observability-as-Code，优先级低于环境变量）
       const weightFile = (rest.find(a => /^--weights-file=/.test(a)) || '').split('=')[1];
       if (weightFile) omni.monitor.loadWeightsFile(weightFile);
+      // --scope=<name>：多舰队差异化阈值 —— 按引擎(llm/autopilot/local/...)或环境 profile(prod/staging/...) 查询差异化阈值与健康着色
+      const scope = (rest.find(a => /^--scope=/.test(a)) || '').split('=')[1];
       const asAlerts = flag('--alerts');
       const asHealth = flag('--health');
       const asLatency = flag('--latency');
@@ -335,10 +337,10 @@ async function main() {
       const asThresholdAlerts = flag('--threshold-alerts');
       const asScore = flag('--score') || flag('--health-score');
       const asWeights = flag('--weights');
-      if (asConfig) { result = omni.monitor.config(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asConfig) { result = omni.monitor.config(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asWeights) { result = omni.monitor.weights(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
-      if (asThresholdHealth) { result = omni.monitor.thresholdHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
-      if (asThresholdAlerts) { result = omni.monitor.thresholdAlerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asThresholdHealth) { result = omni.monitor.thresholdHealth(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asThresholdAlerts) { result = omni.monitor.thresholdAlerts(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asScore) { result = omni.monitor.healthScore(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asAlerts) { result = omni.monitor.alerts(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asTools) { result = omni.monitor.toolHealth(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
@@ -356,7 +358,8 @@ async function main() {
     case 'dashboard': {
       // 生成零依赖静态 HTML 仪表盘（可视化 Agent 状态/记忆/活动/告警）
       const out = (rest.find(a => /^--out=/.test(a)) || '').split('=')[1] || './.omni-dashboard.html';
-      const html = omni.monitor.renderDashboard();
+      const dashScope = (rest.find(a => /^--scope=/.test(a)) || '').split('=')[1];
+      const html = omni.monitor.renderDashboard(undefined, dashScope);
       try { writeFileSync(out, html, 'utf8'); } catch (e) { console.error('仪表盘写盘失败:', e.message); process.exitCode = 1; break; }
       result = { ok: true, out, bytes: html.length };
       if (!jsonMode) console.log(`📊 监控仪表盘已生成: ${out} (${html.length} bytes)\n用浏览器打开即可查看 Agent 状态/记忆/活动/告警可视化。`);

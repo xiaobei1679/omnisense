@@ -843,3 +843,108 @@ test('Body.monitor 委托到 omni.monitor（第 8 器官接线正确）', () => 
   const r = body.monitor('snapshot');
   assert.deepEqual(r, { ok: true, fromMonitor: true });
 });
+
+// ── 多舰队差异化阈值（scope）：按引擎/环境 profile 分组查询差异化阈值配置 ──
+function mkScopedMon(scopes, runs = []) {
+  const cfgPath = join(TD, `mon-scope-${Math.random().toString(36).slice(2)}.json`);
+  const file = { spikeFactor: 7 }; // 平铺默认
+  if (scopes) file.scopes = scopes;
+  writeFileSync(cfgPath, JSON.stringify(file), 'utf8');
+  const omni = makeOmni(runs, fakeMemory());
+  const m = new Monitor(omni.bus, omni, { metricsFile: join(TD, `sc-${Math.random().toString(36).slice(2)}.json`), thresholdFile: cfgPath });
+  return { m, cfgPath };
+}
+
+test('scoped 阈值: config(scope) 返回 scope 差异化覆盖(source=scope) + 列出 availableScopes', () => {
+  const { m } = mkScopedMon({ prod: { spikeFactor: 9 }, llm: { inactiveMs: 1000 } });
+  const c = m.config('prod');
+  assert.equal(c.scope, 'prod', '应回显当前 scope');
+  assert.equal(c.thresholds.spikeFactor.value, 9, 'prod scope 应覆盖 spikeFactor');
+  assert.equal(c.thresholds.spikeFactor.source, 'scope', '来源应标注 scope');
+  assert.equal(c.thresholds.spikeFactor.overridden, true);
+  // 未在 prod scope 覆盖、且平铺文件也未定义 inactiveMs 的项 → 回退内置 default（诚实：不伪造来源）
+  assert.equal(c.thresholds.inactiveMs.source, 'default', '未覆盖项回退内置默认（平铺文件未定义则 default，不谎报 file）');
+  assert.equal(c.thresholds.inactiveMs.value, 48 * 3600 * 1000, '未覆盖项保持内置默认值');
+  // 另一个 scope 不应串扰
+  const c2 = m.config('llm');
+  assert.equal(c2.thresholds.spikeFactor.value, 7, 'llm scope 不继承 prod 的覆盖');
+  assert.equal(c2.thresholds.inactiveMs.value, 1000, 'llm scope 的 inactiveMs 覆盖生效');
+  assert.equal(c2.thresholds.inactiveMs.source, 'scope');
+  // availableScopes 列出全部定义的 scope
+  assert.deepEqual(c.availableScopes.sort(), ['llm', 'prod'], 'availableScopes 应含全部 scope');
+});
+
+test('scoped 阈值: config() 无 scope 时仍返回平铺默认(不污染 scope 覆盖)', () => {
+  const { m } = mkScopedMon({ prod: { spikeFactor: 9 } });
+  const c = m.config();
+  assert.equal(c.scope, null, '无 scope 应回显 null');
+  assert.equal(c.thresholds.spikeFactor.value, 7, '无 scope 应用平铺默认');
+  assert.equal(c.thresholds.spikeFactor.source, 'file', '来源为 file 而非 scope');
+});
+
+test('scoped 阈值: 优先级 opts > env > scope > file > default（env 盖过 scope）', () => {
+  const { m } = mkScopedMon({ prod: { spikeFactor: 9 } });
+  process.env.OMNI_MONITOR_SPIKE_FACTOR = '4';
+  try {
+    const c = m.config('prod');
+    assert.equal(c.thresholds.spikeFactor.value, 4, 'env 盖过 scope 与 file');
+    assert.equal(c.thresholds.spikeFactor.source, 'env');
+  } finally {
+    delete process.env.OMNI_MONITOR_SPIKE_FACTOR;
+  }
+});
+
+test('scoped 阈值: thresholdHealth(scope) 用差异化阈值 + 按引擎过滤测量(engineScope)', () => {
+  const old = Date.now() - 49 * 3600 * 1000;
+  // llm 引擎 49h 前活跃；autopilot 引擎刚活跃
+  const runs = [
+    { runId: 'o1', engine: 'llm', completed: true, startedAt: old, finishedAt: old + 500, steps: [] },
+    { runId: 'a1', engine: 'autopilot', completed: true, startedAt: Date.now(), finishedAt: Date.now() + 100, steps: [] },
+  ];
+  const { m } = mkScopedMon({ llm: { inactiveMs: 1000 } }, runs); // llm scope 把"无活动"阈值调到 1s；runs 已注入 tracer
+  const th = m.thresholdHealth('llm');
+  assert.equal(th.scope, 'llm');
+  assert.equal(th.engineScope, true, 'llm 是已知引擎，应按引擎过滤测量');
+  const byKey = Object.fromEntries(th.items.map(i => [i.key, i]));
+  // llm 引擎自身 49h 无活动 → inactiveMs 应 over；llm scope 把阈值降到 1000ms，更是 over
+  assert.equal(byKey.inactiveMs.status, 'over', 'llm scope 下该引擎无活动应 over');
+  assert.equal(byKey.inactiveMs.threshold.source, 'scope', '该阈值项来源应标 scope');
+  // 对比：无 scope 时测量为全局（含刚活跃的 autopilot 引擎）→ 全局 inactiveMs 应为 ok（另一引擎仍在活动）
+  // 这正体现 "按引擎 scope 分化" 的价值：llm 引擎已凉，但全局因 autopilot 活跃而不算 over。
+  const thGlobal = m.thresholdHealth();
+  assert.equal(thGlobal.scope, null);
+  assert.equal(thGlobal.engineScope, false, '无 scope 应为全局测量');
+  assert.equal(thGlobal.items.find(i => i.key === 'inactiveMs').status, 'ok', '全局因 autopilot 活跃而 ok（与 llm scope 的 over 形成分化）');
+});
+
+test('scoped 阈值: thresholdAlerts(scope) 委托到 scoped thresholdHealth(同结构同 fingerprint)', () => {
+  const old = Date.now() - 49 * 3600 * 1000;
+  const runs = [{ runId: 'o1', engine: 'llm', completed: true, startedAt: old, finishedAt: old + 500, steps: [] }];
+  const { m } = mkScopedMon({ prod: { inactiveMs: 1000 } }, runs);
+  const r = m.thresholdAlerts('prod');
+  assert.equal(r.ok, true);
+  assert.ok(r.count > 0, 'prod scope 下长期无活动应产出告警');
+  for (const a of r.alerts) {
+    assert.ok(['critical', 'warning'].includes(a.severity));
+    assert.ok(/^[0-9a-f]{16}$/.test(a.fingerprint), '应有稳定 fingerprint');
+    assert.equal(a.labels.monitor, 'omnisense');
+  }
+});
+
+test('scoped 阈值: 未知 scope 静默回退默认(不报错，source=default)', () => {
+  const { m } = mkScopedMon({ prod: { spikeFactor: 9 } });
+  const c = m.config('nonexistent-scope');
+  assert.equal(c.scope, 'nonexistent-scope');
+  assert.equal(c.thresholds.spikeFactor.value, 7, '未知 scope 回退平铺文件默认');
+  assert.equal(c.thresholds.spikeFactor.source, 'file');
+});
+
+test('scoped 阈值: dashboard 展示当前 scope 与可用 scope 列表(多舰队差异化阈值)', () => {
+  const { m } = mkScopedMon({ prod: { spikeFactor: 9 }, llm: { inactiveMs: 1000 } });
+  const html = m.renderDashboard(undefined, 'prod');
+  assert.ok(html.startsWith('<!doctype html>'));
+  assert.ok(html.includes('scope'), '仪表盘应提及 scope(多舰队差异化阈值)');
+  assert.ok(html.includes('prod'), '仪表盘应含当前 scope 名');
+  assert.ok(html.includes('llm'), '仪表盘应列出可用 scope(llm)');
+});
+

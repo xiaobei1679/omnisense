@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 每小时 minor 小版本；距上次 major 满 3 小时则 major 大版本（minor 归零）。
 
+## v9.1.0 — 2026-07-15 (minor)
+
+- monitor 多舰队差异化阈值(scoped thresholds): 阈值配置 JSON 文件支持 scopes 按引擎/环境 profile 分组覆盖；config/thresholdHealth/thresholdAlerts 支持 --scope（引擎 scope 仅测该引擎 runs、环境 profile scope 仅覆盖阈值，不改测量对象）；优先级 opts>env>scope>file>default，来源诚实标注 source:'scope'；config 回显当前 scope 并列出 availableScopes，dashboard 展示当前 scope 与可用 scope 列表。内核 monitor.mjs+cli.mjs / 桥接 omnisense-link.mjs 三层一致。学习子系统 learner.mjs 新增 observability 本地学习源（身体从自身监控器官蒸馏多舰队可观测性模式，离线可用），满足三层同迭代。借鉴 100+ Agent per-Agent-type 差异化阈值 / kaxo.io per-agent 可观测 / Prometheus 按环境 tier 分级告警。
+
 ## v9.0.0 — 2026-07-14 (major)
 
 - 工具级缓存/熔断落盘持久化（OMNI_TOOL_CACHE_FILE/--persist-file 启用零依赖 JSON 落盘，跨重启续命：缓存不重抓+熔断冷却续命）；setToolCachePersistence/toolCachePersistence/persistToolCache/clearToolCachePersistence 暴露至 facade+CLI+工作区桥接；新增 5 内核单测+1 跨层断言；借鉴 disk-backed TTL cache/SQLiteCache 思想

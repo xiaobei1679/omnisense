@@ -84,6 +84,9 @@ const DEFAULT_MONITOR_CONFIG_PATH = (() => {
 })();
 
 // 读取并校验阈值 JSON 文件：仅保留 THRESHOLD_SPEC 中定义的 key（防御：忽略未知键，避免误配污染阈值）。
+// 多舰队差异化阈值（本回合新增）：文件可额外携带 `scopes` 映射，按引擎(llm/autopilot/...)或环境
+// profile(prod/staging/...) 分组定义阈值覆盖，实现"不同 fleet 用不同告警阈值"（借鉴 100+ Agent 协作系统
+// 按 Agent 类型分组差异化 P95 阈值、kaxo.io per-agent 可观测性实践）。平铺 key = 默认阈值；scopes[name] = 该 scope 覆盖。
 function loadThresholdFile(path) {
   if (!path || typeof path !== 'string') return null;
   try {
@@ -94,12 +97,30 @@ function loadThresholdFile(path) {
     for (const k of Object.keys(THRESHOLD_SPEC)) {
       if (Object.prototype.hasOwnProperty.call(obj, k)) clean[k] = obj[k];
     }
+    // 解析 scopes：每个 scope 仅保留 THRESHOLD_SPEC 中定义的 key（未知键忽略，避免误配污染）
+    let scopes = null;
+    if (obj.scopes && typeof obj.scopes === 'object') {
+      scopes = {};
+      for (const scope of Object.keys(obj.scopes)) {
+        const sval = obj.scopes[scope];
+        if (!sval || typeof sval !== 'object') continue;
+        const sc = {};
+        for (const k of Object.keys(THRESHOLD_SPEC)) {
+          if (Object.prototype.hasOwnProperty.call(sval, k)) sc[k] = sval[k];
+        }
+        if (Object.keys(sc).length) scopes[scope] = sc;
+      }
+    }
+    // scopes 与平铺默认阈值共存（resolveThreshold 用 .scopes[scope] 取差异化覆盖）
+    if (scopes) clean.scopes = scopes;
     return Object.keys(clean).length ? clean : null;
   } catch { return null; }
 }
 
-// 解析单个阈值：opts 覆盖 > 环境变量 > JSON文件 > 默认；返回 { value, source }。
-function resolveThreshold(key, opts, env, fileObj) {
+// 解析单个阈值：opts 覆盖 > 环境变量 > 作用域(scope)覆盖 > JSON文件默认 > 内置默认；返回 { value, source }。
+// 新增 scope 分支（多舰队差异化阈值）：当指定 scope(引擎名/环境 profile)且该 scope 在阈值文件里有对应覆盖时，
+// 优先级高于平铺文件默认值、低于 opts/env；来源诚实标注 'scope'。
+function resolveThreshold(key, opts, env, fileObj, scope) {
   const [envKey, def] = THRESHOLD_SPEC[key];
   if (opts && Object.prototype.hasOwnProperty.call(opts, key)) {
     const v = Number(opts[key]);
@@ -109,6 +130,11 @@ function resolveThreshold(key, opts, env, fileObj) {
   if (raw != null && String(raw).trim() !== '') {
     const v = Number(raw);
     if (Number.isFinite(v)) return { value: v, source: 'env' };
+  }
+  if (scope && fileObj && fileObj.scopes && fileObj.scopes[scope]
+    && Object.prototype.hasOwnProperty.call(fileObj.scopes[scope], key)) {
+    const v = Number(fileObj.scopes[scope][key]);
+    if (Number.isFinite(v)) return { value: v, source: 'scope' };
   }
   if (fileObj && Object.prototype.hasOwnProperty.call(fileObj, key)) {
     const v = Number(fileObj[key]);
@@ -228,6 +254,7 @@ export class Monitor {
     this._thresholdFile = opts.thresholdFile || env.OMNI_MONITOR_CONFIG || DEFAULT_MONITOR_CONFIG_PATH;
     const fileObj = loadThresholdFile(this._thresholdFile);
     this._thresholdFileLoaded = !!fileObj;
+    this._thresholdFileObj = fileObj; // 缓存供 config(scope)/thresholdHealth(scope) 跨进程重新解析差异化阈值
     // 健康评分维度权重 JSON 文件（Observability-as-Code）：opts.weightFile > 环境变量 OMNI_MONITOR_WEIGHTS > 默认 ~/.omnisense/monitor-weights.json
     this._weightFile = opts.weightFile || env.OMNI_MONITOR_WEIGHTS || DEFAULT_WEIGHT_FILE;
     // 阈值配置：opts.thresholds 覆盖 > 环境变量 > JSON文件 > 内置默认；来源可经 config() 观测（诚实标注）。
@@ -302,6 +329,7 @@ export class Monitor {
     this._thresholdFile = path || null;
     const fileObj = loadThresholdFile(path);
     this._thresholdFileLoaded = !!fileObj;
+    this._thresholdFileObj = fileObj; // 同步缓存，config(scope) 才能解析 scopes 差异化阈值
     this._resolveConfig(this._optsThresholds, fileObj);
     const cfg = this.config();
     return { ok: true, configFile: this._thresholdFile, loaded: !!fileObj, count: cfg.count, overrides: cfg.overrides };
@@ -319,23 +347,32 @@ export class Monitor {
     return { ok: true, weightFile: this._weightFile, loaded: !!fileObj, count: w.count, overrides: w.overrides };
   }
 
-  // 返回当前生效的阈值配置（值 + 来源 default/env/opts + 环境变量名 + 说明），供 CLI/工作区/仪表盘观测。
+  // 返回当前生效的阈值配置（值 + 来源 default/env/file/scope/opts + 环境变量名 + 说明），供 CLI/工作区/仪表盘观测。
   // 让「阈值为什么是这个数、能怎么调」透明可查（可观测性最佳实践：阈值应可见、可调、可溯源）。
-  config() {
+  // 多舰队差异化阈值（本回合新增）：传 scope(引擎名/环境 profile) 时返回该 scope 的差异化阈值配置，
+  // 并附 availableScopes 列出文件里定义的所有 scope，便于"同一份监控、不同 fleet 不同告警阈值"。
+  config(scope) {
+    const s = typeof scope === 'string' ? scope : (scope && scope.scope) || null;
+    const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
     const thresholds = {};
     for (const key of Object.keys(THRESHOLD_SPEC)) {
       const [envKey, def, desc] = THRESHOLD_SPEC[key];
+      let value, source;
+      if (s) ({ value, source } = resolveThreshold(key, this._optsThresholds, env, this._thresholdFileObj, s));
+      else { value = this.cfg[key]; source = this._cfgSource[key]; }
       thresholds[key] = {
-        value: this.cfg[key],
-        source: this._cfgSource[key],
+        value,
+        source,
         envKey,
         default: def,
-        overridden: this._cfgSource[key] !== 'default',
+        overridden: source !== 'default',
         desc,
       };
     }
     const overrides = Object.keys(thresholds).filter(k => thresholds[k].overridden);
-    return { ok: true, thresholds, overrides, count: overrides.length, metricsFile: this.metricsFile, configFile: this._thresholdFile || null, configFileLoaded: this._thresholdFileLoaded };
+    const availableScopes = (this._thresholdFileObj && this._thresholdFileObj.scopes)
+      ? Object.keys(this._thresholdFileObj.scopes) : [];
+    return { ok: true, thresholds, overrides, count: overrides.length, scope: s, availableScopes, metricsFile: this.metricsFile, configFile: this._thresholdFile || null, configFileLoaded: this._thresholdFileLoaded };
   }
 
   // 返回当前生效的健康评分维度权重（值 + 归一化值 + 来源 default/env/file/opts + 环境变量名），
@@ -365,8 +402,19 @@ export class Monitor {
   // https://grafana.com/docs/grafana/latest/visualizations/panels-visualizations/configure-thresholds/）——
   // 不只告诉运维"阈值是多少"，更直观显示"现在离阈值有多近、是否已超标"，一眼看出身体在退化还是健康。
   // 全部带保护、读优先（绝不因观测改动状态/基线）：无数据时对应维度标 na(灰)，绝不伪造读数。
-  _measureCurrent() {
-    const runs = this._tracerRuns();
+  _measureCurrent(scope) {
+    let runs = this._tracerRuns();
+    let engineScope = false;
+    // 多舰队差异化阈值：若 scope 是已知引擎名(llm/autopilot/local/...)，则测量仅限该引擎的 runs，
+    // 实现"按引擎分组"的延迟/存活差异化观测；若 scope 是环境 profile(如 prod/staging)，则测量保持全局、
+    // 仅应用该 scope 的阈值覆盖（profile 不改变"谁来测"，只改变"用什么阈值判"）。
+    if (scope) {
+      try {
+        const grid = this.statusGrid(runs).grid;
+        const engines = new Set(grid.map(g => g.engine));
+        if (engines.has(scope)) { runs = runs.filter(r => (r.engine || 'unknown') === scope); engineScope = true; }
+      } catch { /* noop */ }
+    }
     const now = Date.now();
     const la = lastActiveAt(runs);
     const idleMs = la ? now - la : null;          // 距上次活动(ms)，对比 inactiveMs
@@ -433,14 +481,14 @@ export class Monitor {
       if (fleets.length >= 4) trendFleet = linRegSlope(fleets);
     }
 
-    return { idleMs, maxEngineIdleMs, maxMemAgeMs, memGrowth, spikeRatio, trendP95, trendSuccess, trendMem, trendFleet };
+    return { scope: scope || null, engineScope, idleMs, maxEngineIdleMs, maxMemAgeMs, memGrowth, spikeRatio, trendP95, trendSuccess, trendMem, trendFleet };
   }
 
   // 返回每个阈值的"当前测量值 + 状态(ok/warn/over/na) + 阈值来源"，供 CLI/工作区/仪表盘做红黄绿着色。
   // status 语义（对齐 Grafana 红黄绿）：ok=绿(在阈值内/健康) · warn=黄(接近或轻度超标，关注) · over=红(超标) · na=灰(无数据)。
-  thresholdHealth() {
-    const cur = this._measureCurrent();
-    const cfg = this.config().thresholds;
+  thresholdHealth(scope) {
+    const cur = this._measureCurrent(scope);
+    const cfg = this.config(scope).thresholds;
     const items = [];
     const add = (key, current, status, unit) => items.push({
       key,
@@ -507,7 +555,7 @@ export class Monitor {
     }
     const summary = { total: items.length, ok: 0, warn: 0, over: 0, na: 0 };
     for (const it of items) summary[it.status]++;
-    return { ok: true, items, summary };
+    return { ok: true, items, summary, scope: cur.scope, engineScope: cur.engineScope };
   }
 
   // ── 阈值告警清单（Alertmanager-ready）：把"超标/关注"的阈值项转成可直接提交给 Prometheus Alertmanager
@@ -520,8 +568,8 @@ export class Monitor {
   // 诚实边界：本框架离线运行、不主动外发；这里只产出"与 Alertmanager API 形状一致"的 payload，
   //   接入方可把 alerts[] 直接 POST 到 Alertmanager `POST /api/v2/alerts`（或经 webhook），无需格式转换。
   // 全部零依赖（仅用内置 crypto 生成 fingerprint）；none 状态（ok/na）不产出告警，绝不伪造告警。
-  thresholdAlerts() {
-    const th = this.thresholdHealth();
+  thresholdAlerts(scope) {
+    const th = this.thresholdHealth(scope);
     const alerts = th.items
       .filter(it => it.severity !== 'none')
       .map(it => {
@@ -1200,7 +1248,7 @@ export class Monitor {
   }
 
   // ── 可视化：零依赖静态 HTML 仪表盘（作战指挥中心 / 驾驶舱风格）──
-  renderDashboard(snapshot = this.snapshot()) {
+  renderDashboard(snapshot = this.snapshot(), scope) {
     const s = snapshot;
     const genTime = new Date(s.generatedAt).toLocaleString('zh-CN', { hour12: false });
     const esc = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1341,8 +1389,9 @@ export class Monitor {
 
     // 阈值配置（可调）+ 阈值健康着色：把"当前测量值 vs 阈值"红黄绿并排展示（借鉴 Grafana 阈值状态着色）。
     // 不只告诉运维"阈值是多少"，更直观显示"现在离阈值多近、是否已超标"——可观测仪表盘的眼睛。
-    const cfg = this.config();
-    const thHealth = this.thresholdHealth();
+    // scope（多舰队差异化阈值）：传入时仪表盘展示该 scope 的差异化阈值与健康着色。
+    const cfg = this.config(scope);
+    const thHealth = this.thresholdHealth(scope);
     const statusColorOf = (st) => st === 'ok' ? '#3fb950' : st === 'warn' ? '#d29922' : st === 'over' ? '#f85149' : 'var(--muted)';
     const statusLabelOf = (st) => st === 'ok' ? '正常' : st === 'warn' ? '关注' : st === 'over' ? '超标' : '无数据';
     const fmtTh = (val, unit) => {
@@ -1378,10 +1427,19 @@ export class Monitor {
     const cfgFileNote = cfg.configFile
       ? `<div class="muted" style="margin-bottom:6px">配置来源文件: <code>${esc(cfg.configFile)}</code>${cfg.configFileLoaded ? '' : '（未找到，已用默认/环境变量）'}</div>`
       : '';
+    // 多舰队差异化阈值：展示当前作用域 + 文件里定义的所有可用 scope，让"同一份监控、不同 fleet 不同阈值"一目了然
+    const scopeNote = (() => {
+      const avail = (cfg.availableScopes && cfg.availableScopes.length)
+        ? ` · 可用 scope(多舰队差异化阈值): ${cfg.availableScopes.map(s => `<code>${esc(s)}</code>`).join(' ')}` : '';
+      if (cfg.scope) return `<div class="muted" style="margin-bottom:6px">当前作用域(scope): <code>${esc(cfg.scope)}</code>${avail}</div>`;
+      if (avail) return `<div class="muted" style="margin-bottom:6px">${avail}</div>`;
+      return '';
+    })();
     const worst = thHealth.summary.over ? 'over' : (thHealth.summary.warn ? 'warn' : 'ok');
     const cfgHtml = `
       <div class="muted" style="margin-bottom:8px">生效阈值 ${Object.keys(cfg.thresholds).length} 项 · 被覆盖 <b style="color:${cfg.count ? '#d29922' : '#3fb950'}">${cfg.count}</b> 项 · 阈值健康 <b style="color:${statusColorOf(worst)}">${thHealth.summary.ok}正常 / ${thHealth.summary.warn}关注 / ${thHealth.summary.over}超标 / ${thHealth.summary.na}无数据</b>（当前值 vs 阈值，红黄绿着色）</div>
       ${cfgFileNote}
+      ${scopeNote}
       ${cfgRows}
       ${taHtml}`;
 
@@ -1486,7 +1544,7 @@ export class Monitor {
   //     总线注册、METHOD_META、agentCard 的技能 id 一致（body.monitor('health') 等委派不再 undefined）。
   health() { return this.agentHealth(); }
   alerts(agent) { return this.allAlerts(agent); }
-  dashboard(snap) { return this.renderDashboard(snap); }
+  dashboard(snap, scope) { return this.renderDashboard(snap, scope); }
   trendAnomalies() { return this._detectTrendAnomalies(); }
   score() { return this.healthScore(); }
 }
