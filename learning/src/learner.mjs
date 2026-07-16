@@ -60,7 +60,7 @@ export function allSources() {
 
 // 抽取"技法表述"的特征词（真实方法/技术描述，而非标题或客套）
 const TECH_RE = /(stage|阶段|RIA|提取|验证|框架|原则|案例|反例|术语|蒸馏|reason|infer|detect|recogni[sz]e|cluster|classif|tokeni[sz]e|embed|ontology|discourse|dialogue|conversation|percept|memory|belief|method|approach|technique|we (use|propose|adopt|leverage|introduce)|supports|features|capable|provides|enables|allows|using (to|for)|based on|built on|wraps|integrates|generat|synthesi[sz]|transcri[bd]|encode|decode|segment|normaliz[ei]|extract|augment|fine-?tun|pre-?train|inferenc|pipelines|models|architecture|vocabulary|language model|endpoint|REST|API|async|streaming|callback|queue|batch|parallel|chunk|split|merge|filter|mapper|reducer|pipeline|middleware|plugin|extension|interface|protocol|schema|serializ|deserializ|configur|template|scaffold|boilerplate|hybrid|cluster)/
-function extractCodeExamples(corpus) {
+export function extractCodeExamples(corpus) {
   const examples = [];
   const re = /```(?:js|javascript|python|ts|typescript|bash|shell|json|yaml|go|rust|mjs)?\s*\n([\s\S]*?)```/g;
   let m;
@@ -74,7 +74,7 @@ function extractCodeExamples(corpus) {
   return examples;
 }
 
-function stripNoise(text) {
+export function stripNoise(text) {
   return text
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')      // 删除 markdown 图片（含 shields 徽章）
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')   // 链接保留文字
@@ -83,7 +83,7 @@ function stripNoise(text) {
 }
 
 // 从一组文档文本里抽取"像技法"的实质性表述行 + 代码示例
-function distillTechniques(corpus) {
+export function distillTechniques(corpus) {
   const clean = stripNoise(corpus);
   const codeExamples = extractCodeExamples(corpus);
   // 抽取含技术特征的实质行（保留特征列表行，仅排除标题和引用）

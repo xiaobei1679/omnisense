@@ -10,6 +10,17 @@ import {
   detectThemes,
   THEME_LEXICON,
 } from '../learning/src/nlp.mjs';
+import {
+  Learner,
+  allSources,
+  CURATED,
+  LOCAL_FALLBACK,
+  stripNoise,
+  extractCodeExamples,
+  distillTechniques,
+} from '../learning/src/learner.mjs';
+
+const learner = new Learner();
 
 // ───────────────────────── relations.mjs ─────────────────────────
 
@@ -85,4 +96,80 @@ test('detectThemes 依词表识别主题', () => {
 test('THEME_LEXICON 含基础主题词表', () => {
   assert.ok(THEME_LEXICON['记忆']);
   assert.ok(THEME_LEXICON['死亡'].includes('killed'));
+});
+
+// ───────────────────────── learner.mjs（学渊引擎） ─────────────────────────
+
+test('pickFor 按意图路由到正确的能力源（see/listen/think/talk）', () => {
+  assert.equal(learner.pickFor('see the image and describe it').mapsTo, 'see');
+  assert.equal(learner.pickFor('transcribe audio speech').mapsTo, 'listen');
+  assert.equal(learner.pickFor('think about the graph logic').mapsTo, 'think');
+  assert.equal(learner.pickFor('talk to the user dialogue').mapsTo, 'talk');
+});
+
+test('pickFor 观测意图落到 observe 源（含 LOCAL_FALLBACK）', () => {
+  const s = learner.pickFor('monitor metrics 监控指标 dashboard');
+  assert.ok(s);
+  assert.equal(s.mapsTo, 'observe');
+});
+
+test('pickFor 无关意图返回 null（诚实降级，不瞎匹配）', () => {
+  assert.equal(learner.pickFor('今天天气不错'), null);
+  assert.equal(learner.pickFor(''), null);
+});
+
+test('CURATED / LOCAL_FALLBACK 来源完整性', () => {
+  assert.ok(CURATED.length >= 4);
+  for (const c of CURATED) {
+    assert.ok(['see', 'listen', 'think', 'talk', 'observe'].includes(c.mapsTo), `非法 mapsTo: ${c.mapsTo}`);
+    assert.ok(c.repo || c.localDir, '源需有 repo 或 localDir');
+  }
+  for (const l of LOCAL_FALLBACK) {
+    assert.ok(l.dir, `回退源 ${l.name} 缺 dir`);
+    assert.ok(['see', 'think'].includes(l.mapsTo));
+  }
+});
+
+test('allSources 合并 CURATED 与 sources.json（无扩展源时仅 CURATED）', () => {
+  const all = allSources();
+  assert.ok(all.length >= CURATED.length);
+  // 已知 CURATED 项必在合并结果中
+  const seeItem = CURATED.find((c) => c.mapsTo === 'see');
+  assert.ok(all.includes(seeItem));
+});
+
+test('stripNoise 清除 markdown 图片/链接/HTML/裸 URL', () => {
+  const dirty = '![shield](https://badge.io/x.png) 见[文档](https://ex.com/d) <b>粗</b> 访问 https://site.com 完';
+  const clean = stripNoise(dirty);
+  assert.ok(!clean.includes('!['));          // 图片语法移除
+  assert.ok(!clean.includes('https://'));     // 裸 URL 移除
+  assert.ok(!clean.includes('<b>'));          // HTML 移除
+  assert.ok(clean.includes('文档'));          // 链接文字保留
+  assert.ok(clean.includes('粗'));            // HTML 文字保留
+});
+
+test('extractCodeExamples 抽取围栏代码块首行', () => {
+  const corpus = '示例:\n```js\nconst x = await fetch(url);\n```\n\n```python\nprint("hi")\n```';
+  const ex = extractCodeExamples(corpus);
+  assert.ok(ex.length >= 1);
+  assert.ok(ex[0].includes('const x ='));
+  assert.ok(ex.some((e) => e.includes('print(')));
+});
+
+test('distillTechniques 抽技术行 + 代码示例 + 去重 + 上限', () => {
+  const corpus = [
+    '# 标题行（应被排除）',
+    'We use a hybrid architecture with middleware and async pipelines to process streams.',
+    'The framework provides tokenization and supports ontology extraction via REST API.',
+    'The framework provides tokenization and supports ontology extraction via REST API.', // 重复
+    '> 引用块（应被排除）',
+    '```js\nconst t = tokenizer.encode(text);\n```',
+  ].join('\n');
+  const techs = distillTechniques(corpus);
+  assert.ok(techs.length >= 2);
+  assert.ok(techs.length <= 10);
+  // 去重：重复行只出现一次
+  assert.equal(techs.filter((t) => t.includes('hybrid architecture')).length, 1);
+  // 代码示例被纳入
+  assert.ok(techs.some((t) => t.includes('tokenizer.encode') || t.startsWith('代码示例')));
 });
