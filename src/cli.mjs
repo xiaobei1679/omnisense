@@ -368,9 +368,18 @@ async function main() {
       const asScore = flag('--score') || flag('--health-score');
       const asWeights = flag('--weights');
       const asLearnings = flag('--learnings');
+      const asPushAlerts = flag('--push-alerts');
+      const alertUrl = (rest.find(a => /^--alert-url=/.test(a)) || '').split('=')[1];
+      const alertmanagerUrl = (rest.find(a => /^--alertmanager-url=/.test(a)) || '').split('=')[1];
       if (asConfig) { result = omni.monitor.config(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asWeights) { result = omni.monitor.weights(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asLearnings) { result = omni.monitor.learnings(); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
+      if (asPushAlerts) {
+        const target = alertUrl ? { type: 'webhook', url: alertUrl } : alertmanagerUrl ? { type: 'alertmanager', url: alertmanagerUrl } : undefined;
+        result = await omni.monitor.pushAlerts(target);
+        if (!jsonMode) console.log(JSON.stringify(result, null, 2));
+        break;
+      }
       if (asThresholdHealth) { result = omni.monitor.thresholdHealth(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asThresholdAlerts) { result = omni.monitor.thresholdAlerts(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }
       if (asScore) { result = omni.monitor.healthScore(scope); if (!jsonMode) console.log(JSON.stringify(result, null, 2)); break; }

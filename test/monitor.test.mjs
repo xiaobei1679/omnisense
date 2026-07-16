@@ -53,13 +53,13 @@ function mkMon(runs = [], memory) {
   return new Monitor(omni.bus, omni, { metricsFile: join(TD, `m-${Math.random().toString(36).slice(2)}.json`) });
 }
 
-test('Monitor 构造并注册 21 个总线方法(核心 6 + 新增 15，含综合健康评分与维度权重)', () => {
+test('Monitor 构造并注册 22 个总线方法(核心 6 + 新增 16，含综合健康评分/维度权重/真实告警推送)', () => {
   const reg = {};
   const bus = { register: (o, m) => { reg[`${o}.${m}`] = true; } };
   const omni = { bus, memory: fakeMemory(), tracer: makeTracer(), body: fakeBody() };
   new Monitor(bus, omni, { metricsFile: join(TD, 'reg.json') });
   for (const m of ['snapshot', 'health', 'alerts', 'dashboard', 'recordMetric', 'checkAlerts',
-    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score', 'weights']) {
+    'latency', 'statusGrid', 'memoryHealth', 'anomalies', 'recentRuns', 'toolHealth', 'trends', 'trendAnomalies', 'config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score', 'weights', 'pushAlerts']) {
     assert.ok(reg[`monitor.${m}`], `应注册 monitor.${m}`);
   }
 });
@@ -754,6 +754,73 @@ test('thresholdAlerts: 只产出非 none 项，形状对齐 Alertmanager(labels+
   const a1 = r.alerts.find(x => x.labels.key === 'inactiveMs');
   const a2 = r2.alerts.find(x => x.labels.key === 'inactiveMs');
   if (a1 && a2) assert.equal(a1.fingerprint, a2.fingerprint, '同一 key 的 fingerprint 应跨调用稳定');
+});
+
+// ── pushAlerts：真实告警推送（零依赖 webhook/Alertmanager 客户端，离线可测）──
+test('pushAlerts: 无 target 且未配置 env -> 结构化报错不伪造(ok:false)', async () => {
+  const m = mkMon([]);
+  const r = await m.pushAlerts();
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'no-alert-target');
+  assert.equal(r.sent, 0);
+  assert.ok('available' in r, '应带 available 字段');
+});
+
+test('pushAlerts: 有 target 但无 active 告警 -> ok:true, sent:0, 不联网', async () => {
+  const m = mkMon([]);
+  const r = await m.pushAlerts({ type: 'webhook', url: 'http://example.test/hook' });
+  assert.equal(r.ok, true);
+  assert.equal(r.sent, 0);
+  assert.equal(r.reason, 'no-active-alerts');
+  assert.equal(r.type, 'webhook');
+});
+
+test('pushAlerts: webhook 目标 -> 注入 mock fetch 收到正确 JSON 负载', async () => {
+  const m = mkMon([]);
+  m.thresholdAlerts = () => ({
+    ok: true, count: 2, critical: 1, warning: 1,
+    alerts: [
+      { fingerprint: 'a'.repeat(16), severity: 'critical', labels: { key: 'inactiveMs' }, annotations: { summary: 'x' } },
+      { fingerprint: 'b'.repeat(16), severity: 'warning', labels: { key: 'memStaleMs' }, annotations: { summary: 'y' } },
+    ],
+  });
+  let captured = null;
+  const fakeFetch = async (url, opts) => { captured = { url, opts }; return { status: 200, statusCode: 200 }; };
+  const r = await m.pushAlerts({ type: 'webhook', url: 'http://example.test/hook' }, { fetch: fakeFetch });
+  assert.equal(r.ok, true);
+  assert.equal(r.sent, 2);
+  assert.equal(r.critical, 1);
+  assert.equal(r.warning, 1);
+  assert.equal(captured.url, 'http://example.test/hook');
+  assert.equal(captured.opts.method, 'POST');
+  const body = JSON.parse(captured.opts.body);
+  assert.equal(body.monitor, 'omnisense');
+  assert.equal(body.count, 2);
+  assert.equal(body.alerts.length, 2);
+});
+
+test('pushAlerts: alertmanager 目标 -> URL 补齐 /api/v2/alerts 且 body 为数组', async () => {
+  const m = mkMon([]);
+  m.thresholdAlerts = () => ({ ok: true, count: 1, critical: 1, warning: 0, alerts: [{ fingerprint: 'c'.repeat(16), severity: 'critical', labels: { key: 'inactiveMs' }, annotations: {} }] });
+  let captured = null;
+  const fakeFetch = async (url, opts) => { captured = { url, opts }; return { status: 200, statusCode: 200 }; };
+  const r = await m.pushAlerts({ type: 'alertmanager', url: 'http://am:9093' }, { fetch: fakeFetch });
+  assert.equal(r.ok, true);
+  assert.equal(r.sent, 1);
+  assert.equal(captured.url, 'http://am:9093/api/v2/alerts', 'alertmanager URL 应补齐 /api/v2/alerts');
+  const body = JSON.parse(captured.opts.body);
+  assert.ok(Array.isArray(body), 'alertmanager body 应为告警数组');
+  assert.equal(body.length, 1);
+});
+
+test('pushAlerts: fetch 失败 -> ok:false 且 sent:0(诚实不谎报成功)', async () => {
+  const m = mkMon([]);
+  m.thresholdAlerts = () => ({ ok: true, count: 1, critical: 1, warning: 0, alerts: [{ fingerprint: 'd'.repeat(16), severity: 'critical', labels: { key: 'inactiveMs' }, annotations: {} }] });
+  const fakeFetch = async () => { throw new Error('ECONNREFUSED'); };
+  const r = await m.pushAlerts({ type: 'webhook', url: 'http://dead/hook' }, { fetch: fakeFetch });
+  assert.equal(r.ok, false);
+  assert.equal(r.sent, 0);
+  assert.ok(/ECONNREFUSED/.test(r.error), '错误应透传');
 });
 
 test('thresholdAlerts: 全部健康(ok/na)时无告警可推送(离线不伪造告警)', () => {

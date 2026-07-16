@@ -306,6 +306,7 @@ export class Monitor {
     this.bus.register('monitor', 'thresholdHealth', () => this.thresholdHealth());
     this.bus.register('monitor', 'thresholdAlerts', () => this.thresholdAlerts());
     this.bus.register('monitor', 'alertables', () => this.thresholdAlerts());
+    this.bus.register('monitor', 'pushAlerts', p => this.pushAlerts(p && p.target, { fetch: p && p.fetch }));
     this.bus.register('monitor', 'healthScore', p => this.healthScore(p && p.scope));
     this.bus.register('monitor', 'score', p => this.healthScore(p && p.scope));
     this.bus.register('monitor', 'weights', () => this.weights());
@@ -650,6 +651,66 @@ export class Monitor {
     const critical = alerts.filter(a => a.severity === 'critical').length;
     const warning = alerts.filter(a => a.severity === 'warning').length;
     return { ok: true, count: alerts.length, critical, warning, alerts };
+  }
+
+  // ── 真实告警推送（接外部告警系统，零依赖 webhook/Alertmanager 客户端）──
+  // 把 thresholdAlerts() 产出的 Alertmanager 形状告警"真正发出去"，补齐 monitor 常驻轨道最后一块（候选⑦落地）：
+  //   - type=webhook：POST 原始 JSON（{monitor,generatedAt,count,alerts}）到任意 webhook 端点
+  //     （Slack/飞书/企业微信/自定义 receiver 都可直接消费这份结构）
+  //   - type=alertmanager：POST 告警数组到 `${url}/api/v2/alerts`（自动补齐路径），对齐 Alertmanager v2 API
+  // 目标解析优先级：显式 target.url > 环境变量 OMNI_ALERT_WEBHOOK(webhook) / OMNI_ALERTMANAGER_URL(alertmanager)
+  // 诚实边界：fetch 失败 / 无 active 告警 / 无 fetch 运行时，一律返回结构化结果，绝不伪造"发送成功"；
+  //   离线不主动外发，仅在用户显式传入 target 或配置 env 时推送（需用户自配端点，本框架不内嵌任何地址）。
+  // opts.fetch 可注入（用于单测：避免真实联网 + 规避 undici keep-alive 致 node --test 挂起）。
+  async pushAlerts(target, opts = {}) {
+    const ta = this.thresholdAlerts();
+    const alerts = ta.alerts || [];
+    // 解析目标：显式 > env
+    let t = (typeof target === 'string') ? { url: target } : (target || {});
+    if (!t.url) {
+      const env = (typeof process !== 'undefined' && process.env) || {};
+      if (env.OMNI_ALERTMANAGER_URL) t = { type: 'alertmanager', url: env.OMNI_ALERTMANAGER_URL };
+      else if (env.OMNI_ALERT_WEBHOOK) t = { type: 'webhook', url: env.OMNI_ALERT_WEBHOOK };
+    }
+    if (!t.url) {
+      return { ok: false, error: 'no-alert-target', hint: 'set target {type,url} or env OMNI_ALERT_WEBHOOK / OMNI_ALERTMANAGER_URL', available: alerts.length, sent: 0 };
+    }
+    const type = t.type === 'alertmanager' ? 'alertmanager' : 'webhook';
+    if (alerts.length === 0) {
+      return { ok: true, type, url: t.url, sent: 0, available: ta.count, reason: 'no-active-alerts' };
+    }
+    const post = opts.fetch || (typeof fetch !== 'undefined' ? fetch : null);
+    if (typeof post !== 'function') {
+      return { ok: false, error: 'no-fetch-available', available: alerts.length, sent: 0 };
+    }
+    let url = t.url;
+    let body;
+    if (type === 'alertmanager') {
+      const base = t.url.replace(/\/+$/, '');
+      url = /\/api\/v2\/alerts$/.test(base) ? base
+          : /\/api\/v2$/.test(base) ? base + '/alerts'
+          : base + '/api/v2/alerts';
+      body = alerts; // Alertmanager v2 API 直接收告警数组
+    } else {
+      body = { monitor: 'omnisense', generatedAt: new Date().toISOString(), count: alerts.length, alerts };
+    }
+    try {
+      const res = await post(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'connection': 'close' },
+        body: JSON.stringify(body),
+      });
+      const status = (typeof res.status === 'number') ? res.status : (res.statusCode || 0);
+      const okStatus = status >= 200 && status < 300;
+      return {
+        ok: okStatus, type, url, sent: alerts.length,
+        critical: ta.critical, warning: ta.warning,
+        httpStatus: status,
+        error: okStatus ? undefined : `http-${status}`,
+      };
+    } catch (e) {
+      return { ok: false, type, url, sent: 0, available: alerts.length, error: String((e && e.message) || e) };
+    }
   }
 
   // ── 综合健康评分（composite health score）：把分散的观测信号聚合成一个 0-100 综合健康分 + 等级(A/B/C/D/F) ──

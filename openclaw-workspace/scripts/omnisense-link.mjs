@@ -193,9 +193,16 @@ export async function runLink(args) {
     // 仅对可作用域的子命令(config/thresholdHealth/thresholdAlerts/alertables)透传 scope 参数，其余子命令忽略。
     const scope = (rest.find(a => a.startsWith('--scope=')) || '').split('=')[1] || null;
     const sub = rest.find(a => !a.startsWith('--')) || 'snapshot';
+    // pushAlerts：把监控告警真正推送到外部 webhook/Alertmanager（零依赖 fetch 客户端，目标来自 --alert-url/--alertmanager-url 或 env）
+    if (sub === 'pushAlerts') {
+      const alertUrl = (rest.find(a => a.startsWith('--alert-url=')) || '').split('=')[1];
+      const amUrl = (rest.find(a => a.startsWith('--alertmanager-url=')) || '').split('=')[1];
+      const target = alertUrl ? { type: 'webhook', url: alertUrl } : amUrl ? { type: 'alertmanager', url: amUrl } : undefined;
+      return await withTimeout(omni.monitor.pushAlerts(target), TIMEOUT_MS);
+    }
     const fn = omni.monitor[sub];
     if (typeof fn !== 'function') {
-      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score/weights/learnings，可加 --scope=<引擎/环境> 查差异化阈值）` };
+      return { ok: false, error: `monitor 无此子命令: ${sub}（可选 snapshot/health/alerts/dashboard/recordMetric/checkAlerts/toolHealth/trends/trendAnomalies/config/thresholdHealth/thresholdAlerts/alertables/healthScore/score/weights/learnings/pushAlerts，可加 --scope=<引擎/环境> 查差异化阈值）` };
     }
     const scopedSubs = new Set(['config', 'thresholdHealth', 'thresholdAlerts', 'alertables', 'healthScore', 'score']);
     const callArgs = rest.filter(a => a !== sub && !a.startsWith('--config-file=') && !a.startsWith('--weights-file=') && !a.startsWith('--scope='));
