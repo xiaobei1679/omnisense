@@ -14,6 +14,8 @@
 
 # CodeGraph 本地代码知识图谱索引（大体积二进制，本地/CI 独立重建）
 .codegraph/
+# 通用本地缓存目录（agent 运行遗留，不进仓库）
+.cache/
 .env
 .env.local
 *.local
