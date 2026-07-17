@@ -20,8 +20,8 @@
 //   node scripts/release.mjs list                            列出所有本地版本(tag)
 //   node scripts/release.mjs rollback <tag>                  非破坏式回退到指定 tag（新提交，历史保留）
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
@@ -167,6 +167,51 @@ function writePkg(obj) {
 function nowISO() {
   return new Date().toISOString();
 }
+
+// ── 发布前质量护栏（preflight）─────────────────────────────
+// 全量语法自检：递归扫描项目自有源码（src/integrations/scripts/learning）下所有 .mjs，
+// 逐个 `node --check`。不放 npm test（零依赖单测偶因 undici keep-alive 挂起），
+// 语法门禁足以挡住大多数"改坏文件"的发布。不放 node_modules/.git。
+const PREFLIGHT_DIRS = ['src', 'integrations', 'scripts', 'learning'];
+const PREFLIGHT_EXTS = ['.mjs'];
+function collectSourceFiles() {
+  const out = [];
+  for (const d of PREFLIGHT_DIRS) {
+    const base = join(ROOT, d);
+    if (!existsSync(base)) continue;
+    const walk = (p) => {
+      for (const e of readdirSync(p)) {
+        if (e === 'node_modules' || e === '.git') continue;
+        const fp = join(p, e);
+        let st;
+        try { st = statSync(fp); } catch { continue; }
+        if (st.isDirectory()) walk(fp);
+        else if (PREFLIGHT_EXTS.includes(extname(fp).toLowerCase())) out.push(fp);
+      }
+    };
+    walk(base);
+  }
+  return out;
+}
+function doPreflight() {
+  const files = collectSourceFiles();
+  let fail = 0;
+  for (const f of files) {
+    try {
+      execFileSync(process.execPath, ['--check', f], { cwd: ROOT, stdio: 'pipe' });
+    } catch (e) {
+      fail++;
+      const raw = (e && (e.stderr || e.stdout)) ? String(e.stderr || e.stdout) : String(e.message || e);
+      console.error(`  ✗ 语法错误: ${f.replace(ROOT + '/', '')}\n${raw.split('\n').slice(0, 3).join('\n')}`);
+    }
+  }
+  if (fail) {
+    console.error(`❌ preflight 失败: ${fail} 个文件语法错误，已阻止发布`);
+    process.exit(1);
+  }
+  console.log(`✅ preflight 通过: ${files.length} 个 .mjs 文件语法 OK`);
+  return true;
+}
 function changelogHeader() {
   return [
     '# OmniSense 更新日志 (Changelog)',
@@ -177,6 +222,7 @@ function changelogHeader() {
     '  skip: 变更过少(<3文件且<50行) → 版本号不变，避免心跳空转消耗版本号',
     '  minor: 日常增量迭代（单层小改动 / monitor 小幅增强 / 文档同步 / 学习心跳）',
     '  major: 架构级变更（新增器官 / 跨2+层大重构 / BREAKING / ≥25文件或≥1200行 / minor 封顶25触发 consolidation）',
+    '版本公开性: 每个条目带 public 字段——major/baseline 为对外可展示版本(public:true)，minor 为内部增量(public:false)。',
     '',
   ].join('\n');
 }
@@ -204,7 +250,7 @@ function commitAndTag(version, type, isBaseline = false) {
 function doBaseline(notes) {
   const cur = readVersion();
   writeFileSync(VERSION_FILE, cur + '\n');
-  const entry = { version: cur, type: 'baseline', date: nowISO(), tag: `v${cur}`, notes: notes || '初始合并后基线。' };
+  const entry = { version: cur, type: 'baseline', date: nowISO(), tag: `v${cur}`, public: true, notes: notes || '初始合并后基线。' };
   appendChangelog(entry);
   const manifest = readManifest();
   manifest.push(entry);
@@ -214,10 +260,11 @@ function doBaseline(notes) {
   return cur;
 }
 function doBump(type, notes, isBaseline = false) {
+  doPreflight();   // 质量护栏：发布前全量语法自检，挡住坏文件
   const cur = readVersion();
   const next = nextVersionOf(cur, type);
   const entryType = isBaseline ? 'baseline' : type;
-  const entry = { version: next, type: entryType, date: nowISO(), tag: `v${next}`, notes: notes || '(无说明)' };
+  const entry = { version: next, type: entryType, date: nowISO(), tag: `v${next}`, public: entryType === 'major' || entryType === 'baseline', notes: notes || '(无说明)' };
   writeFileSync(VERSION_FILE, next + '\n');
   const pkg = readPkg();
   pkg.version = next;
@@ -332,9 +379,12 @@ function main() {
     case 'rollback':
       doRollback(rest[0]);
       break;
+    case 'preflight':
+      doPreflight();
+      break;
     default:
       console.error(
-        '用法: release.mjs <init-baseline|bump|auto|current|list|rollback> [--type minor|major] [--notes "..."] [--force-major] [<tag>]'
+        '用法: release.mjs <init-baseline|bump|auto|current|list|rollback|preflight> [--type minor|major] [--notes "..."] [--force-major] [<tag>]'
       );
       process.exit(1);
   }

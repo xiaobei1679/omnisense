@@ -1,11 +1,13 @@
 // integrations/openclaw/index.mjs
 // 桥接层统一出口：多智能体工作区直接 import 本文件即可驱动 OmniSense 身体。
 // 直接复用 src/ 真实实现，无 shell 中转、可单测。
+import { ORGANS as BODY_ORGANS } from '../../src/body.mjs';
 export { runOrgan } from './omni-body.mjs';
 export { runGoal } from './omnisense-bridge.mjs';
 
-// 器官清单（与 body.describe() 一致，供上层枚举/校验：七器官 + 监控器官）
-export const ORGANS = ['eye', 'ear', 'mouth', 'brain', 'hand', 'perceive', 'foot', 'monitor'];
+// 器官清单（单一事实来源：从 src/body.mjs 的 ORGANS 派生，避免"七/八器官"描述漂移）。
+// 上层只需枚举器官 key 时直接 import ORGANS / listOrgans()。
+export const ORGANS = BODY_ORGANS.map(o => o.key);
 
 // 返回器官副本，避免调用方误改常量
 export function listOrgans() {

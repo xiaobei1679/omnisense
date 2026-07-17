@@ -2,7 +2,7 @@
 // 全部离线、零副作用、零网络；对齐 index.mjs 真实演示语料，保证断言可复现。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canonRelation, relationKind } from '../learning/src/relations.mjs';
+import { canonRelation, relationKind, CAUSAL, NEG_CAUSAL, RELATIONAL, VERB_FORMS, IS_CAUSAL } from '../learning/src/relations.mjs';
 import {
   tokenizeSentences,
   extractEntities,
@@ -41,6 +41,35 @@ test('relationKind 区分 causal / relational / other', () => {
   assert.equal(relationKind('discovered'), 'relational');
   assert.equal(relationKind('is'), 'relational');
   assert.equal(relationKind('foobar'), 'other');
+});
+
+// ── 2026-07-17 迭代补强：固定由专用测试暴露的 2 个真实 bug + 集合不变量 ──
+test('canonRelation: 非字符串/空输入优雅返回 null（不抛 TypeError）', () => {
+  assert.equal(canonRelation(undefined), null);
+  assert.equal(canonRelation(null), null);
+  assert.equal(canonRelation(''), null);
+  assert.equal(canonRelation(42), null, '数字等非字符串输入应返回 null 而非崩溃');
+});
+
+test('canonRelation: 基础形态 find 也归 discovered（召回补全）', () => {
+  assert.equal(canonRelation('find'), 'discovered');
+  assert.equal(canonRelation('found'), 'discovered');
+  assert.equal(canonRelation('finds'), 'discovered');
+});
+
+test('relations 集合不变量: CAUSAL/RELATIONAL 互斥且 NEG_CAUSAL 独立', () => {
+  for (const v of NEG_CAUSAL) assert.ok(!CAUSAL.has(v), `NEG_CAUSAL 的 ${v} 不应混入 CAUSAL`);
+  for (const v of RELATIONAL) assert.ok(!CAUSAL.has(v), `RELATIONAL 的 ${v} 不应混入 CAUSAL`);
+  assert.ok(CAUSAL.has('causes') && RELATIONAL.has('discovered'));
+});
+
+test('VERB_FORMS 由 VERB_MAP 派生且按长度降序；IS_CAUSAL 引用 CAUSAL', () => {
+  assert.ok(Array.isArray(VERB_FORMS) && VERB_FORMS.length > 0);
+  for (let i = 1; i < VERB_FORMS.length; i++) {
+    assert.ok(VERB_FORMS[i - 1].length >= VERB_FORMS[i].length, '应按长度降序');
+  }
+  assert.equal(IS_CAUSAL, CAUSAL, 'IS_CAUSAL 应直接引用 CAUSAL（因果链仅正向边）');
+  for (const v of NEG_CAUSAL) assert.ok(!IS_CAUSAL.has(v), `否定边 ${v} 不应进入因果链`);
 });
 
 // ───────────────────────── nlp.mjs ─────────────────────────

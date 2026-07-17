@@ -47,3 +47,6 @@ learning/.learn_cache/
 learning/memory.json
 learning/sample.png
 learning/sample.wav
+# 学习子系统在 cwd=仓库根 运行时落盘的根级记忆/缓存，亦为运行时态不进仓库
+/.learn_cache/
+/memory.json

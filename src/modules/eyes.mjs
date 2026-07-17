@@ -237,19 +237,31 @@ export class Eyes {
     const sources = Object.keys(this._hotSources());
     log.info(`\n[眼·视觉] 并行聚合 ${sources.length} 个平台热搜…`);
     const results = await Promise.allSettled(sources.map(s => this._fetchTopics(s, { force })));
-    const freq = new Map();      // title -> 跨平台出现次数
-    const byTitle = new Map();   // title -> {title, url}（按标题去重，保留首个来源）
+    // 标题归一化：小写 + 去空白与常见分隔/标点，跨平台"同义标题"才能正确去重（如 "A" 与 "A · "）
+    const norm = (t) => String(t).toLowerCase().replace(/\s+/g, '').replace(/[·•\-_|【】\[\]()（）"'’‘“”！!?？]/g, '').trim();
+    const freq = new Map();      // normTitle -> 跨平台出现次数
+    const byNorm = new Map();    // normTitle -> {title, url}（保留首个来源原始标题）
     for (const r of results) {
       if (r.status === 'fulfilled') for (const t of r.value) {
         const title = t.title || String(t);
-        if (!byTitle.has(title)) byTitle.set(title, t);
-        freq.set(title, (freq.get(title) || 0) + 1);
+        const k = norm(title);
+        if (!byNorm.has(k)) byNorm.set(k, { title, url: t.url });
+        freq.set(k, (freq.get(k) || 0) + 1);
       }
     }
-    const ranked = [...byTitle.values()].sort((a, b) => (freq.get(b.title) || 0) - (freq.get(a.title) || 0));
+    const ranked = [...byNorm.values()].sort((a, b) => (freq.get(norm(b.title)) || 0) - (freq.get(norm(a.title)) || 0));
+    // Top5 自动联网抓首页摘要（零依赖：仅抓首页正文片段，不调用 LLM，离线/失败即降级跳过）
+    if (!env.OMNI_HOT_SUMMARY || env.OMNI_HOT_SUMMARY !== 'off') {
+      for (const t of ranked.slice(0, 5)) {
+        try {
+          const p = await this.seeWebsite(t.url);
+          if (p && p.text) t.snippet = p.text.slice(0, 140);
+        } catch { /* 离线/失败：不阻断聚合 */ }
+      }
+    }
     const percept = { modality: 'visual-hot-aggregate', source: 'all', topics: ranked.slice(0, 30), freq: Object.fromEntries(freq), platforms: sources.length, fetchedAt: Date.now() };
     log.info(`   ✓ 去重后 ${ranked.length} 条热点（跨平台频次已统计）Top:`);
-    ranked.slice(0, 10).forEach((t, i) => log.info(`     ${i + 1}. ${t.title}${freq.get(t.title) > 1 ? ` (×${freq.get(t.title)})` : ''}`));
+    ranked.slice(0, 10).forEach((t, i) => log.info(`     ${i + 1}. ${t.title}${freq.get(norm(t.title)) > 1 ? ` (×${freq.get(norm(t.title))})` : ''}${t.snippet ? ` — ${t.snippet}` : ''}`));
     this.bus.emit('percept', percept);
     return percept;
   }

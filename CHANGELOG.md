@@ -4,6 +4,10 @@
 回退命令: `node scripts/release.mjs rollback <tag>`（非破坏式，历史保留）。
 版本规则: 基于**实际变更规模**而非时间判定 major/minor（详见 `scripts/release.mjs` 头部说明）。
 
+## v10.0.0 — 2026-07-17 (major)
+
+- v10.0.0 大版本：①根治 undici keep-alive 致 node --test 挂起(http.mjs 加 Connection:close)；②跨层测试纳入 CI(package.json test:link)；③release 发布前加 preflight 语法护栏 + versions.json 增 public 字段；④桥接层 ORGANS 改由 src/body.mjs 单一事实来源派生(消除七/八器官描述漂移)；⑤monitor.pushAlerts 合并 checkAlerts 统一告警一起推送(统一告警闭环)；⑥memoryHub 加 triples/edges/learnings 容量上限滚动裁剪 + persist schemaVersion 防无限膨胀；⑦eyes.seeAllHot 标题归一化去重 + Top5 自动抓首页摘要
+
 ## v9.6.0 — 2026-07-16 (minor)
 
 - 轻量心跳: 学习+硬骨头变更汇总

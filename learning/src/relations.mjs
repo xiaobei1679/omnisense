@@ -29,7 +29,7 @@ const VERB_MAP = {
   destroy: 'prevents', destroys: 'prevents', destroyed: 'prevents',
   kill: 'prevents', kills: 'prevents', killed: 'prevents',
   hide: 'prevents', hides: 'prevents', hid: 'prevents', guard: 'prevents', guards: 'prevents',
-  discover: 'discovered', discovers: 'discovered', discovered: 'discovered', found: 'discovered', finds: 'discovered',
+  discover: 'discovered', discovers: 'discovered', discovered: 'discovered', find: 'discovered', found: 'discovered', finds: 'discovered',
   warn: 'warned', warns: 'warned', warned: 'warned',
   love: 'loved', loves: 'loved', loved: 'loved',
   save: 'saved', saves: 'saved', saved: 'saved', help: 'helped', helps: 'helped', helped: 'helped',
@@ -49,6 +49,7 @@ const VERB_MAP = {
 export const VERB_FORMS = Object.keys(VERB_MAP).sort((a, b) => b.length - a.length);
 
 export function canonRelation(verb) {
+  if (!verb || typeof verb !== 'string') return null;
   return VERB_MAP[verb.toLowerCase()] || null;
 }
 

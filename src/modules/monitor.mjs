@@ -662,9 +662,50 @@ export class Monitor {
   // 诚实边界：fetch 失败 / 无 active 告警 / 无 fetch 运行时，一律返回结构化结果，绝不伪造"发送成功"；
   //   离线不主动外发，仅在用户显式传入 target 或配置 env 时推送（需用户自配端点，本框架不内嵌任何地址）。
   // opts.fetch 可注入（用于单测：避免真实联网 + 规避 undici keep-alive 致 node --test 挂起）。
+  // 把统一告警项 {level,type,message,agent} 归一化为 Alertmanager 形状，与 thresholdAlerts() 同构，便于合并推送。
+  _toAlertShape(a) {
+    const sev = a.level === 'error' ? 'critical' : 'warning';
+    const status = a.level === 'error' ? 'firing' : 'warning';
+    return {
+      fingerprint: fingerprint(`unified|${a.type}|${a.agent || 'unknown'}`),
+      status,
+      severity: sev,
+      labels: {
+        alertname: `omnisense_${a.type}`,
+        severity: sev,
+        monitor: 'omnisense',
+        type: a.type,
+        agent: a.agent || 'unknown',
+        source: 'unified',
+      },
+      annotations: { summary: a.message, description: a.message, generatedAt: new Date().toISOString() },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+  // 合并两组 Alertmanager 形状告警，按 fingerprint 去重（避免阈值项与统一项重复计）。
+  _mergeAlerts(a, b) {
+    const seen = new Set();
+    const alerts = [];
+    for (const x of [...a, ...b]) {
+      const fp = x.fingerprint || `${x.labels?.alertname}|${x.labels?.key}|${x.type}`;
+      if (seen.has(fp)) continue;
+      seen.add(fp);
+      alerts.push(x);
+    }
+    const critical = alerts.filter(x => x.severity === 'critical').length;
+    const warning = alerts.filter(x => x.severity === 'warning').length;
+    return { alerts, count: alerts.length, critical, warning };
+  }
   async pushAlerts(target, opts = {}) {
+    // 统一告警推送：阈值告警(Alertmanager形状) + 综合运营告警(checkAlerts，归一化为同形状)。
+    // 合并去重后作为对外负载，确保外部告警系统拿到完整画面（不再只发阈值类告警）。
+    // 注：detectAnomalies() 含滑动基线副作用（每次调用都推进基线），仅由 snapshot/心跳周期触发，
+    //     不在此推送路径调用，避免每次 push 都移动基线导致"批量注入"等异常检测失效。
     const ta = this.thresholdAlerts();
-    const alerts = ta.alerts || [];
+    const thresholdAlerts = ta.alerts || [];
+    const unified = (this.checkAlerts() || []).map(a => this._toAlertShape(a));
+    const merged = this._mergeAlerts(thresholdAlerts, unified);
+    const alerts = merged.alerts;
     // 解析目标：显式 > env
     let t = (typeof target === 'string') ? { url: target } : (target || {});
     if (!t.url) {
@@ -673,15 +714,15 @@ export class Monitor {
       else if (env.OMNI_ALERT_WEBHOOK) t = { type: 'webhook', url: env.OMNI_ALERT_WEBHOOK };
     }
     if (!t.url) {
-      return { ok: false, error: 'no-alert-target', hint: 'set target {type,url} or env OMNI_ALERT_WEBHOOK / OMNI_ALERTMANAGER_URL', available: alerts.length, sent: 0 };
+      return { ok: false, error: 'no-alert-target', hint: 'set target {type,url} or env OMNI_ALERT_WEBHOOK / OMNI_ALERTMANAGER_URL', available: merged.count, sent: 0 };
     }
     const type = t.type === 'alertmanager' ? 'alertmanager' : 'webhook';
     if (alerts.length === 0) {
-      return { ok: true, type, url: t.url, sent: 0, available: ta.count, reason: 'no-active-alerts' };
+      return { ok: true, type, url: t.url, sent: 0, available: merged.count, reason: 'no-active-alerts' };
     }
     const post = opts.fetch || (typeof fetch !== 'undefined' ? fetch : null);
     if (typeof post !== 'function') {
-      return { ok: false, error: 'no-fetch-available', available: alerts.length, sent: 0 };
+      return { ok: false, error: 'no-fetch-available', available: merged.count, sent: 0 };
     }
     let url = t.url;
     let body;
@@ -704,12 +745,12 @@ export class Monitor {
       const okStatus = status >= 200 && status < 300;
       return {
         ok: okStatus, type, url, sent: alerts.length,
-        critical: ta.critical, warning: ta.warning,
+        critical: merged.critical, warning: merged.warning,
         httpStatus: status,
         error: okStatus ? undefined : `http-${status}`,
       };
     } catch (e) {
-      return { ok: false, type, url, sent: 0, available: alerts.length, error: String((e && e.message) || e) };
+      return { ok: false, type, url, sent: 0, available: merged.count, error: String((e && e.message) || e) };
     }
   }
 

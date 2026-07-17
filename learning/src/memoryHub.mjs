@@ -3,6 +3,13 @@
 import { writeFileSync, readFileSync, existsSync, renameSync } from 'node:fs';
 import { IS_CAUSAL } from './relations.mjs';
 
+// 无界数组容量上限（滚动裁剪，保留最近 N 条，避免长周期运行后 memory.json 无限膨胀）。
+// 仅裁剪确实会无限增长的三元组/边/学习条目；实体用 Map 且有命名空间去重，不在此限。
+const MAX_TRIPLES = 5000;
+const MAX_EDGES = 5000;
+const MAX_LEARNINGS = 2000;
+const MEMORY_SCHEMA_VERSION = 1;
+
 export class MemoryHub {
   constructor(persistPath) {
     this.working = [];                                   // 短期上下文
@@ -38,13 +45,17 @@ export class MemoryHub {
     return e;
   }
 
-  addTriple(t) { this.triples.push(t); }
+  addTriple(t) {
+    this.triples.push(t);
+    if (this.triples.length > MAX_TRIPLES) this.triples.splice(0, this.triples.length - MAX_TRIPLES);
+  }
 
   // 边图去重：同一 (from|rel|to|modality|source) 只入一次，避免重跑/跨源重复污染推理计数
   addEdge(from, rel, to, meta = {}) {
     const key = `${from}|${rel}|${to}|${meta.modality || 'unknown'}|${meta.source || ''}`;
     if (this.edges.some(e => `${e.from}|${e.rel}|${e.to}|${e.modality}|${e.source}` === key)) return;
     this.edges.push({ from, rel, to, modality: meta.modality || 'unknown', source: meta.source || '' });
+    if (this.edges.length > MAX_EDGES) this.edges.splice(0, this.edges.length - MAX_EDGES);
   }
 
   // 查询某实体出现的作品/来源集合（用于跨模态消歧）
@@ -52,7 +63,10 @@ export class MemoryHub {
 
   addBelief(b) { this.beliefs.push(b); }
   addHypothesis(h) { this.hypotheses.push(h); }
-  addLearning(l) { this.learnings.push(l); }
+  addLearning(l) {
+    this.learnings.push(l);
+    if (this.learnings.length > MAX_LEARNINGS) this.learnings.splice(0, this.learnings.length - MAX_LEARNINGS);
+  }
 
   recordGap(entity, modality) {
     if (!this.gaps.find(g => g.entity === entity)) {
@@ -128,6 +142,7 @@ export class MemoryHub {
   persist() {
     if (!this.persistPath) return;
     const data = {
+      schemaVersion: MEMORY_SCHEMA_VERSION, // 记忆落盘格式版本，未来不兼容变更时据此迁移
       triples: this.triples,
       beliefs: this.beliefs,
       hypotheses: this.hypotheses,

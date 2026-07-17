@@ -15,7 +15,7 @@ export async function httpGet(url, { headers = {}, timeout = 15000, retries = 1,
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const r = await fetch(url, {
-        headers: { 'User-Agent': UA, ...headers },
+        headers: { 'User-Agent': UA, 'Connection': 'close', ...headers },
         redirect: 'follow',
         signal: AbortSignal.timeout(timeout),
       });

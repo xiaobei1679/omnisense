@@ -768,6 +768,7 @@ test('pushAlerts: 无 target 且未配置 env -> 结构化报错不伪造(ok:fal
 
 test('pushAlerts: 有 target 但无 active 告警 -> ok:true, sent:0, 不联网', async () => {
   const m = mkMon([]);
+  m.checkAlerts = () => [];   // 隔离统一告警源，仅验证阈值告警路径
   const r = await m.pushAlerts({ type: 'webhook', url: 'http://example.test/hook' });
   assert.equal(r.ok, true);
   assert.equal(r.sent, 0);
@@ -777,6 +778,7 @@ test('pushAlerts: 有 target 但无 active 告警 -> ok:true, sent:0, 不联网'
 
 test('pushAlerts: webhook 目标 -> 注入 mock fetch 收到正确 JSON 负载', async () => {
   const m = mkMon([]);
+  m.checkAlerts = () => [];   // 隔离统一告警源
   m.thresholdAlerts = () => ({
     ok: true, count: 2, critical: 1, warning: 1,
     alerts: [
@@ -801,6 +803,7 @@ test('pushAlerts: webhook 目标 -> 注入 mock fetch 收到正确 JSON 负载',
 
 test('pushAlerts: alertmanager 目标 -> URL 补齐 /api/v2/alerts 且 body 为数组', async () => {
   const m = mkMon([]);
+  m.checkAlerts = () => [];   // 隔离统一告警源
   m.thresholdAlerts = () => ({ ok: true, count: 1, critical: 1, warning: 0, alerts: [{ fingerprint: 'c'.repeat(16), severity: 'critical', labels: { key: 'inactiveMs' }, annotations: {} }] });
   let captured = null;
   const fakeFetch = async (url, opts) => { captured = { url, opts }; return { status: 200, statusCode: 200 }; };
@@ -815,12 +818,29 @@ test('pushAlerts: alertmanager 目标 -> URL 补齐 /api/v2/alerts 且 body 为�
 
 test('pushAlerts: fetch 失败 -> ok:false 且 sent:0(诚实不谎报成功)', async () => {
   const m = mkMon([]);
+  m.checkAlerts = () => [];   // 隔离统一告警源
   m.thresholdAlerts = () => ({ ok: true, count: 1, critical: 1, warning: 0, alerts: [{ fingerprint: 'd'.repeat(16), severity: 'critical', labels: { key: 'inactiveMs' }, annotations: {} }] });
   const fakeFetch = async () => { throw new Error('ECONNREFUSED'); };
   const r = await m.pushAlerts({ type: 'webhook', url: 'http://dead/hook' }, { fetch: fakeFetch });
   assert.equal(r.ok, false);
   assert.equal(r.sent, 0);
   assert.ok(/ECONNREFUSED/.test(r.error), '错误应透传');
+});
+
+test('pushAlerts: 合并 checkAlerts 统一告警一起推送（统一告警闭环）', async () => {
+  const m = mkMon([]);
+  m.thresholdAlerts = () => ({ ok: true, count: 1, critical: 0, warning: 1, alerts: [{ fingerprint: 'a'.repeat(16), severity: 'warning', labels: { key: 'memStaleMs' }, annotations: { summary: 'y' } }] });
+  m.checkAlerts = () => [{ level: 'error', type: 'consecutive_failures', message: '连续 3 次运行未完成', agent: 'tracer' }];
+  let captured = null;
+  const fakeFetch = async (url, opts) => { captured = { url, opts }; return { status: 200, statusCode: 200 }; };
+  const r = await m.pushAlerts({ type: 'webhook', url: 'http://example.test/hook' }, { fetch: fakeFetch });
+  assert.equal(r.ok, true);
+  assert.equal(r.sent, 2, '阈值告警(1) + 统一告警(1) 共 2 条');
+  assert.equal(r.critical, 1, '统一告警 error 级应映射为 critical');
+  assert.equal(r.warning, 1);
+  const body = JSON.parse(captured.opts.body);
+  assert.equal(body.alerts.length, 2);
+  assert.ok(body.alerts.some(a => a.labels?.source === 'unified'), '应含归一化的统一告警');
 });
 
 test('thresholdAlerts: 全部健康(ok/na)时无告警可推送(离线不伪造告警)', () => {
